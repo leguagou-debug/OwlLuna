@@ -21,14 +21,14 @@
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.owais.owlluna.backup</string>
-			<key>UTTypeDescription</key>
-			<string>OwlLuna backup</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>OwlLuna backup</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.owlluna.backup</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -39,47 +39,47 @@
 			</dict>
 		</dict>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.owais.owlluna.notebook-reference</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
 			<key>UTTypeDescription</key>
 			<string>OwlLuna notebook</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.owlluna.notebook-reference</string>
+		</dict>
+		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
-		</dict>
-		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.owais.owlluna.page-reference</string>
 			<key>UTTypeDescription</key>
 			<string>OwlLuna page</string>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.data</string>
-			</array>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.owlluna.page-reference</string>
 		</dict>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.owais.owlluna.tab-reference</string>
-			<key>UTTypeDescription</key>
-			<string>OwlLuna tab</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>OwlLuna tab</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.owlluna.tab-reference</string>
 		</dict>
 	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.owais.swiftscribe.backup</string>
-			<key>UTTypeDescription</key>
-			<string>OwlLuna backup</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>OwlLuna backup</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.swiftscribe.backup</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

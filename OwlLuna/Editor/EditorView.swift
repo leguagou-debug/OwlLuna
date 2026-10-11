@@ -116,7 +116,7 @@ final class EditorSession {
         finder = NotebookFinder(document: document)
         let saved = document.manifest.library.currentPage
         currentPage = max(0, min(initialPageID.flatMap(document.index(of:)) ?? saved, document.pages.count - 1))
-        drawingInput = UserDefaults.standard.string(forKey: SettingsKey.drawingInput).flatMap(DrawingInput.init(rawValue:)) ?? .system
+        drawingInput = UserDefaults.standard.string(forKey: SettingsKey.drawingInput).flatMap(DrawingInput.init(rawValue:)) ?? .initial
         finder.startPage = { [weak self] in self?.currentPage ?? 0 }
         finder.onChange = { [weak self] in
             guard let self else { return }
@@ -595,7 +595,8 @@ fileprivate struct EditorContent: View {
     private var cloth: ClothColor { document.manifest.cover.cloth }
 
     var body: some View {
-        studySheets(sheets(layout))
+        // The layout is a 20 KB value and every modifier below would copy it onto the stack, more than an iPad's main thread has.
+        studySheets(sheets(AnyView(layout)))
     }
 
     private var layout: some View {

@@ -4,6 +4,9 @@ enum DrawingInput: String, CaseIterable, Identifiable {
     case system, pencilOnly, anyInput
     var id: String { rawValue }
 
+    /// What draws until the setting is changed.
+    static let initial = DrawingInput.pencilOnly
+
     var displayName: String {
         switch self {
         case .system: String(localized: "System Setting")

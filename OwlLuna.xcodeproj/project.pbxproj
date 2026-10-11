@@ -364,9 +364,10 @@
 				CODE_SIGN_ENTITLEMENTS = Config/OwlLunaWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/OwlLunaWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "OwlLuna";
+				INFOPLIST_KEY_CFBundleDisplayName = OwlLuna;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -389,9 +390,10 @@
 				CODE_SIGN_ENTITLEMENTS = Config/OwlLunaWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/OwlLunaWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "OwlLuna";
+				INFOPLIST_KEY_CFBundleDisplayName = OwlLuna;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -537,10 +539,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";
+				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "OwlLuna";
+				INFOPLIST_KEY_CFBundleDisplayName = OwlLuna;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "OwlLuna reads today's events to print them on a page when you ask it to. They are read on this iPad and go nowhere else.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "OwlLuna uses the camera to scan paper into your notebooks.";
@@ -551,7 +554,6 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "OwlLuna writes down what was said in a recording when you ask it to. It is done on this iPad; the recording is never sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -577,10 +579,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";
+				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "OwlLuna";
+				INFOPLIST_KEY_CFBundleDisplayName = OwlLuna;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "OwlLuna reads today's events to print them on a page when you ask it to. They are read on this iPad and go nowhere else.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "OwlLuna uses the camera to scan paper into your notebooks.";
@@ -591,7 +594,6 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "OwlLuna writes down what was said in a recording when you ask it to. It is done on this iPad; the recording is never sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (

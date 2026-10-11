@@ -5,7 +5,7 @@ struct OwlLunaSettingsView: View {
     @Environment(LibraryStore.self) private var store
     @Environment(WritingActivity.self) private var activity
     @Environment(AppModel.self) private var app: AppModel?
-    @AppStorage(SettingsKey.drawingInput) private var drawingInput: DrawingInput = .system
+    @AppStorage(SettingsKey.drawingInput) private var drawingInput: DrawingInput = .initial
     @AppStorage(SettingsKey.defaultTemplate) private var template: PaperTemplate = .narrowRuled
     @AppStorage(SettingsKey.defaultPaperColor) private var color: PaperColor = .white
     @AppStorage(SettingsKey.defaultPageSize) private var size: PageSize = .letter
