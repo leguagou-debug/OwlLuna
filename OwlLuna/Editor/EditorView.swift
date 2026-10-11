@@ -942,6 +942,7 @@ fileprivate struct EditorContent: View {
 
     // MARK: Chrome
 
+    /// Each menu is a value of several kilobytes and the bar is built deep in the stack, so they go in behind `AnyView`.
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
@@ -960,14 +961,14 @@ fileprivate struct EditorContent: View {
             .accessibilityIdentifier(pane == .secondary ? "editor.close.pane" : "editor.back")
         }
         .boardBackground()
-        ToolbarItem(placement: .principal) { titleMenu.environment(\.panelAnchorHeight, 44) }
+        ToolbarItem(placement: .principal) { AnyView(titleMenu.environment(\.panelAnchorHeight, 44)) }
         if isNarrow {
             ToolbarItem(placement: .topBarTrailing) {
                 BarGroup {
                     undoButtons
-                    addMenu
+                    AnyView(addMenu)
                     if session.recorder.isRecording { recordButton }
-                    moreMenu
+                    AnyView(moreMenu)
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { buttonGroupWidth = $0 }
             }
@@ -975,7 +976,7 @@ fileprivate struct EditorContent: View {
         } else {
             if showsBoardMenu {
                 ToolbarItem(placement: .topBarTrailing) {
-                    BarGroup { boardMenu }
+                    BarGroup { AnyView(boardMenu) }
                 }
                 .boardBackground()
             }
@@ -986,11 +987,11 @@ fileprivate struct EditorContent: View {
             .boardBackground()
             ToolbarItem(placement: .topBarTrailing) {
                 BarGroup {
-                    addMenu
+                    AnyView(addMenu)
                     recordButton
                     recordingsButton
                     toolsButton
-                    moreMenu
+                    AnyView(moreMenu)
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { buttonGroupWidth = $0 }
             }

@@ -87,6 +87,7 @@ A's one weakness is simulator footprint at 5×. We addressed it with the measure
   4. schedules a save.
 
   The notebook's modification date is applied at save time, so a stroke never touches the observed manifest.
+- **Stack.** SwiftUI builds a view's body on the main thread's stack, which is 1 MB on an iPad and 8 MB in the simulator, and a debug build copies a view's whole value at every chained modifier. The editor's page and bar came to a 20 KB value, and its fifty-odd sheets, alerts and observers took 1,051 KB to hang on it: it crashed on an iPad as soon as a notebook opened, and nowhere else. `EditorContent` now puts that layout, and each menu in its bar, behind `AnyView`, so what is copied is a pointer; a redraw takes about 165 KB and opening a notebook about 325 KB. A new sheet or menu belongs behind the same wrappers.
 
 ## Draw and hold
 
