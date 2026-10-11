@@ -6,12 +6,14 @@ extension XCTestCase {
     @MainActor
     func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType = .all, screen: String = "", modal: Bool = false,
                scrolled: Bool = false, formText: [String] = [], sheet: XCUIElement? = nil, popover: Bool = false,
-               largeText: Bool = false, overlay: XCUIElement? = nil, bar: XCUIElement? = nil, pageText: [String] = []) throws {
+               largeText: Bool = false, overlay: XCUIElement? = nil, bar: XCUIElement? = nil, pageText: [String] = [],
+               cutBy list: XCUIElement? = nil) throws {
         let barMaxY = app.navigationBars.allElementsBoundByIndex.map { $0.frame.maxY }.max() ?? 0
         let screenMaxY = app.windows.firstMatch.frame.maxY
         let overlayTop = overlay.map { $0.exists ? $0.frame.minY - 120 : screenMaxY - 240 }
         let barFrame = bar.flatMap { $0.exists ? $0.frame.insetBy(dx: -4, dy: -4) : nil }
         let sheetTexts = sheet.flatMap { $0.exists ? $0.staticTexts.allElementsBoundByIndex.map(\.frame) : nil } ?? []
+        let listFrame = list.flatMap { $0.exists ? $0.frame : nil }
         try app.performAccessibilityAudit(for: types) { issue in
             let element = issue.element
             print("AUDIT [\(screen)] \(issue.compactDescription) | type \(element.map { String($0.elementType.rawValue) } ?? "-") '\(element?.label ?? "nil")' \(element?.frame ?? .zero)")
@@ -41,6 +43,20 @@ extension XCTestCase {
                 print("AUDIT [\(screen)] ignored behind sheet: \(element?.label ?? "nil")")
                 return true
             }
+            // A list in a sheet smaller than the screen lays out every row; one past the list's edge is reported where
+            // the dimmed page shows. It is checked in the pass that scrolls it into sight.
+            if let listFrame, issue.auditType == .contrast || issue.auditType == .textClipped, let element, !listFrame.contains(element.frame) {
+                print("AUDIT [\(screen)] ignored, scrolled out of its list: \(element.label)")
+                return true
+            }
+            // A notebook's line of small print is part of its button, so the audit measures it over the whole card and
+            // reads the cover's colours. Its own pair, secondary text on the desk, is checked by DesignTests.
+            if issue.auditType == .contrast, let element, element.elementType == .staticText, case let frame = element.frame, frame.height > 100,
+               app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'notebook.'")).allElementsBoundByIndex
+                   .contains(where: { $0.frame.insetBy(dx: -1, dy: -1).contains(frame) }) {
+                print("AUDIT [\(screen)] ignored, a card's small print measured with its cover: \(element.label)")
+                return true
+            }
             // iPadOS 27 reports popover content about 49 pt below where it's drawn, so contrast samples the wrong pixels.
             if popover, issue.auditType == .contrast {
                 print("AUDIT [\(screen)] ignored in a popover: \(element?.label ?? "nil")")
@@ -49,6 +65,12 @@ extension XCTestCase {
             // Thumbnail contents the audit reads as text, and rows a sheet's edge cuts at large sizes; colours are checked at the default size.
             if modal, issue.auditType == .contrast, element == nil || largeText {
                 print("AUDIT [\(screen)] ignored in a sheet: \(issue.compactDescription)")
+                return true
+            }
+            // At the default size the audit guesses which text a larger size would cut, and a guess with no element can't
+            // be placed. The large-text pass looks at each sheet as it is then.
+            if modal, !largeText, issue.auditType == .textClipped, element == nil {
+                print("AUDIT [\(screen)] ignored, unnamed text that might be cut at a larger size: \(issue.compactDescription)")
                 return true
             }
             // Text on the editor's floating bars is reported as low contrast whatever its colours, and not every run.

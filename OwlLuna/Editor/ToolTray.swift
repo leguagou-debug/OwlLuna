@@ -100,6 +100,8 @@ struct ToolTray: View {
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .scrollIndicators(.hidden)
             .onScrollGeometryChange(for: Edge.Set.self) { geometry in
+                // A tray with no width yet has no edges to report.
+                guard room > 0 else { return [] }
                 let x = geometry.contentOffset.x, end = geometry.contentSize.width - geometry.containerSize.width
                 return (x > 1 ? Edge.Set.leading : []).union(x < end - 1 ? .trailing : [])
             } action: { _, edges in hidden = edges }

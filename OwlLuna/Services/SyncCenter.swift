@@ -3,7 +3,7 @@ import Observation
 import os
 
 /// Runs the library's sync with iCloud: finds the container, decides when to sync, and tells the library what changed.
-/// Off unless turned on in Settings, and unavailable in a build without the iCloud capability.
+/// On unless turned off in Settings, and unavailable in a build without the iCloud capability.
 @MainActor
 @Observable
 final class SyncCenter {
@@ -40,7 +40,8 @@ final class SyncCenter {
 
     init(root: StorageRoot) {
         self.root = root
-        isEnabled = UserDefaults.standard.bool(forKey: SettingsKey.syncsWithICloud)
+        let defaults = UserDefaults.standard
+        isEnabled = defaults.object(forKey: SettingsKey.syncsWithICloud) == nil || defaults.bool(forKey: SettingsKey.syncsWithICloud)
     }
 
     /// Finds where the synced copy lives. A test can stand a plain folder in for iCloud with `-cloudFolder <name>`.
@@ -54,7 +55,8 @@ final class SyncCenter {
             return
         }
         #endif
-        guard FileManager.default.ubiquityIdentityToken != nil else {
+        // A test's storage root never syncs with real iCloud.
+        guard LaunchOptions.value("-storageRoot") == nil, FileManager.default.ubiquityIdentityToken != nil else {
             availability = .unavailable(String(localized: "iCloud isn't available. Sign in to iCloud and turn on iCloud Drive in Settings; this copy of OwlLuna also has to be built with the iCloud capability."))
             return
         }

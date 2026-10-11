@@ -10,7 +10,7 @@ final class SearchIndexTests: XCTestCase {
 
     private func makeStore() throws -> LibraryStore {
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         self.container = container
         return LibraryStore(root: temporaryRoot(self), context: container.mainContext)
     }
@@ -67,7 +67,7 @@ final class SearchIndexTests: XCTestCase {
 
         try autoreleasepool {
             let old = Schema(versionedSchema: LibraryIndexSchemaV1.self)
-            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore))
+            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore, cloudKitDatabase: .none))
             let record = LibraryIndexSchemaV1.NotebookRecord(id: manifest.id)
             record.title = "Physics"
             record.searchText = "momentum and inertia"

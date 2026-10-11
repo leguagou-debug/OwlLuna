@@ -418,7 +418,7 @@ final class LibraryStoreSafetyTests: XCTestCase {
     private func makeStore() throws -> (LibraryStore, StorageRoot, ModelContext) {
         let root = temporaryRoot(self)
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         self.container = container
         return (LibraryStore(root: root, context: container.mainContext), root, container.mainContext)
     }

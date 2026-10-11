@@ -10,7 +10,7 @@ final class FolderTests: XCTestCase {
 
     private func makeStore() throws -> LibraryStore {
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         self.container = container
         return LibraryStore(root: temporaryRoot(self), context: container.mainContext)
     }
@@ -142,7 +142,7 @@ final class FolderTests: XCTestCase {
 
         try autoreleasepool {
             let old = Schema(versionedSchema: LibraryIndexSchemaV2.self)
-            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore))
+            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore, cloudKitDatabase: .none))
             let folder = LibraryIndexSchemaV2.FolderRecord(id: physics)
             folder.name = "Physics"
             let record = LibraryIndexSchemaV2.NotebookRecord(id: manifest.id)

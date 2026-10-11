@@ -10,7 +10,7 @@ final class LockTests: XCTestCase {
 
     private func makeStore() throws -> LibraryStore {
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         self.container = container
         return LibraryStore(root: temporaryRoot(self), context: container.mainContext)
     }
@@ -48,7 +48,7 @@ final class LockTests: XCTestCase {
         let saved = try await package.readManifest().manifest
         XCTAssertTrue(saved.library.isLocked)
 
-        let fresh = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true))
+        let fresh = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         await LibraryIndex.refresh(root: store.root, context: fresh.mainContext)
         XCTAssertEqual(try fresh.mainContext.fetch(FetchDescriptor<NotebookRecord>()).map(\.isLocked), [true], "a rebuilt index reads the lock back")
     }
@@ -62,7 +62,7 @@ final class LockTests: XCTestCase {
 
         try autoreleasepool {
             let old = Schema(versionedSchema: LibraryIndexSchemaV3.self)
-            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore))
+            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore, cloudKitDatabase: .none))
             let record = LibraryIndexSchemaV3.NotebookRecord(id: manifest.id)
             record.title = "Diary"
             record.indexedAt = .distantFuture

@@ -10,7 +10,7 @@ final class TagTests: XCTestCase {
 
     private func makeStore() throws -> LibraryStore {
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         containers.append(container)
         return LibraryStore(root: temporaryRoot(self), context: container.mainContext)
     }
@@ -181,7 +181,7 @@ final class TagTests: XCTestCase {
         let saved = try await manifest(recipes.id, in: store) { !$0.library.tags.isEmpty }
         XCTAssertEqual(saved.library.tags, ["Finals"])
 
-        let fresh = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true))
+        let fresh = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         await LibraryIndex.refresh(root: store.root, context: fresh.mainContext)
         let rebuilt = try fresh.mainContext.fetch(FetchDescriptor<NotebookRecord>(sortBy: [SortDescriptor(\.title)]))
         XCTAssertEqual(rebuilt.map(\.tags), [["exam", "term 1"], ["Finals"]], "a rebuilt index reads the tags back")
@@ -200,7 +200,7 @@ final class TagTests: XCTestCase {
 
         try autoreleasepool {
             let old = Schema(versionedSchema: LibraryIndexSchemaV4.self)
-            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore))
+            let container = try ModelContainer(for: old, configurations: ModelConfiguration(schema: old, url: root.indexStore, cloudKitDatabase: .none))
             let record = LibraryIndexSchemaV4.NotebookRecord(id: manifest.id)
             record.title = "Biology"
             record.isLocked = true
@@ -339,7 +339,7 @@ final class TagTests: XCTestCase {
         XCTAssertEqual(saved.first?.rule, TagRule(tags: ["exam"]))
         XCTAssertEqual(saved.first?.id, revision.id)
 
-        let container = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: LibraryIndex.schema, configurations: ModelConfiguration(schema: LibraryIndex.schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         containers.append(container)
         let relaunched = LibraryStore(root: store.root, context: container.mainContext)
         XCTAssertEqual(relaunched.smartShelves, [])

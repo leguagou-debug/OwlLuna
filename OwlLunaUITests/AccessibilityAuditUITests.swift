@@ -45,23 +45,24 @@ final class AccessibilityAuditUITests: XCTestCase {
 
         var pageText: [String] = []
         func check(_ screen: String, modal: Bool = false, scrolled: Bool = false, formText: [String] = [], sheet: XCUIElement? = nil,
-                   popover: Bool = false, overlay: XCUIElement? = nil, bar: XCUIElement? = nil) throws {
+                   popover: Bool = false, overlay: XCUIElement? = nil, bar: XCUIElement? = nil, cutBy list: XCUIElement? = nil) throws {
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "\(mode) \(screen)"
             attachment.lifetime = .keepAlways
             add(attachment)
             try audit(app, checks, screen: "\(mode) \(screen)", modal: modal, scrolled: scrolled, formText: formText, sheet: sheet, popover: popover,
-                      largeText: mode == "AX-L", overlay: overlay, bar: bar, pageText: pageText)
+                      largeText: mode == "AX-L", overlay: overlay, bar: bar, pageText: pageText, cutBy: list)
         }
 
         /// Audits a sheet at the top, then again scrolled to the end, so text below the fold is checked while it's on screen.
-        func checkSheet(_ screen: String, scrolling container: XCUIElement, formText: [String] = [], popover: Bool = false) throws {
-            try check(screen, modal: true, formText: formText, popover: popover)
+        func checkSheet(_ screen: String, scrolling container: XCUIElement, formText: [String] = [], popover: Bool = false,
+                        cutBy list: XCUIElement? = nil) throws {
+            try check(screen, modal: true, formText: formText, popover: popover, cutBy: list)
             guard container.exists else { return }
             container.swipeUp(velocity: .fast)
             container.swipeUp(velocity: .fast)
             sleep(3)
-            try check("\(screen) (end)", modal: true, scrolled: true, formText: formText, popover: popover)
+            try check("\(screen) (end)", modal: true, scrolled: true, formText: formText, popover: popover, cutBy: list)
         }
 
         func dismissKeyboard() {
@@ -203,7 +204,8 @@ final class AccessibilityAuditUITests: XCTestCase {
         try check("link picker", modal: true)
         linkTabs.buttons["Another Notebook"].tap()
         sleep(1)
-        try check("link notebooks", modal: true)
+        let linkList = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH 'link.notebook.'")).firstMatch
+        try checkSheet("link notebooks", scrolling: linkList, cutBy: linkList)
         linkTabs.buttons["Web"].tap()
         dismissKeyboard()
         try check("link web address", modal: true)

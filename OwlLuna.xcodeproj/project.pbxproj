@@ -535,7 +535,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Tomato AppIcon-Moss AppIcon-Oxblood AppIcon-Mustard AppIcon-Print";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Config/OwlLuna.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "Config/OwlLuna-iCloud.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";
@@ -575,7 +575,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Tomato AppIcon-Moss AppIcon-Oxblood AppIcon-Mustard AppIcon-Print";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Config/OwlLuna.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "Config/OwlLuna-iCloud.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";

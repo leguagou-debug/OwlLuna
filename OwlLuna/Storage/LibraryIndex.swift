@@ -396,7 +396,8 @@ enum LibraryIndex {
     static func makeContainer(root: StorageRoot) -> (container: ModelContainer, recovered: Bool) {
         let schema = schema
         try? FileManager.default.createDirectory(at: root.url, withIntermediateDirectories: true)
-        let configuration = ModelConfiguration(schema: schema, url: root.indexStore)
+        // Left to itself SwiftData mirrors the store to CloudKit once the build has an iCloud container.
+        let configuration = ModelConfiguration(schema: schema, url: root.indexStore, cloudKitDatabase: .none)
         do {
             return (try ModelContainer(for: schema, migrationPlan: LibraryIndexMigrationPlan.self, configurations: configuration), false)
         } catch {
@@ -405,7 +406,7 @@ enum LibraryIndex {
             if let container = try? ModelContainer(for: schema, migrationPlan: LibraryIndexMigrationPlan.self, configurations: configuration) {
                 return (container, true)
             }
-            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
             // An in-memory container with a known-good schema cannot fail.
             return (try! ModelContainer(for: schema, configurations: memory), true)
         }

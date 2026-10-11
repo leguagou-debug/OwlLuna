@@ -14,7 +14,7 @@ final class DailyJournalTests: XCTestCase {
 
     private func makeStore() throws -> LibraryStore {
         let schema = LibraryIndex.schema
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         self.container = container
         let saved = UserDefaults.standard.object(forKey: SettingsKey.dailyJournalID)
         addTeardownBlock { UserDefaults.standard.set(saved, forKey: SettingsKey.dailyJournalID) }
