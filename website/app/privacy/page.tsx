@@ -272,9 +272,10 @@ export default function PrivacyPolicy() {
             <h3 className={`display ${styles.sub}`}>When you delete a notebook</h3>
             <p>
               A notebook you delete for good is removed from iCloud the next time that device syncs, and from your other
-              devices after that, unless one of them holds newer writing in it, in which case the notebook is kept and
-              comes back. An empty marker named with the notebook&rsquo;s random ID stays in the container so the other
-              devices know it was deleted. It holds nothing else.
+              devices after that. If another device holds writing in that notebook that it has not synced yet, the
+              notebook is kept and comes back; writing that had already synced is deleted with it. An empty marker named
+              with the notebook&rsquo;s random ID stays in the container so the other devices know it was deleted. It
+              holds nothing else.
             </p>
           </Part>
 
@@ -310,7 +311,8 @@ export default function PrivacyPolicy() {
                 up with it.
               </LedgerRow>
               <LedgerRow label="Face ID, Touch ID or passcode">
-                To open notebooks you have locked. iPadOS does the checking and tells the app only yes or no.
+                To open notebooks you have locked, to lock or unlock one, and before a backup when any notebook is
+                locked. iPadOS does the checking and tells the app only yes or no.
               </LedgerRow>
             </Ledger>
             <p>
@@ -383,7 +385,8 @@ export default function PrivacyPolicy() {
               </li>
               <li>
                 <strong>Open a link.</strong> A web link you placed on a page opens in your browser, and Settings ›
-                About links to GitHub. Those sites have privacy policies of their own.
+                About links to this website and to GitHub. What a visit here records is under{' '}
+                <a href="#website">This website</a>; other sites have privacy policies of their own.
               </li>
             </ul>
             <p>Where a file goes after the share sheet is up to the app or service you chose there.</p>

@@ -162,7 +162,7 @@ function Pitch() {
         <h1 className={`display ${styles.pitchTitle}`}>Handwritten notes for iPad. Free, for good.</h1>
         <p className={styles.pitchLede}>
           No subscription, no ads, no account and no tracking. OwlLuna is open source, and your notes stay on your
-          iPad and in your own iCloud.
+          iPad, and in your own iCloud if you turn sync on.
         </p>
       </div>
       <div className={styles.pitchActions}>
