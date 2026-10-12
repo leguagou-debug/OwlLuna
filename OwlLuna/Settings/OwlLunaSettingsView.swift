@@ -236,7 +236,7 @@ struct OwlLunaSettingsView: View {
             SettingsActionRow(title: "Back Up Library…", systemImage: "externaldrive", isBusy: backupWork == .backingUp, action: backUp)
                 .accessibilityIdentifier("settings.backup.create")
             if let lastBackup {
-                SettingsActionRow(title: "Share the Backup Again", systemImage: "square.and.arrow.up") { sharedBackup = SharedFile(url: lastBackup) }
+                SettingsActionRow(title: "Share the Backup Again", systemImage: "square.and.arrow.up") { shareAgain(lastBackup) }
                     .accessibilityIdentifier("settings.backup.share")
             }
             SettingsActionRow(title: "Restore from a Backup…", systemImage: "arrow.counterclockwise", isBusy: backupWork == .restoring) {
@@ -291,18 +291,20 @@ struct OwlLunaSettingsView: View {
         backupWork = .backingUp
         Task {
             defer { backupWork = nil }
-            // The file holds locked notebooks in full, so making it asks what opening one would.
-            if store.hasLockedNotebooks {
-                guard NotebookLock.shared.isAvailable else {
-                    backupMessage = String(localized: "This library has locked notebooks. To back them up, set a passcode on this iPad in Settings first.")
-                    return
-                }
-                guard await NotebookLock.shared.confirm(String(localized: "Back up your library, including locked notebooks")) else { return }
-            }
             do {
-                let url = try await store.makeBackup()
+                guard let url = try await store.backupToShare() else { return }
                 lastBackup = url
                 sharedBackup = SharedFile(url: url)
+            } catch {
+                backupMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func shareAgain(_ made: URL) {
+        Task {
+            do {
+                if let url = try await store.backupToShare(made) { sharedBackup = SharedFile(url: url) }
             } catch {
                 backupMessage = error.localizedDescription
             }
@@ -344,7 +346,7 @@ private struct Colophon: View {
                 Text(verbatim: "\(String(localized: "Version")) \(version)").metaStyle()
             }
             .accessibilityElement(children: .combine)
-            Text("OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad and in your own iCloud.")
+            Text("OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad, and in your own iCloud if you turn sync on.")
                 .font(.subheadline)
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)

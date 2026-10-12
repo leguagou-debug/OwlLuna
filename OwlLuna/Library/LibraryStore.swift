@@ -579,6 +579,17 @@ extension LibraryStore {
         return try await Task.detached(priority: .userInitiated) { try LibraryBackup.create(root: root, journal: journal) }.value
     }
 
+    /// The backup file to hand to the share sheet: `made` if one was already written, or else a new one. It holds
+    /// locked notebooks in full, so with any in the library this first asks what opening one would. Nil when refused.
+    func backupToShare(_ made: URL? = nil) async throws -> URL? {
+        if hasLockedNotebooks {
+            guard NotebookLock.shared.isAvailable else { throw LibraryBackup.Failure.needsPasscode }
+            guard await NotebookLock.shared.confirm(String(localized: "Back up your library, including locked notebooks")) else { return nil }
+        }
+        if let made { return made }
+        return try await makeBackup()
+    }
+
     /// Notebooks, folders or stickers were changed on disk by something other than this store (a sync): read them again.
     func reloadFromDisk() async {
         await folderWrite?.value

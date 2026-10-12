@@ -22,6 +22,7 @@ final class AppModel {
     var pendingAction: AppAction?
     @ObservationIgnored private let indexWasRecovered: Bool
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var trashIsDue = false
     @ObservationIgnored private let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "app")
 
     init(root: StorageRoot = LaunchOptions.storageRoot) {
@@ -39,7 +40,9 @@ final class AppModel {
             activity.forget(notebooks: $0)
             flashcards.forget(notebooks: $0)
         }
-        sync.busy = { Set(DocumentRegistry.shared.openDocuments.map(\.id)) }
+        sync.take = { DocumentRegistry.shared.take($0) }
+        sync.release = { DocumentRegistry.shared.release($0) }
+        sync.onSynced = { [weak self] in self?.emptyExpiredTrash() }
         // What a sync brought in (a lock, a deletion) reaches Spotlight and the widgets as a change made here would.
         sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] _ in
             await library.reloadFromDisk()
@@ -96,16 +99,26 @@ final class AppModel {
         await library.loadSmartShelves()
         await activity.load()
         await flashcards.load()
-        library.purgeExpiredTrash()
         phase = .ready
         spotlight.schedule(library)
+        trashIsDue = true
         Task {
             await sweep.value
             await sync.resolve()
             await sync.syncNow()
+            // With nothing to sync with there is nothing to wait for.
+            if !sync.canSync { emptyExpiredTrash() }
         }
         Task.detached(priority: .background) { CoverCache.shared.sweepDisk() }
         signposter.endInterval("Launch", interval)
+    }
+
+    /// Recently Deleted loses what is past its 30 days once a launch, and after a sync when there is one to wait
+    /// for: a notebook restored on another device has to arrive before it is counted as still deleted here.
+    private func emptyExpiredTrash() {
+        guard trashIsDue else { return }
+        trashIsDue = false
+        library.purgeExpiredTrash()
     }
 
     func flushOpenDocuments() {

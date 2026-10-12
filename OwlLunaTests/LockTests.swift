@@ -2,6 +2,12 @@ import XCTest
 import SwiftData
 @testable import OwlLuna
 
+/// An iPad with no passcode set.
+private struct NoPasscode: Authenticating {
+    func isAvailable() -> Bool { false }
+    func authenticate(reason: String) async -> Bool { false }
+}
+
 /// Locked notebooks: the flag in the manifest and the index, who may open one, how the lock reaches another device,
 /// and what the widgets, Siri and a backup are told.
 @MainActor
@@ -141,11 +147,35 @@ final class LockTests: XCTestCase {
     func testABackupOfALockedLibraryAsksFirst() async throws {
         let store = try makeStore()
         let diary = try await makeNotebook("Diary", in: store)
-        XCTAssertFalse(store.hasLockedNotebooks)
+        let lock = NotebookLock.shared, usual = lock.authenticator
+        addTeardownBlock { @MainActor in lock.authenticator = usual }
+        lock.authenticator = ScriptedAuthenticator(passes: 0)
+        let made = try await store.backupToShare()
+        let backup = try XCTUnwrap(made, "with nothing locked a backup is made without asking")
+        addTeardownBlock { try? FileManager.default.removeItem(at: backup) }
+
         store.setLocked(true, for: [diary])
-        XCTAssertTrue(store.hasLockedNotebooks)
+        let refused = try await store.backupToShare()
+        XCTAssertNil(refused, "a locked notebook's pages go into the file, so making it asks what opening one would")
+        let again = try await store.backupToShare(backup)
+        XCTAssertNil(again, "and so does sharing a file made earlier")
         store.moveToTrash([diary])
-        XCTAssertTrue(store.hasLockedNotebooks, "a backup holds Recently Deleted too")
+        let trashed = try await store.backupToShare(backup)
+        XCTAssertNil(trashed, "a backup holds Recently Deleted too")
+
+        lock.authenticator = ScriptedAuthenticator(passes: 1)
+        let allowed = try await store.backupToShare(backup)
+        XCTAssertEqual(allowed, backup)
+        let later = try await store.backupToShare(backup)
+        XCTAssertNil(later, "each time is asked about")
+
+        lock.authenticator = NoPasscode()
+        do {
+            _ = try await store.backupToShare(backup)
+            XCTFail("an iPad that can't ask hands nothing over")
+        } catch {
+            XCTAssertEqual(error as? LibraryBackup.Failure, .needsPasscode)
+        }
     }
 
     func testAnIndexFromBeforeLocksIsMigrated() async throws {

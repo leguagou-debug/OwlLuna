@@ -45,8 +45,11 @@ final class SyncUITests: XCTestCase {
         openSettings(second)
         let received = second.staticTexts["settings.sync.status"]
         for _ in 0..<6 where !received.exists { second.swipeUp() }
-        XCTAssertTrue(received.waitForExistence(timeout: 30))
-        XCTAssertTrue(received.label.contains("3 notebooks received") || received.label.contains("up to date"), received.label)
+        XCTAssertTrue(received.waitForExistence(timeout: 30), "the sync finished without an error")
+        // By now a later sync may have replaced "3 notebooks received", but none may have had anything else to report.
+        for word in ["sent", "waiting", "conflicted", "deletion"] {
+            XCTAssertFalse(received.label.contains(word), "an empty device only receives: \(received.label)")
+        }
     }
 
     func testSyncSaysWhyItIsUnavailable() throws {
@@ -82,13 +85,29 @@ final class SyncUITests: XCTestCase {
         XCTAssertTrue(allow.waitForExistence(timeout: 30), "sync stops and asks")
         XCTAssertTrue(second.staticTexts["A different Apple Account is signed in"].exists)
         attach(second, "sync-account-question")
+
+        // A link opens a note in front of the library while the question is up, which takes the question down.
+        XCUIDevice.shared.system.open(URL(string: "owlluna://quicknote")!)
+        let back = second.buttons["editor.back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 20))
+        XCTAssertFalse(allow.exists)
+        back.tap()
+        XCTAssertTrue(allow.waitForExistence(timeout: 15), "still unanswered, it is asked again once the library is back")
         allow.tap()
         XCTAssertTrue(allow.waitForNonExistence(timeout: 10))
         openSettings(second)
         let sent = second.staticTexts["settings.sync.status"]
         for _ in 0..<6 where !sent.exists { second.swipeUp() }
-        XCTAssertTrue(sent.waitForExistence(timeout: 30))
-        XCTAssertTrue(sent.label.contains("3 notebooks sent") || sent.label.contains("up to date"), sent.label)
+        XCTAssertTrue(sent.waitForExistence(timeout: 30), "the sync with the second account finished without an error")
         attach(second, "sync-account-allowed")
+        second.terminate()
+
+        // What was sent is what a device new to that account receives.
+        let third = XCUIApplication()
+        third.launchArguments = ["-storageRoot", "syncAccountNew", "-resetStorage", "-cloudFolder", "account2", "-cloudAccount", "two", "-syncsWithICloud", "YES"]
+        third.launch()
+        XCTAssertTrue(third.buttons["notebook.Physics II 3"].waitForExistence(timeout: 60), "the notebooks were copied to the second account's iCloud")
+        XCTAssertTrue(third.buttons["notebook.Cell Biology 1"].exists)
+        XCTAssertTrue(third.buttons["notebook.Studio Notes 2"].exists)
     }
 }

@@ -14,6 +14,8 @@ final class DocumentRegistry {
     private var entries: [UUID: Entry] = [:]
     private var opening: [UUID: (task: Task<NotebookDocument, Error>, scene: String?)] = [:]
     private var closing: [UUID: NotebookDocument] = [:]
+    /// Notebooks a sync is copying over right now. Opening one waits until it is let go.
+    private var inHand: Set<UUID> = []
 
     /// The live document for a notebook: open in an editor, or closed with changes still waiting to be saved.
     func document(for id: UUID) -> NotebookDocument? {
@@ -23,6 +25,15 @@ final class DocumentRegistry {
     }
 
     func isOpening(_ id: UUID) -> Bool { opening[id] != nil }
+
+    /// A sync asks before it touches a notebook's files. False while the notebook is open, opening or still saving.
+    func take(_ id: UUID) -> Bool {
+        guard document(for: id) == nil, opening[id] == nil else { return false }
+        inHand.insert(id)
+        return true
+    }
+
+    func release(_ id: UUID) { inHand.remove(id) }
 
     func sceneIdentifier(for id: UUID) -> String? {
         if entries[id]?.document != nil { return entries[id]?.sceneIdentifier }
@@ -41,6 +52,8 @@ final class DocumentRegistry {
         if let pending = opening[id] { return try await pending.task.value }
         let task = Task { () throws -> NotebookDocument in
             defer { self.opening[id] = nil }
+            // A sync that has the notebook in hand finishes first, so the editor never reads files being swapped.
+            while self.inHand.contains(id) { try await Task.sleep(for: .milliseconds(20)) }
             let document = try await NotebookDocument.open(id, root: root)
             configure(document)
             self.entries[id] = Entry(document: document, sceneIdentifier: scene)

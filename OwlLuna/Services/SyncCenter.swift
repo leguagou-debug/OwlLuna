@@ -34,7 +34,11 @@ final class SyncCenter {
         didSet {
             guard isEnabled != oldValue else { return }
             defaults.set(isEnabled, forKey: SettingsKey.syncsWithICloud)
-            guard isEnabled else { return stopWatching() }
+            guard isEnabled else {
+                // Turning sync off is an answer to whatever was being asked.
+                question = nil
+                return halt()
+            }
             Task {
                 await review()
                 schedule(after: .zero)
@@ -52,11 +56,17 @@ final class SyncCenter {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var identityObserver: NSObjectProtocol?
     @ObservationIgnored private var wantsAnotherPass = false
+    @ObservationIgnored private var running: Task<SyncReport, Error>?
+    @ObservationIgnored private var reviewing = 0
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "sync")
     /// Called after a sync that changed the library on this device, so the index can be brought up to date.
     @ObservationIgnored var onLibraryChanged: (@MainActor (SyncReport) async -> Void)?
-    /// The notebooks open in an editor, which a sync leaves alone.
-    @ObservationIgnored var busy: @MainActor () -> Set<UUID> = { [] }
+    /// Called after every pass that finished, once the library has heard what it changed.
+    @ObservationIgnored var onSynced: (@MainActor () -> Void)?
+    /// A pass takes each notebook in hand just before it touches it, and lets it go after. One that is open in an
+    /// editor can't be taken, and is left for next time.
+    @ObservationIgnored var take: @MainActor (UUID) -> Bool = { _ in true }
+    @ObservationIgnored var release: @MainActor (UUID) -> Void = { _ in }
 
     init(root: StorageRoot, defaults: UserDefaults = .standard) {
         self.root = root
@@ -67,6 +77,9 @@ final class SyncCenter {
     }
 
     private var isDecided: Bool { hadSynced || defaults.object(forKey: SettingsKey.syncsWithICloud) != nil }
+
+    /// Whether a pass may run: sync is on, the copy is found, and nothing is being asked or worked out.
+    var canSync: Bool { isEnabled && question == nil && availability == .available && reviewing == 0 && cloud != nil }
 
     /// A marker for an Apple Account: a digest of the token iPadOS gives the app for it. It tells one account from
     /// another and nothing else.
@@ -102,38 +115,47 @@ final class SyncCenter {
         await use(CloudFolder(url: container.appending(path: "Sync", directoryHint: .isDirectory), isUbiquitous: true), account: Self.marker(for: token))
     }
 
-    /// The synced copy has been found. Anything that has to be asked first is asked before it is touched.
+    /// The synced copy has been found. What has to be asked first is worked out before sync is said to be
+    /// available, so no pass touches the copy in between.
     func use(_ cloud: CloudFolder, account: String?) async {
+        if cloud != self.cloud || account != self.account { halt() }
+        availability = .checking
         self.cloud = cloud
         self.account = account
-        availability = .available
         await review()
-        if isEnabled, question == nil { startWatching() }
+        availability = .available
+        if canSync { startWatching() }
     }
 
     private func leave(_ reason: String) {
-        stopWatching()
+        halt()
         cloud = nil
         account = nil
         question = nil
         availability = .unavailable(reason)
     }
 
-    /// Signing out of iCloud, or in with another account, moves the container out from under the app.
+    /// Signing out of iCloud, or in with another account, moves the container out from under the app. Nothing
+    /// syncs until the account now signed in has been looked at.
     private func identityChanged() {
-        stopWatching()
+        halt()
         cloud = nil
+        availability = .checking
         Task {
             await resolve()
             await syncNow()
         }
     }
 
+    /// Works out what has to be asked. No pass starts while it does.
     private func review() async {
-        guard availability == .available else { return }
+        guard cloud != nil else { return }
+        reviewing += 1
+        defer { reviewing -= 1 }
         let root = root
         let known = await Task.detached(priority: .utility) { SyncState.read(root).account }.value
-        if let account, let known, known != account {
+        // Another account only matters while sync is on: with it off nothing is copied, and a refusal stands.
+        if isEnabled, let account, let known, known != account {
             question = .accountChanged
         } else if !isDecided {
             question = .firstSync
@@ -171,7 +193,7 @@ final class SyncCenter {
 
     /// Syncs a little later, so a burst of changes becomes one sync.
     func schedule(after delay: Duration = .seconds(4)) {
-        guard isEnabled, question == nil, availability == .available else { return }
+        guard canSync else { return }
         pending?.cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(for: delay)
@@ -181,30 +203,46 @@ final class SyncCenter {
     }
 
     func syncNow() async {
-        guard isEnabled, question == nil, availability == .available, let cloud else { return }
+        guard canSync else { return }
         guard !isSyncing else { wantsAnotherPass = true; return }
         isSyncing = true
         defer { isSyncing = false }
         repeat {
             wantsAnotherPass = false
-            let root = root, busy = busy(), account = account
             do {
                 // A second pass uploads the copies a conflict left behind.
-                var report = try await Task.detached(priority: .utility) { try await LibrarySync.run(root: root, cloud: cloud, busy: busy, account: account) }.value
-                if !report.conflictCopies.isEmpty {
-                    let again = try await Task.detached(priority: .utility) { try await LibrarySync.run(root: root, cloud: cloud, busy: busy, account: account) }.value
-                    report.pushed += again.pushed
-                }
+                guard var report = try await pass() else { break }
+                if !report.conflictCopies.isEmpty, let again = try await pass() { report.pushed += again.pushed }
                 lastReport = report
                 lastSynced = .now
                 lastError = nil
                 if report.changedHere { await onLibraryChanged?(report) }
+                onSynced?()
+            } catch is CancellationError {
+                // Stopped part-way because sync was turned off or the copy moved. Whoever stopped it decides what follows.
+            } catch SyncError.accountChanged {
+                identityChanged()
             } catch {
                 lastError = error.localizedDescription
                 log.error("sync failed: \(error.localizedDescription)")
             }
         } while wantsAnotherPass
-        if query == nil, cloud.isUbiquitous { startWatching() }
+        if canSync { startWatching() }
+    }
+
+    /// One pass, or nil when sync may no longer run. That is asked before every pass, since the account may have
+    /// changed or sync been turned off during the one before, and a ubiquitous pass asks the account again as it goes.
+    private func pass() async throws -> SyncReport? {
+        guard canSync, let cloud else { return nil }
+        let root = root, account = account, take = take, release = release
+        let signedIn: @Sendable () -> String? = { SyncCenter.marker(for: FileManager.default.ubiquityIdentityToken) }
+        let task = Task.detached(priority: .utility) {
+            try await LibrarySync.run(root: root, cloud: cloud, account: account, take: { await take($0) }, release: { await release($0) },
+                                      signedIn: cloud.isUbiquitous ? signedIn : nil)
+        }
+        running = task
+        defer { running = nil }
+        return try await task.value
     }
 
     /// Notebooks arriving from another device show up as changes to the container's files.
@@ -222,8 +260,10 @@ final class SyncCenter {
         self.query = query
     }
 
-    private func stopWatching() {
+    /// Stops watching the container, and a pass that is part-way.
+    private func halt() {
         pending?.cancel()
+        running?.cancel()
         query?.stop()
         query = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -243,7 +283,7 @@ enum SyncQuestion {
     static func message(_ question: SyncCenter.Question) -> String {
         switch question {
         case .firstSync:
-            String(localized: "OwlLuna can copy every notebook, folder and sticker to your private iCloud storage, so your other devices have them. Nothing is copied until you choose to, and Settings › iCloud can change it later.")
+            String(localized: "OwlLuna can copy every notebook, folder and sticker to your private iCloud storage, so your other devices have them. Nothing is copied until you choose to, and Settings › iCloud in OwlLuna can change it later.")
         case .accountChanged: accountChangedMessage
         }
     }

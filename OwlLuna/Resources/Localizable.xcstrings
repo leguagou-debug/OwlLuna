@@ -16186,24 +16186,24 @@
         }
       }
     },
-    "OwlLuna can copy every notebook, folder and sticker to your private iCloud storage, so your other devices have them. Nothing is copied until you choose to, and Settings › iCloud can change it later." : {
+    "OwlLuna can copy every notebook, folder and sticker to your private iCloud storage, so your other devices have them. Nothing is copied until you choose to, and Settings › iCloud in OwlLuna can change it later." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna kann alle Notizbücher, Ordner und Sticker in deinen privaten iCloud-Speicher kopieren, damit deine anderen Geräte sie haben. Nichts wird kopiert, bevor du dich dafür entscheidest, und unter Einstellungen › iCloud lässt es sich später ändern."
+            "value" : "OwlLuna kann alle Notizbücher, Ordner und Sticker in deinen privaten iCloud-Speicher kopieren, damit deine anderen Geräte sie haben. Nichts wird kopiert, bevor du dich dafür entscheidest, und unter Einstellungen › iCloud in OwlLuna lässt es sich später ändern."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna puede copiar todos los cuadernos, carpetas y pegatinas en tu almacenamiento privado de iCloud para que tus otros dispositivos los tengan. No se copia nada hasta que tú lo decidas, y puedes cambiarlo más adelante en Ajustes › iCloud."
+            "value" : "OwlLuna puede copiar todos los cuadernos, carpetas y pegatinas en tu almacenamiento privado de iCloud para que tus otros dispositivos los tengan. No se copia nada hasta que tú lo decidas, y puedes cambiarlo más adelante en Ajustes › iCloud, dentro de OwlLuna."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna peut copier tous vos carnets, dossiers et autocollants dans votre espace de stockage iCloud privé, pour que vos autres appareils les aient. Rien n’est copié tant que vous ne l’avez pas choisi, et Réglages › iCloud permet de changer d’avis."
+            "value" : "OwlLuna peut copier tous vos carnets, dossiers et autocollants dans votre espace de stockage iCloud privé, pour que vos autres appareils les aient. Rien n’est copié tant que vous ne l’avez pas choisi, et Réglages › iCloud dans OwlLuna permet de changer d’avis."
           }
         }
       }
@@ -22098,24 +22098,24 @@
         }
       }
     },
-    "OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad and in your own iCloud." : {
+    "OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad, and in your own iCloud if you turn sync on." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna ist kostenlos und Open Source. Keine Werbung, keine Abos, kein Tracking. Deine Notizen bleiben auf deinem iPad und in deinem eigenen iCloud-Speicher."
+            "value" : "OwlLuna ist kostenlos und Open Source. Keine Werbung, keine Abos, kein Tracking. Deine Notizen bleiben auf deinem iPad und, wenn du die Synchronisierung aktivierst, in deinem eigenen iCloud-Speicher."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna es gratis y de código abierto. Sin anuncios, sin suscripciones, sin rastreo. Tus notas se quedan en tu iPad y en tu propio iCloud."
+            "value" : "OwlLuna es gratis y de código abierto. Sin anuncios, sin suscripciones, sin rastreo. Tus notas se quedan en tu iPad y, si activas la sincronización, en tu propio iCloud."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna est gratuit et open source. Pas de publicité, pas d’abonnement, pas de suivi. Vos notes restent sur votre iPad et dans votre propre espace iCloud."
+            "value" : "OwlLuna est gratuit et open source. Pas de publicité, pas d’abonnement, pas de suivi. Vos notes restent sur votre iPad et, si vous activez la synchronisation, dans votre propre espace iCloud."
           }
         }
       }

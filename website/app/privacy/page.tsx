@@ -252,10 +252,13 @@ export default function PrivacyPolicy() {
               it syncs there too.
             </p>
             <p>
-              OwlLuna syncs with the Apple Account the iPad is signed in to. If a different account signs in, sync stops
-              and asks before anything is copied to that account&rsquo;s iCloud storage or brought in from it. If you
-              say yes, the notebooks on the iPad are copied there and the notebooks that account holds are added;
-              nothing is deleted. Before you pass the iPad on to someone else, delete the app.
+              OwlLuna syncs with the Apple Account the iPad is signed in to. If a different account signs in while
+              sync is on, sync stops and asks before it copies your notebooks to that account&rsquo;s iCloud storage or
+              brings anything in from it. A sync already under way at that moment stops after the notebook it is
+              copying. If you say yes, the notebooks on the iPad are copied there and the notebooks that account holds
+              are added; nothing is deleted. If you say no, sync is turned off on that device and stays off until you
+              turn it on again in Settings › iCloud in the app, which asks again. Before you pass the iPad on to someone
+              else, delete the app.
             </p>
             <h3 className={`display ${styles.sub}`}>Turning it off, and removing the copy</h3>
             <p>
@@ -272,10 +275,14 @@ export default function PrivacyPolicy() {
             <h3 className={`display ${styles.sub}`}>When you delete a notebook</h3>
             <p>
               A notebook you delete for good is removed from iCloud the next time that device syncs, and from your other
-              devices after that. If another device holds writing in that notebook that it has not synced yet, the
-              notebook is kept and comes back; writing that had already synced is deleted with it. An empty marker named
-              with the notebook&rsquo;s random ID stays in the container so the other devices know it was deleted. It
-              holds nothing else.
+              devices after that. Before it removes a notebook, the app checks whether another device has written in it
+              since. If it sees newer writing, it keeps the notebook, and the notebook comes back to the device that
+              deleted it. The check goes by what each device has received from iCloud at that moment: if one device
+              deletes a notebook while another device&rsquo;s newer writing has not reached it yet, the delete can win,
+              and that writing is removed with the notebook. The same check is made for Recently Deleted: a notebook put
+              there on one device and written in on another that had not heard of it comes back out. For a notebook that
+              is removed, an empty marker named with its random ID stays in the container so the other devices know it
+              was deleted. It holds nothing else.
             </p>
           </Part>
 
@@ -373,8 +380,9 @@ export default function PrivacyPolicy() {
               <li>
                 <strong>Back up.</strong> Settings › Backup makes one file of your whole library and hands it to the
                 share sheet. The file is not encrypted, and it contains every notebook, including locked ones and any
-                still in Recently Deleted, along with your writing history. If any notebook is locked, making a backup
-                asks for Face ID, Touch ID or the passcode first. Keep the file somewhere you trust.
+                still in Recently Deleted, along with your writing history. If any notebook is locked, making a backup,
+                or sharing the last one again, asks for Face ID, Touch ID or the passcode first. Keep the file somewhere
+                you trust.
               </li>
               <li>
                 <strong>Copy or drag.</strong> Text you copy goes to the iPadOS clipboard, and a picture you drop on a
@@ -419,7 +427,9 @@ export default function PrivacyPolicy() {
             <Ledger className={styles.table}>
               <LedgerRow label="A notebook">
                 Deleting it moves it to Recently Deleted. It is removed for good after 30 days, the next time the app
-                opens, or sooner if you delete it from there yourself.
+                opens, or sooner if you delete it from there yourself. With iCloud sync on, the app syncs first when it
+                can, and a notebook you restored on another device is kept only if that restore has reached this iPad by
+                then.
               </LedgerRow>
               <LedgerRow label="A recording or a transcript">Each can be removed on its own from Recordings.</LedgerRow>
               <LedgerRow label="A page of an imported PDF">

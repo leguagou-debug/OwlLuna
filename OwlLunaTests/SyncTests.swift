@@ -2,6 +2,19 @@ import XCTest
 import PencilKit
 @testable import OwlLuna
 
+/// Something a test changes while a pass is running.
+private final class Shared<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Value
+
+    init(_ value: Value) { stored = value }
+
+    var value: Value {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}
+
 /// Two devices and the synced copy between them, played out with three folders.
 final class SyncTests: XCTestCase {
     private let paper = PageDefaults(template: .grid, paperColor: .white, pageSize: .letter)
@@ -50,7 +63,7 @@ final class SyncTests: XCTestCase {
 
     @discardableResult
     private func sync(_ root: StorageRoot, busy: Set<UUID> = []) async throws -> SyncReport {
-        try await LibrarySync.run(root: root, cloud: cloud, busy: busy)
+        try await LibrarySync.run(root: root, cloud: cloud, take: { !busy.contains($0) })
     }
 
     func testANotebookWrittenOnOneDeviceArrivesOnTheOther() async throws {
@@ -142,6 +155,216 @@ final class SyncTests: XCTestCase {
         let onA = await titles(on: a)
         XCTAssertEqual(onA, ["Kept and written in"])
         XCTAssertFalse(FileManager.default.fileExists(atPath: a.package(old.id).path(percentEncoded: false)), "and the deleted one doesn't come back")
+    }
+
+    func testADeleteDoesNotRemoveWritingAnotherDeviceAlreadySynced() async throws {
+        let notes = try await makeNotebook("Notes", on: a)
+        try await sync(a)
+        try await sync(b)
+
+        try await edit(notes.id, on: b, title: "Notes, written in", strokes: 4, after: 60)
+        try await sync(b)
+        try FileManager.default.removeItem(at: a.package(notes.id))
+        let report = try await sync(a)
+        XCTAssertEqual(report.removedThere, [], "the synced copy changed since this device last saw it, so the delete doesn't carry")
+        XCTAssertEqual(report.pulled, [notes.id], "and the newer writing comes here instead")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cloud.tombstone(notes.id).path(percentEncoded: false)))
+        let arrived = await strokes(notes, on: a)
+        XCTAssertEqual(arrived, 4)
+
+        let other = try await sync(b)
+        XCTAssertEqual(other, SyncReport(), "nothing is removed on the device that wrote it")
+        let onB = await titles(on: b)
+        XCTAssertEqual(onB, ["Notes, written in"])
+    }
+
+    func testAMarkerLeftBesideANotebookWrittenInSinceIsClearedAway() async throws {
+        let notes = try await makeNotebook("Notes", on: a)
+        try await sync(a)
+        try await sync(b)
+        // A delete on another device that got as far as its marker and no further.
+        try Data().write(to: cloud.tombstone(notes.id))
+        try await edit(notes.id, on: b, strokes: 4, after: 60)
+        let report = try await sync(b)
+        XCTAssertEqual(report.pushed, [notes.id])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cloud.tombstone(notes.id).path(percentEncoded: false)), "writing wins, so the marker goes")
+
+        let fresh = temporaryRoot(self)
+        let arrived = try await LibrarySync.run(root: fresh, cloud: cloud)
+        XCTAssertEqual(arrived.pulled, [notes.id], "and a device new to the library receives the notebook rather than finishing the delete")
+        try await sync(a)
+        try await settled()
+        XCTAssertEqual(b.packageIDs(), [notes.id])
+    }
+
+    // MARK: A pass and what changes while it runs
+
+    private func sorted(_ manifests: [NotebookManifest]) -> [UUID] { manifests.map(\.id).sorted { $0.uuidString < $1.uuidString } }
+
+    private func isSynced(_ id: UUID) -> Bool {
+        FileManager.default.fileExists(atPath: cloud.package(id).appending(path: "manifest.json").path(percentEncoded: false))
+    }
+
+    func testEachNotebookIsAskedForWhenItsTurnComes() async throws {
+        let ids = sorted([try await makeNotebook("One", on: a), try await makeNotebook("Two", on: a), try await makeNotebook("Three", on: a)])
+        // The last one is opened in an editor while the pass is busy with the first, and is open by the time that is done.
+        let open = Shared<Set<UUID>>([]), log = Shared<[String]>([]), released = Shared<[UUID]>([])
+        let report = try await LibrarySync.run(root: a, cloud: cloud, take: { id in
+            log.value.append("take \(id)")
+            return !open.value.contains(id)
+        }, release: { id in
+            log.value.append("release \(id)")
+            released.value.append(id)
+            if id == ids[0] { open.value.insert(ids[2]) }
+        })
+        XCTAssertEqual(log.value, ["take \(ids[0])", "release \(ids[0])", "take \(ids[1])", "release \(ids[1])", "take \(ids[2])"],
+                       "each in its turn, not all as the pass begins")
+        XCTAssertEqual(report.pushed, [ids[0], ids[1]])
+        XCTAssertEqual(report.waiting, [ids[2]], "so one opened since is still left alone")
+        XCTAssertFalse(isSynced(ids[2]))
+        XCTAssertEqual(released.value, [ids[0], ids[1]], "and what was taken is handed back")
+    }
+
+    func testAPassStopsWhenAnotherAccountSignsInPartWay() async throws {
+        let ids = sorted([try await makeNotebook("One", on: a), try await makeNotebook("Two", on: a), try await makeNotebook("Three", on: a)])
+        let signedIn = Shared<String?>("one"), released = Shared<[UUID]>([])
+        do {
+            _ = try await LibrarySync.run(root: a, cloud: cloud, account: "one", take: { id in
+                if id == ids[0] { signedIn.value = "two" }
+                return true
+            }, release: { released.value.append($0) }, signedIn: { signedIn.value })
+            XCTFail("the container now belongs to another account")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .accountChanged)
+        }
+        XCTAssertTrue(isSynced(ids[0]), "the notebook in hand is finished")
+        XCTAssertEqual(released.value, [ids[0]])
+        XCTAssertFalse(isSynced(ids[1]) || isSynced(ids[2]), "and nothing more is copied")
+        XCTAssertEqual(SyncState.read(a).notebooks, [:], "nothing is taken as agreed with the other account's copy")
+        XCTAssertEqual(SyncState.read(a).account, "one", "but whose copy the pass began with is kept, so the other account is asked about")
+    }
+
+    func testAPassThatIsCancelledStopsBeforeTheNextNotebook() async throws {
+        let ids = sorted([try await makeNotebook("One", on: a), try await makeNotebook("Two", on: a)])
+        let pass = Shared<Task<SyncReport, Error>?>(nil), cloud = cloud!, a = a!
+        let task = Task.detached {
+            try await LibrarySync.run(root: a, cloud: cloud, take: { id in
+                if id == ids[0] { pass.value?.cancel() }
+                return true
+            })
+        }
+        pass.value = task
+        do {
+            _ = try await task.value
+            XCTFail("a cancelled pass doesn't finish")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertFalse(isSynced(ids[1]))
+    }
+
+    // MARK: A conflict that can't be finished
+
+    private func permit(_ mode: Int, _ url: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path(percentEncoded: false))
+    }
+
+    private func inkFile(of id: UUID) throws -> URL {
+        let ink = cloud.package(id).appending(path: "ink", directoryHint: .isDirectory)
+        return try XCTUnwrap(FileManager.default.contentsOfDirectory(at: ink, includingPropertiesForKeys: nil).first)
+    }
+
+    /// Every notebook on the device is whole and named by its own ID: the titles, and how much is written in each.
+    private func shelf(_ root: StorageRoot, file: StaticString = #filePath, line: UInt = #line) async throws -> [String: Int] {
+        var result: [String: Int] = [:]
+        for id in root.packageIDs() {
+            let manifest = try await NotebookPackage(root: root, id: id).readManifest().manifest
+            XCTAssertEqual(manifest.id, id, "a notebook is never left under another's ID", file: file, line: line)
+            result[manifest.title] = await strokes(manifest, on: root)
+        }
+        return result
+    }
+
+    func testTheNewerVersionInTheSyncedCopyWinsAConflict() async throws {
+        let notes = try await makeNotebook("Notes", on: a)
+        try await sync(a)
+        try await sync(b)
+
+        try await edit(notes.id, on: a, strokes: 7, after: 120)
+        try await edit(notes.id, on: b, strokes: 3, after: 60)
+        try await sync(a)
+        let report = try await sync(b)
+        XCTAssertEqual(report.conflictCopies.count, 1)
+        XCTAssertEqual(report.pulled, [notes.id], "the newer version comes in under the notebook's ID")
+        let onB = try await shelf(b)
+        XCTAssertEqual(onB, ["Notes": 7, "Notes (conflicted copy)": 3], "and what was written here is kept beside it")
+
+        try await sync(b)
+        try await sync(a)
+        let onA = try await shelf(a)
+        XCTAssertEqual(onA, ["Notes": 7, "Notes (conflicted copy)": 3])
+        try await settled()
+    }
+
+    func testAConflictWhosePullFailsLeavesTheNotebookInItsPlace() async throws {
+        let notes = try await makeNotebook("Notes", on: a)
+        try await sync(a)
+        try await sync(b)
+
+        try await edit(notes.id, on: a, strokes: 7, after: 120)
+        try await edit(notes.id, on: b, strokes: 3, after: 60)
+        try await sync(a)
+        // The newer version is in the synced copy, but one of its pages can't be read.
+        let ink = try inkFile(of: notes.id)
+        try permit(0o000, ink)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: ink.path(percentEncoded: false)) }
+
+        let failed = try await sync(b)
+        XCTAssertEqual(failed.waiting, [notes.id])
+        XCTAssertEqual(failed.pulled, [])
+        let kept = try await shelf(b)
+        XCTAssertEqual(kept["Notes"], 3, "the notebook is still where it was, with what was written here")
+
+        try permit(0o644, ink)
+        let report = try await sync(b)
+        XCTAssertEqual(report.pulled, [notes.id])
+        XCTAssertEqual(report.removedThere, [], "a pull that failed is never taken for a delete")
+        let onB = try await shelf(b)
+        XCTAssertEqual(onB, ["Notes": 7, "Notes (conflicted copy)": 3], "one copy is kept, however often it had to try")
+        try await sync(b)
+        try await sync(a)
+        let onA = try await shelf(a)
+        XCTAssertEqual(onA, ["Notes": 7, "Notes (conflicted copy)": 3])
+    }
+
+    func testAConflictWhosePushFailsLeavesNoHalfMadeCopy() async throws {
+        let notes = try await makeNotebook("Notes", on: a)
+        try await sync(a)
+        try await sync(b)
+
+        try await edit(notes.id, on: a, strokes: 3, after: 60)
+        try await edit(notes.id, on: b, strokes: 7, after: 120)
+        try await sync(a)
+        // The older version is in the synced copy, where its manifest can't be replaced.
+        let synced = cloud.package(notes.id)
+        try permit(0o555, synced)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: synced.path(percentEncoded: false)) }
+
+        let failed = try await sync(b)
+        XCTAssertEqual(failed.waiting, [notes.id])
+        XCTAssertEqual(failed.pushed, [])
+        let kept = try await shelf(b)
+        XCTAssertEqual(kept["Notes"], 7)
+        XCTAssertEqual(kept.filter { $0.key != "Notes" }, ["Notes (conflicted copy)": 3], "the older version is kept whole before anything is sent over it")
+
+        try permit(0o755, synced)
+        let report = try await sync(b)
+        XCTAssertTrue(report.pushed.contains(notes.id))
+        XCTAssertEqual(report.conflictCopies, [], "and it isn't copied a second time")
+        try await sync(a)
+        let onA = try await shelf(a)
+        XCTAssertEqual(onA, ["Notes": 7, "Notes (conflicted copy)": 3])
+        try await settled()
     }
 
     func testAnOpenNotebookAndAHalfArrivedOneAreLeftForLater() async throws {
@@ -366,6 +589,79 @@ final class SyncTests: XCTestCase {
         try await settled()
     }
 
+    private func syncedLibrary(_ id: UUID) throws -> LibraryState {
+        try ManifestCodec.decode(Data(contentsOf: cloud.package(id).appending(path: "manifest.json")), fallbackID: id).manifest.library
+    }
+
+    func testAStampInTheSyncedCopyNeverMovesBackwards() async throws {
+        let diary = try await makeNotebook("Diary", on: a), c = temporaryRoot(self)
+        let locked = Date.now, relocked = locked.addingTimeInterval(60)
+        try await file(diary.id, on: a, at: locked) { $0.isLocked = true }
+        try await sync(a)
+        try await sync(b)
+        _ = try await LibrarySync.run(root: c, cloud: cloud)
+
+        // Unlocked on a third device that then stays out of reach, and on the second, which locks it again afterwards.
+        try await file(diary.id, on: c, at: locked.addingTimeInterval(30)) { $0.isLocked = false }
+        try await file(diary.id, on: b, at: locked.addingTimeInterval(40)) { $0.isLocked = false }
+        try await file(diary.id, on: b, at: relocked) {
+            $0.isLocked = true
+            $0.isFavorite = true
+        }
+        try await sync(b)
+        XCTAssertEqual(try XCTUnwrap(syncedLibrary(diary.id).changedAt(.locked)).timeIntervalSince(relocked), 0, accuracy: 0.001)
+
+        // The first device still has the lock under its first stamp, and changes something else.
+        try await file(diary.id, on: a, at: relocked.addingTimeInterval(60)) { $0.tags = ["private"] }
+        let report = try await sync(a)
+        XCTAssertEqual(report.stateSent, [diary.id])
+        XCTAssertEqual(try XCTUnwrap(syncedLibrary(diary.id).changedAt(.locked)).timeIntervalSince(relocked), 0, accuracy: 0.001,
+                       "sending the tags doesn't put the lock's stamp back")
+
+        _ = try await LibrarySync.run(root: c, cloud: cloud)
+        try await sync(a)
+        try await sync(b)
+        for root in [a!, b!, c] {
+            let state = try await library(diary.id, on: root)
+            XCTAssertTrue(state.isLocked, "so an unlock from before the lock was put back doesn't take it off")
+            XCTAssertEqual(state.tags, ["private"])
+        }
+    }
+
+    func testWritingTheDeletingDeviceHadNotSeenComesOutOfRecentlyDeleted() async throws {
+        let notes = try await makeNotebook("Notes", on: a), unread = try await makeNotebook("Unread", on: a)
+        try await sync(a)
+        try await sync(b)
+
+        let trashed = Date.now
+        for id in [notes.id, unread.id] { try await file(id, on: a, at: trashed) { $0.deletedAt = trashed } }
+        try await sync(a)
+        // Written in on a device that hasn't heard it was deleted.
+        try await edit(notes.id, on: b, strokes: 4, after: 60)
+        let report = try await sync(b)
+        XCTAssertEqual(report.pushed, [notes.id])
+        XCTAssertEqual(report.stateReceived, [unread.id], "a notebook nobody wrote in follows into Recently Deleted")
+        let written = try await library(notes.id, on: b), untouched = try await library(unread.id, on: b)
+        XCTAssertNil(written.deletedAt, "one just written in doesn't: writing wins, as it does over a permanent delete")
+        XCTAssertNotNil(untouched.deletedAt)
+
+        let back = try await sync(a)
+        XCTAssertEqual(back.pulled, [notes.id])
+        let restored = try await library(notes.id, on: a)
+        XCTAssertNil(restored.deletedAt, "and it comes back out on the device that deleted it")
+        let count = await strokes(notes, on: a)
+        XCTAssertEqual(count, 4)
+        try await settled()
+
+        // Deleted again by a device that has the writing, it stays deleted.
+        let again = Date.now.addingTimeInterval(120)
+        try await file(notes.id, on: a, at: again) { $0.deletedAt = again }
+        try await sync(a)
+        try await sync(b)
+        let gone = try await library(notes.id, on: b)
+        XCTAssertNotNil(gone.deletedAt)
+    }
+
     // MARK: A synced copy that isn't the one this device knew
 
     private func fill(_ root: StorageRoot, folder: String = "Science", sticker: String = "cat.png") throws {
@@ -463,6 +759,66 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(report.removedHere, [old.id], "deletions made on the other device still carry over")
         XCTAssertEqual(FolderFile.read(a).folders, [])
         XCTAssertEqual(SyncState.read(a).copy, SyncState.read(b).copy)
+    }
+
+    func testAnErasedCopyDeletesNothingOnADeviceFromBeforeCopiesWereNamed() async throws {
+        let physics = try await makeNotebook("Physics", on: a)
+        try fill(a)
+        try await sync(a)
+        // As an older build left the device, and then the copy in iCloud was erased.
+        var state = SyncState.read(a)
+        state.copy = nil
+        try state.write(a)
+        try FileManager.default.removeItem(at: cloud.url)
+
+        let report = try await sync(a)
+        XCTAssertTrue(report.startedAgain, "an empty copy that was never named isn't the one this device agreed with")
+        XCTAssertEqual(report.pushed, [physics.id])
+        XCTAssertEqual(FolderFile.read(a).folders.map(\.name), ["Science"], "so its folders")
+        XCTAssertEqual(stickers(in: a.stickers), ["cat.png"], "and stickers were never deleted")
+        XCTAssertEqual(stickers(in: cloud.stickers), ["cat.png"])
+    }
+
+    func testACopyIDThatCannotBeReadIsWaitedForAndNotReplaced() async throws {
+        try await makeNotebook("Physics", on: a)
+        try await sync(a)
+        try await sync(b)
+        let name = try String(contentsOf: cloud.copyFile, encoding: .utf8)
+        let copyFile = cloud.copyFile
+        try permit(0o000, copyFile)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: copyFile.path(percentEncoded: false)) }
+
+        do {
+            try await sync(a)
+            XCTFail("a copy whose name can't be read yet isn't synced with")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .stillArriving)
+        }
+        try permit(0o644, copyFile)
+        XCTAssertEqual(try String(contentsOf: copyFile, encoding: .utf8), name, "and it isn't given a new name, which every device would take for another copy")
+        let report = try await sync(b)
+        XCTAssertFalse(report.startedAgain)
+    }
+
+    func testFoldersThatCannotBeReadAreWaitedForAndNotTakenAsDeleted() async throws {
+        try fill(a)
+        try await sync(a)
+        try await sync(b)
+        let foldersFile = cloud.foldersFile
+        try permit(0o000, foldersFile)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: foldersFile.path(percentEncoded: false)) }
+
+        do {
+            try await sync(b)
+            XCTFail("folders that can't be read yet aren't merged")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .stillArriving)
+        }
+        XCTAssertEqual(FolderFile.read(b).folders.map(\.name), ["Science"], "a folder isn't deleted here because its list couldn't be read")
+        try permit(0o644, foldersFile)
+        try await sync(b)
+        try await sync(a)
+        XCTAssertEqual(FolderFile.read(a).folders.map(\.name), ["Science"])
     }
 
     func testAPullInterruptedByAQuitIsClearedAway() async throws {

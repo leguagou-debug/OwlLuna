@@ -107,7 +107,8 @@ struct LibraryRootView: View {
         }
         .onChange(of: app.sync.question, initial: true) { _, question in syncQuestion = question }
         .notice(Text(SyncQuestion.title(syncQuestion ?? .firstSync)),
-                isPresented: Binding(get: { syncQuestion != nil && libraryInFront }, set: { if !$0 { syncQuestion = nil } }),
+                // Taken down because something came in front of the library, the question still stands for when it is back.
+                isPresented: Binding(get: { syncQuestion != nil && libraryInFront }, set: { if !$0, libraryInFront { syncQuestion = nil } }),
                 message: Text(SyncQuestion.message(syncQuestion ?? .firstSync))) {
             Button(SyncQuestion.refuse(syncQuestion ?? .firstSync), role: .cancel) { Task { await app.sync.answer(false) } }
                 .accessibilityIdentifier("sync.question.refuse")

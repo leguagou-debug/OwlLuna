@@ -33,13 +33,14 @@ enum LibraryBackup {
     }
 
     enum Failure: LocalizedError {
-        case notABackup, newer, archive
+        case notABackup, newer, archive, needsPasscode
 
         var errorDescription: String? {
             switch self {
             case .notABackup: String(localized: "This file isn't an OwlLuna backup.")
             case .newer: String(localized: "This backup was made by a newer version of OwlLuna. Update the app, then restore it.")
             case .archive: String(localized: "The backup couldn't be written.")
+            case .needsPasscode: String(localized: "This library has locked notebooks. To back them up, set a passcode on this iPad in Settings first.")
             }
         }
     }

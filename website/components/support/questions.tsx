@@ -149,7 +149,7 @@ export const groups: Group[] = [
             No. A lock keeps a notebook closed in the app: it asks for Face ID, Touch ID or the iPad’s passcode every
             time the notebook is opened. Its files are not encrypted beyond what iPadOS does for every app, and a
             backup or an iCloud copy holds it like any other notebook. Making a backup of a library with locked
-            notebooks asks you to unlock first.
+            notebooks, or sharing one again, asks you to unlock first.
           </p>
         ),
       },
