@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { useRef, useSyncExternalStore } from 'react'
 import { ease, rising } from '@/lib/motion'
 import { words } from './covers'
-import { useArrival } from './useArrival'
+import { useArrival } from '@/components/ui/useArrival'
 import styles from './JournalPage.module.css'
 
 const sample = '2026-10-11'
@@ -49,7 +49,7 @@ const strokes = lines
 /** Today's journal page: dotted ivory paper printed with the weekday, the date and the day of the year, then written on. */
 export function JournalPage() {
   const page = useRef<HTMLDivElement>(null)
-  const play = useArrival(page, 0.4)
+  const { arrived: play } = useArrival(page, { amount: 0.4 })
   const reduced = useReducedMotion()
   const key = useSyncExternalStore(subscribe, today, () => sample)
   const head = masthead(key)

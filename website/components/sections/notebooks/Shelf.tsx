@@ -5,7 +5,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { landing, quick } from '@/lib/motion'
 import { ClothCover } from '../../ui/ClothCover'
 import { FirstPageCover, PrintCover } from './covers'
-import { useArrival } from './useArrival'
+import { useArrival } from '@/components/ui/useArrival'
 import styles from './Shelf.module.css'
 
 type Book = {
@@ -29,7 +29,7 @@ const drop = { type: 'spring', duration: 0.55, bounce: 0.5 } as const
 /** A shelf of notebooks in the three cover styles, standing on a ledge. Tapping one ties on, or takes off, its favourite ribbon. */
 export function Shelf() {
   const row = useRef<HTMLUListElement>(null)
-  const play = useArrival(row)
+  const { arrived: play } = useArrival(row, { amount: 0.3 })
   const reduced = useReducedMotion()
   const [favourites, setFavourites] = useState<readonly string[]>(['Field Notes'])
 

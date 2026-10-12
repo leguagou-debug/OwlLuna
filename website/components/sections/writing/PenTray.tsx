@@ -6,7 +6,7 @@ import { ease, lively, quick } from '@/lib/motion'
 import { InkGrain, InkStroke } from './Ink'
 import { Glyph, KindMark } from './marks'
 import { another, beats, onPaper, onWell, sample, sheet, shelfLimit, starters } from './pens'
-import { useStill } from './still'
+import { useStill } from '@/components/ui/useStill'
 import styles from './Stage.module.css'
 
 type Tool = 'pen' | 'eraser' | 'lasso'

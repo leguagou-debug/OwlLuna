@@ -6,7 +6,7 @@ import { ease, quick, rising } from '@/lib/motion'
 import { InkStroke } from './Ink'
 import { Glyph } from './marks'
 import { sample, sheet } from './pens'
-import { useStill } from './still'
+import { useStill } from '@/components/ui/useStill'
 import styles from './Stage.module.css'
 
 const view = { x: 40, y: 84, width: 356, height: 150 } as const

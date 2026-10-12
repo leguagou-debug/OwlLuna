@@ -1,15 +1,16 @@
 'use client'
 
 import { motion } from 'motion/react'
-import type { ReactNode } from 'react'
-import { useArrival } from './useArrival'
+import { useRef, type ReactNode } from 'react'
+import { useArrival } from '@/components/ui/useArrival'
 import styles from '../Story.module.css'
 
 const slam = 0.45
 
 /** Brings a rubber stamp down on the foot of whatever it holds, hard enough to jolt it. */
 export function Stamped({ word, children }: { word: string; children: ReactNode }) {
-  const { ref, arrived, waited } = useArrival<HTMLSpanElement>(1)
+  const ref = useRef<HTMLSpanElement>(null)
+  const { arrived, waited } = useArrival(ref, { amount: 1 })
   const landing = waited && arrived
 
   return (

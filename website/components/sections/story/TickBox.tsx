@@ -1,8 +1,9 @@
 'use client'
 
 import { motion, useReducedMotion } from 'motion/react'
+import { useRef } from 'react'
 import { ease } from '@/lib/motion'
-import { useArrival } from './useArrival'
+import { useArrival } from '@/components/ui/useArrival'
 
 const box = 'M4,13.5 L19.5,13 L20,29 L4.5,29.5 Z'
 const tick = 'M6.5,20 L12,27 L24.5,7.5'
@@ -14,7 +15,8 @@ type Props = { ticked?: boolean; delay?: number; className?: string }
 
 /** The hand-drawn checkbox of the splash's note page: ticked, the tick draws itself as it scrolls into view; unticked, the box does. */
 export function TickBox({ ticked = true, delay = 0, className }: Props) {
-  const { ref, arrived } = useArrival<SVGSVGElement>(1)
+  const ref = useRef<SVGSVGElement>(null)
+  const { arrived } = useArrival(ref, { amount: 1 })
   const still = useReducedMotion()
   const stroke = (duration: number, after: number) => {
     if (!arrived) return { duration: 0 }

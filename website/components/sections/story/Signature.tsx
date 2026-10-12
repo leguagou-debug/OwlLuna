@@ -1,8 +1,9 @@
 'use client'
 
 import { motion, useReducedMotion } from 'motion/react'
+import { useRef } from 'react'
 import { ease } from '@/lib/motion'
-import { useArrival } from './useArrival'
+import { useArrival } from '@/components/ui/useArrival'
 
 const capitals: Record<string, [number, string]> = {
   A: [15.4, 'M0,21.1 L7.6,-0.2 L15.4,21 M3.3,13.7 L12.3,13.5'],
@@ -55,7 +56,8 @@ const inked = { pathLength: 1, opacity: 1 }
 
 /** The letter's signature, printed in the hand of the splash's note page and underlined, one stroke after another. */
 export function Signature({ className }: { className?: string }) {
-  const { ref, arrived } = useArrival<SVGSVGElement>(0.9)
+  const ref = useRef<SVGSVGElement>(null)
+  const { arrived } = useArrival(ref, { amount: 0.9 })
   const still = useReducedMotion()
   const stroke = (duration: number, after: number) => {
     if (!arrived) return { duration: 0 }

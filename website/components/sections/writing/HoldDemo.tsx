@@ -4,7 +4,7 @@ import { animate, motion, useInView, useMotionValue, useTransform, type Animatio
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ease, quick } from '@/lib/motion'
 import { Glyph } from './marks'
-import { useStill } from './still'
+import { useStill } from '@/components/ui/useStill'
 import styles from './Stage.module.css'
 
 type Shape = 'line' | 'circle' | 'rectangle' | 'triangle'
