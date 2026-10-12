@@ -235,9 +235,10 @@ export default function PrivacyPolicy() {
             <p>Your writing history, smart shelves, settings and the search index are not copied.</p>
             <p>
               To tell what has changed since last time, each device also keeps a small record of what it last synced:
-              the random IDs and dates of its notebooks, the IDs of its folders, the file names of its stickers, the ID
-              of the iCloud copy, and the account marker described under <a href="#collected">What I collect</a>. That
-              record stays on the device.
+              the random IDs of its notebooks, with when each was last written in and last moved into or out of
+              Recently Deleted, the IDs of its folders, the file names of its stickers, the ID of the iCloud copy, and
+              the account marker described under <a href="#collected">What I collect</a>. That record stays on the
+              device.
             </p>
             <h3 className={`display ${styles.sub}`}>Where it goes</h3>
             <p>
@@ -275,14 +276,15 @@ export default function PrivacyPolicy() {
             <h3 className={`display ${styles.sub}`}>When you delete a notebook</h3>
             <p>
               A notebook you delete for good is removed from iCloud the next time that device syncs, and from your other
-              devices after that. Before it removes a notebook, the app checks whether another device has written in it
-              since. If it sees newer writing, it keeps the notebook, and the notebook comes back to the device that
-              deleted it. The check goes by what each device has received from iCloud at that moment: if one device
-              deletes a notebook while another device&rsquo;s newer writing has not reached it yet, the delete can win,
-              and that writing is removed with the notebook. The same check is made for Recently Deleted: a notebook put
-              there on one device and written in on another that had not heard of it comes back out. For a notebook that
-              is removed, an empty marker named with its random ID stays in the container so the other devices know it
-              was deleted. It holds nothing else.
+              devices after that. A delete only applies to the version of the notebook that device had. If another
+              device has written in the notebook since, or has taken it back out of Recently Deleted, the notebook is
+              kept and comes back to the device that deleted it. That holds whether or not the other device&rsquo;s
+              change had reached the deleting device: a device that finds it holds a newer version than the one that
+              was deleted keeps it and sends it to iCloud again. The same check is made for Recently Deleted: a
+              notebook put there on one device and written in on another that had not heard of it comes back out. For a
+              notebook that is removed, a small marker named with its random ID stays in the container so the other
+              devices know which version was deleted. It holds two dates and nothing else: when that notebook was last
+              written in, and when it was last moved into or out of Recently Deleted.
             </p>
           </Part>
 
@@ -428,8 +430,9 @@ export default function PrivacyPolicy() {
               <LedgerRow label="A notebook">
                 Deleting it moves it to Recently Deleted. It is removed for good after 30 days, the next time the app
                 opens, or sooner if you delete it from there yourself. With iCloud sync on, the app syncs first when it
-                can, and a notebook you restored on another device is kept only if that restore has reached this iPad by
-                then.
+                can, so a notebook you restored on another device is not removed. If that restore has not reached this
+                iPad by then, the notebook is removed here, stays on the device that restored it, and comes back here
+                at a later sync.
               </LedgerRow>
               <LedgerRow label="A recording or a transcript">Each can be removed on its own from Recordings.</LedgerRow>
               <LedgerRow label="A page of an imported PDF">

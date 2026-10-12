@@ -35,6 +35,8 @@ final class LibraryStore {
     @ObservationIgnored private var manifestWrites: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var folderWrite: Task<Void, Never>?
     @ObservationIgnored private var smartShelfWrite: Task<Void, Never>?
+    /// Backup files made while a notebook was locked: they hold it whatever has happened to it since.
+    @ObservationIgnored private var backupsHoldingLocked: Set<URL> = []
     /// Called with the notebooks a permanent delete actually removed.
     @ObservationIgnored var onPermanentlyDeleted: (([UUID]) -> Void)?
     /// Called after every change to the index made on this device, so a sync can follow it.
@@ -258,11 +260,20 @@ final class LibraryStore {
         try? FileManager.default.removeItem(at: root.deleting)
     }
 
-    func purgeExpiredTrash(olderThan days: Int = 30) {
+    /// The index may be behind the files (a sync that stopped part-way), so each notebook's own manifest has the last
+    /// word. `waiting` are notebooks a sync couldn't settle, which may have been restored on another device.
+    func purgeExpiredTrash(olderThan days: Int = 30, skipping waiting: Set<UUID> = []) async {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
-        let expired = ((try? context.fetch(FetchDescriptor<NotebookRecord>(predicate: #Predicate { $0.deletedAt != nil }))) ?? [])
-            .filter { ($0.deletedAt ?? .now) < cutoff }
-        if !expired.isEmpty { deletePermanently(expired) }
+        let candidates = ((try? context.fetch(FetchDescriptor<NotebookRecord>(predicate: #Predicate { $0.deletedAt != nil }))) ?? [])
+            .filter { ($0.deletedAt ?? .now) < cutoff && !waiting.contains($0.id) }.map(\.id)
+        guard !candidates.isEmpty else { return }
+        for write in candidates.compactMap({ manifestWrites[$0] }) { await write.value }
+        let root = root
+        let expired = await Task.detached(priority: .utility) {
+            candidates.filter { id in LibrarySync.filing(ofPackage: root.package(id))?.deletedAt.map { $0 < cutoff } ?? false }
+        }.value
+        let records = expired.compactMap(record).filter { ($0.deletedAt ?? .now) < cutoff }
+        if !records.isEmpty { deletePermanently(records) }
     }
 
     /// Each change is stamped, which is what carries it to other devices without dating the notebook.
@@ -289,12 +300,15 @@ final class LibraryStore {
     /// Writes to one notebook are chained, so two changes made back to back both land.
     @discardableResult
     func update(_ id: UUID, _ change: @escaping @Sendable (inout NotebookManifest) -> Void) -> Task<Void, Never> {
-        let package = NotebookPackage(root: root, id: id)
+        let package = NotebookPackage(root: root, id: id), registry = DocumentRegistry.shared
         let token = UUID()
         changesInFlight[id, default: [:]][token] = change
         let previous = manifestWrites[id]
+        // From here until it is written a sync leaves the notebook alone, and one that has it in hand finishes first.
+        registry.willChange(id)
         let write = Task {
             await previous?.value
+            await registry.whenReleased(id)
             do {
                 _ = try await package.updateManifest(change)
             } catch {
@@ -302,6 +316,7 @@ final class LibraryStore {
                 log.error("manifest update failed for \(id): \(error.localizedDescription)")
                 if let manifest = try? await package.readManifest().manifest { index(manifest) }
             }
+            registry.didChange(id)
             changesInFlight[id]?[token] = nil
             if changesInFlight[id]?.isEmpty == true {
                 changesInFlight[id] = nil
@@ -545,13 +560,17 @@ final class LibraryStore {
             return DailyJournal.ensureTodayPage(in: document, now: now, calendar: calendar, agenda: agenda)
         }
         guard !DocumentRegistry.shared.isOpening(id) else { return nil }
-        let package = NotebookPackage(root: root, id: id)
+        let package = NotebookPackage(root: root, id: id), registry = DocumentRegistry.shared
         let pageID = UUID()
         let token = UUID()
+        registry.willChange(id)
         defer {
+            registry.didChange(id)
             changesInFlight[id]?[token] = nil
             if changesInFlight[id]?.isEmpty == true { changesInFlight[id] = nil }
         }
+        // A sync that has the journal in hand finishes first, so the page is added to what it brought in.
+        await registry.whenReleased(id)
         do {
             if let page = try await package.readManifest().manifest.pages.last(where: { $0.day == key }) { return page.id }
             // The calendar is only read on a day that has no page yet.
@@ -575,14 +594,17 @@ extension LibraryStore {
         for document in DocumentRegistry.shared.openDocuments { await document.flush() }
         await folderWrite?.value
         await smartShelfWrite?.value
-        let root = root, journal = dailyJournal?.id
-        return try await Task.detached(priority: .userInitiated) { try LibraryBackup.create(root: root, journal: journal) }.value
+        let root = root, journal = dailyJournal?.id, holdsLocked = hasLockedNotebooks
+        let url = try await Task.detached(priority: .userInitiated) { try LibraryBackup.create(root: root, journal: journal) }.value
+        if holdsLocked || hasLockedNotebooks { backupsHoldingLocked.insert(url) }
+        return url
     }
 
     /// The backup file to hand to the share sheet: `made` if one was already written, or else a new one. It holds
-    /// locked notebooks in full, so with any in the library this first asks what opening one would. Nil when refused.
+    /// locked notebooks in full, so with any in the library, or in `made` when it was written, this first asks what
+    /// opening one would. Nil when refused.
     func backupToShare(_ made: URL? = nil) async throws -> URL? {
-        if hasLockedNotebooks {
+        if hasLockedNotebooks || made.map(backupsHoldingLocked.contains) == true {
             guard NotebookLock.shared.isAvailable else { throw LibraryBackup.Failure.needsPasscode }
             guard await NotebookLock.shared.confirm(String(localized: "Back up your library, including locked notebooks")) else { return nil }
         }
@@ -593,6 +615,8 @@ extension LibraryStore {
     /// Notebooks, folders or stickers were changed on disk by something other than this store (a sync): read them again.
     func reloadFromDisk() async {
         await folderWrite?.value
+        // A change still waiting to be written goes in first, or the index would take the file from before it.
+        for write in Array(manifestWrites.values) { await write.value }
         await LibraryIndex.refresh(root: root, context: context, full: true)
         await loadSmartShelves()
         searchVersion &+= 1

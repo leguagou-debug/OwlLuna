@@ -59,10 +59,11 @@ final class SyncCenter {
     @ObservationIgnored private var running: Task<SyncReport, Error>?
     @ObservationIgnored private var reviewing = 0
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "sync")
-    /// Called after a sync that changed the library on this device, so the index can be brought up to date.
+    /// Called after a sync that changed the library on this device, so the index can be brought up to date. A pass
+    /// that stopped part-way is reported too, with what it had done by then.
     @ObservationIgnored var onLibraryChanged: (@MainActor (SyncReport) async -> Void)?
     /// Called after every pass that finished, once the library has heard what it changed.
-    @ObservationIgnored var onSynced: (@MainActor () -> Void)?
+    @ObservationIgnored var onSynced: (@MainActor (SyncReport) async -> Void)?
     /// A pass takes each notebook in hand just before it touches it, and lets it go after. One that is open in an
     /// editor can't be taken, and is left for next time.
     @ObservationIgnored var take: @MainActor (UUID) -> Bool = { _ in true }
@@ -209,20 +210,34 @@ final class SyncCenter {
         defer { isSyncing = false }
         repeat {
             wantsAnotherPass = false
+            var done: SyncReport?, failure: (any Error)?
             do {
                 // A second pass uploads the copies a conflict left behind.
-                guard var report = try await pass() else { break }
-                if !report.conflictCopies.isEmpty, let again = try await pass() { report.pushed += again.pushed }
-                lastReport = report
+                guard let first = try await pass() else { break }
+                done = first
+                if !first.conflictCopies.isEmpty, let again = try await pass() { done?.add(again) }
+            } catch let stopped as StoppedPass {
+                if done == nil { done = stopped.report } else { done?.add(stopped.report) }
+                failure = stopped.reason
+            } catch {
+                failure = error
+            }
+            if failure == nil {
+                lastReport = done
                 lastSynced = .now
                 lastError = nil
-                if report.changedHere { await onLibraryChanged?(report) }
-                onSynced?()
-            } catch is CancellationError {
+            }
+            // What a pass did before it stopped is on disk all the same, so the library hears of that as well.
+            if let done, done.changedHere { await onLibraryChanged?(done) }
+            switch failure {
+            case nil:
+                if let done { await onSynced?(done) }
+            case is CancellationError:
                 // Stopped part-way because sync was turned off or the copy moved. Whoever stopped it decides what follows.
-            } catch SyncError.accountChanged {
+                break
+            case let error? where error as? SyncError == .accountChanged:
                 identityChanged()
-            } catch {
+            case let error?:
                 lastError = error.localizedDescription
                 log.error("sync failed: \(error.localizedDescription)")
             }

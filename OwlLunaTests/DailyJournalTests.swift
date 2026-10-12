@@ -79,6 +79,23 @@ final class DailyJournalTests: XCTestCase {
         XCTAssertEqual(later, next)
     }
 
+    func testTodaysPageWaitsWhileASyncHasTheJournalInHand() async throws {
+        let store = try makeStore(), registry = DocumentRegistry.shared
+        let id = try await store.createDailyJournal(now: day(2026, 9, 28), calendar: calendar)
+        XCTAssertTrue(registry.take(id))
+        addTeardownBlock { @MainActor in registry.release(id) }
+        let now = day(2026, 9, 29), calendar = calendar
+        let adding = Task { await store.prepareTodayPage(id, now: now, calendar: calendar) }
+        try await Task.sleep(for: .milliseconds(300))
+        let during = try await manifest(store, id).pages
+        XCTAssertEqual(during.map(\.day), ["2026-09-28"], "nothing is written into a notebook a pull may be about to replace")
+        registry.release(id)
+        let page = await adding.value
+        let after = try await manifest(store, id).pages
+        XCTAssertEqual(after.map(\.day), ["2026-09-29"], "the page is dated once the notebook is let go")
+        XCTAssertEqual(page, after.last?.id)
+    }
+
     func testTheOpenDocumentPathIsUndoable() async throws {
         let store = try makeStore()
         let id = try await store.createDailyJournal(now: day(2026, 9, 28), calendar: calendar)

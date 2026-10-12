@@ -16,6 +16,8 @@ final class DocumentRegistry {
     private var closing: [UUID: NotebookDocument] = [:]
     /// Notebooks a sync is copying over right now. Opening one waits until it is let go.
     private var inHand: Set<UUID> = []
+    /// How many changes the library has yet to write into each closed notebook's manifest.
+    private var changing: [UUID: Int] = [:]
 
     /// The live document for a notebook: open in an editor, or closed with changes still waiting to be saved.
     func document(for id: UUID) -> NotebookDocument? {
@@ -26,14 +28,28 @@ final class DocumentRegistry {
 
     func isOpening(_ id: UUID) -> Bool { opening[id] != nil }
 
-    /// A sync asks before it touches a notebook's files. False while the notebook is open, opening or still saving.
+    /// A sync asks before it touches a notebook's files. False while the notebook is open, opening or still saving,
+    /// or while the library has a change to its manifest waiting to be written.
     func take(_ id: UUID) -> Bool {
-        guard document(for: id) == nil, opening[id] == nil else { return false }
+        guard document(for: id) == nil, opening[id] == nil, changing[id] == nil else { return false }
         inHand.insert(id)
         return true
     }
 
     func release(_ id: UUID) { inHand.remove(id) }
+
+    /// The library says so before it rewrites a closed notebook's manifest, and again once that is done.
+    func willChange(_ id: UUID) { changing[id, default: 0] += 1 }
+
+    func didChange(_ id: UUID) {
+        let left = (changing[id] ?? 1) - 1
+        changing[id] = left > 0 ? left : nil
+    }
+
+    /// Waits for a sync that has the notebook in hand to let it go, so a change isn't lost under the notebook it swaps in.
+    func whenReleased(_ id: UUID) async {
+        while inHand.contains(id) { try? await Task.sleep(for: .milliseconds(20)) }
+    }
 
     func sceneIdentifier(for id: UUID) -> String? {
         if entries[id]?.document != nil { return entries[id]?.sceneIdentifier }

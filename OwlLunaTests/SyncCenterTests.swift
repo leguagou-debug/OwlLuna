@@ -258,7 +258,7 @@ final class SyncCenterTests: XCTestCase {
         let (first, second) = try await twoNotebooksWrittenInElsewhere()
         let center = SyncCenter(root: root, defaults: defaults)
         var finished = 0
-        center.onSynced = { finished += 1 }
+        center.onSynced = { _ in finished += 1 }
         center.take = { [weak center] id in
             if id == first { center?.isEnabled = false }
             return true
@@ -328,12 +328,11 @@ final class SyncCenterTests: XCTestCase {
         await store.reloadFromDisk()
         XCTAssertEqual(store.record(restored)?.isTrashed, true)
         defaults.set(true, forKey: SettingsKey.syncsWithICloud)
-        let center = SyncCenter(root: root, defaults: defaults)
-        // Wired as the app does at launch: the library hears what the sync changed, then Recently Deleted is emptied.
+        let center = SyncCenter(root: root, defaults: defaults), purge = TrashPurge(library: store, sync: center)
         center.onLibraryChanged = { _ in await store.reloadFromDisk() }
-        center.onSynced = { store.purgeExpiredTrash() }
         await center.use(cloud, account: nil)
         await center.syncNow()
+        await purge.launchSyncTried()
         XCTAssertEqual(store.record(restored)?.isTrashed, false, "a notebook restored on another device is heard of before its 30 days are counted here")
         XCTAssertEqual(store.record(written)?.isTrashed, false, "and so is one written in there")
         XCTAssertNil(store.record(expired), "one that nobody wanted back still goes")
@@ -344,13 +343,187 @@ final class SyncCenterTests: XCTestCase {
         XCTAssertEqual(Set(there.packageIDs()), [restored, written], "nothing wanted is removed from the device that wanted it")
     }
 
+    /// A notebook put in Recently Deleted 40 days ago, as its own manifest and the index both have it.
+    private func expiredNotebook(_ title: String, in store: LibraryStore) async throws -> UUID {
+        let id = try await makeNotebook(title, on: root), longAgo = Date.now.addingTimeInterval(-40 * 86_400)
+        try await file(id, on: root, deletedAt: longAgo, stamped: longAgo)
+        await store.reloadFromDisk()
+        XCTAssertEqual(store.record(id)?.isTrashed, true)
+        return id
+    }
+
+    private func isOnDisk(_ id: UUID) -> Bool {
+        FileManager.default.fileExists(atPath: root.package(id).path(percentEncoded: false))
+    }
+
+    func testNothingIsPurgedUntilTheLaunchSyncHasFinished() async throws {
+        let store = try makeStore()
+        let expired = try await expiredNotebook("Expired", in: store)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults), purge = TrashPurge(library: store, sync: center)
+        // The launch sync is tried while iCloud is still being looked for.
+        await center.syncNow()
+        let launch = Task { await purge.launchSyncTried() }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNotNil(store.record(expired), "a pass may be about to follow, so nothing is counted yet")
+        await center.use(cloud, account: nil)
+        await launch.value
+        XCTAssertNotNil(store.record(expired), "and with a sync to wait for, nothing goes before it")
+
+        await center.syncNow()
+        XCTAssertNil(store.record(expired), "what is past its 30 days goes once the sync has finished")
+        XCTAssertFalse(isOnDisk(expired))
+    }
+
+    func testWithNothingToSyncWithRecentlyDeletedIsEmptiedAtOnce() async throws {
+        let store = try makeStore()
+        let expired = try await expiredNotebook("Expired", in: store), recent = try await makeNotebook("Recent", on: root)
+        try await file(recent, on: root, deletedAt: Date.now.addingTimeInterval(-5 * 86_400), stamped: .now)
+        await store.reloadFromDisk()
+        // Sync has never been allowed on this device.
+        let center = SyncCenter(root: root, defaults: defaults), purge = TrashPurge(library: store, sync: center)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        await purge.launchSyncTried()
+        XCTAssertNil(store.record(expired))
+        XCTAssertNotNil(store.record(recent), "a notebook still inside its 30 days stays")
+
+        let later = try await expiredNotebook("Later", in: store)
+        await purge.launchSyncTried()
+        XCTAssertNotNil(store.record(later), "and it happens once a launch")
+    }
+
+    func testANotebookTheSyncLeftWaitingIsNotPurged() async throws {
+        let store = try makeStore()
+        let waiting = try await expiredNotebook("Waiting", in: store), expired = try await expiredNotebook("Expired", in: store)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        // Its manifest in the synced copy is still arriving, so this device can't tell whether it was restored elsewhere.
+        try Data("{".utf8).write(to: cloud.package(waiting).appending(path: "manifest.json"))
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults), purge = TrashPurge(library: store, sync: center)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        await purge.launchSyncTried()
+        XCTAssertEqual(center.lastReport?.waiting, [waiting])
+        XCTAssertNotNil(store.record(waiting), "a notebook the sync couldn't settle isn't counted as still deleted")
+        XCTAssertTrue(isOnDisk(waiting))
+        XCTAssertNil(store.record(expired), "the rest of Recently Deleted is emptied as usual")
+    }
+
+    func testANotebookRestoredInItsOwnFilesIsNotPurgedOnTheIndexsWord() async throws {
+        let store = try makeStore()
+        let restored = try await expiredNotebook("Restored", in: store), expired = try await expiredNotebook("Expired", in: store)
+        // Taken back out by a sync the index hasn't been told of, as a pass stopped part-way leaves it.
+        try await file(restored, on: root, deletedAt: nil, stamped: .now)
+        XCTAssertEqual(store.record(restored)?.isTrashed, true)
+        await store.purgeExpiredTrash()
+        XCTAssertNotNil(store.record(restored), "each notebook's own manifest has the last word")
+        XCTAssertTrue(isOnDisk(restored))
+        XCTAssertNil(store.record(expired))
+    }
+
+    // MARK: A pass that stops part-way
+
+    func testAPassStoppedPartWayStillTellsTheLibrary() async throws {
+        let (first, _) = try await twoNotebooksWrittenInElsewhere()
+        let center = SyncCenter(root: root, defaults: defaults)
+        var reports: [SyncReport] = []
+        center.onLibraryChanged = { reports.append($0) }
+        center.take = { [weak center] id in
+            if id == first { center?.isEnabled = false }
+            return true
+        }
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(reports.map(\.pulled), [[first]], "what arrived before the pass stopped is in the library now, not at the next launch")
+        XCTAssertNil(center.lastError)
+    }
+
+    func testAFollowUpPassThatFailsDoesNotDropWhatTheFirstDid() async throws {
+        let id = try await makeNotebook("Notes", on: root), there = temporaryRoot(self)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        _ = try await LibrarySync.run(root: there, cloud: cloud)
+        _ = try await NotebookPackage(root: root, id: id).updateManifest { $0.modifiedAt = $0.modifiedAt.addingTimeInterval(60) }
+        _ = try await NotebookPackage(root: there, id: id).updateManifest { $0.modifiedAt = $0.modifiedAt.addingTimeInterval(120) }
+        _ = try await LibrarySync.run(root: there, cloud: cloud)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults), copyFile = cloud.copyFile.path(percentEncoded: false)
+        var reports: [SyncReport] = []
+        center.onLibraryChanged = { reports.append($0) }
+        // The pass that uploads the conflicted copy can't read the synced copy's name.
+        center.release = { _ in try? FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: copyFile) }
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: copyFile) }
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(reports.map(\.conflictCopies.count), [1], "the library hears of the copy and the newer version the first pass brought in")
+        XCTAssertEqual(reports.first?.pulled, [id])
+        XCTAssertNotNil(center.lastError)
+    }
+
+    // MARK: A library change while a sync has the notebook in hand
+
+    private func title(of id: UUID) async throws -> String {
+        try await NotebookPackage(root: root, id: id).readManifest().manifest.title
+    }
+
+    func testASyncLeavesANotebookWhoseLibraryChangeIsStillBeingWritten() async throws {
+        let store = try makeStore(), registry = DocumentRegistry.shared
+        let id = try await makeNotebook("Diary", on: root)
+        let write = store.update(id) { $0.title = "Renamed" }
+        let taken = registry.take(id)
+        if taken { registry.release(id) }
+        XCTAssertFalse(taken, "its manifest is about to be rewritten, so a pass leaves it for next time")
+        await write.value
+        XCTAssertTrue(registry.take(id), "and takes it once the change is on disk")
+        registry.release(id)
+    }
+
+    func testALibraryChangeWaitsWhileASyncHasTheNotebookInHand() async throws {
+        let store = try makeStore(), registry = DocumentRegistry.shared
+        let id = try await makeNotebook("Diary", on: root)
+        XCTAssertTrue(registry.take(id))
+        addTeardownBlock { @MainActor in registry.release(id) }
+        let write = store.update(id) { $0.title = "Renamed" }
+        try await Task.sleep(for: .milliseconds(300))
+        let during = try await title(of: id)
+        XCTAssertEqual(during, "Diary", "nothing is written into a notebook a pull may be about to replace")
+        registry.release(id)
+        await write.value
+        let after = try await title(of: id)
+        XCTAssertEqual(after, "Renamed", "the change is made once the notebook is let go")
+    }
+
+    func testALockSetWhileItsNotebookIsBeingPulledIsKept() async throws {
+        let (first, _) = try await twoNotebooksWrittenInElsewhere()
+        let store = try makeStore(), registry = DocumentRegistry.shared
+        await store.reloadFromDisk()
+        let record = try XCTUnwrap(store.record(first))
+        let center = SyncCenter(root: root, defaults: defaults)
+        // Locked from the library just as the pass takes the notebook in hand.
+        center.take = { id in
+            let taken = registry.take(id)
+            if id == first { store.setLocked(true, for: [record]) }
+            return taken
+        }
+        center.release = { registry.release($0) }
+        center.onLibraryChanged = { _ in await store.reloadFromDisk() }
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(center.lastReport?.pulled.contains(first), true)
+        try await Task.sleep(for: .milliseconds(300))
+        let manifest = try await NotebookPackage(root: root, id: first).readManifest().manifest
+        XCTAssertTrue(manifest.title.hasSuffix(", written in"))
+        XCTAssertTrue(manifest.library.isLocked, "the lock lands on the notebook the sync brought in")
+        XCTAssertEqual(store.record(first)?.isLocked, true, "and the library still has it locked")
+    }
+
     func testOnlyAPassThatFinishedIsFollowedUp() async throws {
         try await makeNotebook("Physics", on: root)
         _ = try await LibrarySync.run(root: root, cloud: cloud)
         defaults.set(true, forKey: SettingsKey.syncsWithICloud)
         let center = SyncCenter(root: root, defaults: defaults), copyFile = cloud.copyFile.path(percentEncoded: false)
         var finished = 0
-        center.onSynced = { finished += 1 }
+        center.onSynced = { _ in finished += 1 }
         await center.use(cloud, account: nil)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: copyFile)
         addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: copyFile) }

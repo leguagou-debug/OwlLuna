@@ -176,6 +176,26 @@ final class LockTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? LibraryBackup.Failure, .needsPasscode)
         }
+
+        // A file made while the diary was locked still holds it after the diary is deleted for good.
+        lock.authenticator = ScriptedAuthenticator(passes: 1)
+        let remade = try await store.backupToShare()
+        let withDiary = try XCTUnwrap(remade)
+        addTeardownBlock { try? FileManager.default.removeItem(at: withDiary) }
+        store.deletePermanently([diary])
+        XCTAssertFalse(store.hasLockedNotebooks)
+        lock.authenticator = ScriptedAuthenticator(passes: 0)
+        let gone = try await store.backupToShare(withDiary)
+        XCTAssertNil(gone, "so sharing it again asks, whatever the library holds now")
+        let plain = try await store.backupToShare(backup)
+        XCTAssertEqual(plain, backup, "a file made with nothing locked is handed over unasked")
+        lock.authenticator = NoPasscode()
+        do {
+            _ = try await store.backupToShare(withDiary)
+            XCTFail("an iPad that can't ask hands nothing over")
+        } catch {
+            XCTAssertEqual(error as? LibraryBackup.Failure, .needsPasscode)
+        }
     }
 
     func testAnIndexFromBeforeLocksIsMigrated() async throws {

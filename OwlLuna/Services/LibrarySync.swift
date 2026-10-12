@@ -20,6 +20,45 @@ struct CloudFolder: Sendable, Hashable {
     }
 
     func tombstone(_ id: UUID) -> URL { tombstones.appending(path: id.uuidString) }
+
+    static let uploadExtension = "uploading"
+
+    /// Where a notebook new to the synced copy is assembled before it is moved into place. No listing takes it for a notebook.
+    func upload(_ id: UUID) -> URL {
+        library.appending(path: "\(id.uuidString)-\(UUID().uuidString).\(Self.uploadExtension)", directoryHint: .isDirectory)
+    }
+}
+
+/// What a delete marker says was deleted: the notebook's page date, and when it was last moved into or out of
+/// Recently Deleted. A marker from an older build is empty and says neither.
+struct DeleteMarker: Sendable, Equatable {
+    var modifiedAt: Date?
+    var trashStamp: Date?
+
+    init(modifiedAt: Date? = nil, trashStamp: Date? = nil) {
+        self.modifiedAt = modifiedAt
+        self.trashStamp = trashStamp
+    }
+
+    init(_ data: Data) {
+        let json = try? JSONValue.parse(data)
+        modifiedAt = json?["modifiedAt"]?.stringValue.flatMap(ManifestCodec.parseDate)
+        trashStamp = json?["trashStamp"]?.stringValue.flatMap(ManifestCodec.parseDate)
+    }
+
+    func encoded() throws -> Data {
+        var values: [String: JSONValue] = [:]
+        if let modifiedAt { values["modifiedAt"] = ManifestCodec.encodeDate(modifiedAt) }
+        if let trashStamp { values["trashStamp"] = ManifestCodec.encodeDate(trashStamp) }
+        return try JSONValue.object(values).serialized()
+    }
+
+    /// Whether the marker is for this version of a notebook: the same pages, and not taken back out of Recently
+    /// Deleted since. Nil for a marker that doesn't say.
+    func covers(_ notebook: (modifiedAt: Date, library: LibraryState)) -> Bool? {
+        guard let modifiedAt else { return nil }
+        return abs(notebook.modifiedAt.timeIntervalSince(modifiedAt)) < 0.002 && !notebook.library.wasRestored(since: trashStamp)
+    }
 }
 
 /// What this device and the synced copy agreed on last time, kept on the device. It is what tells a notebook that was
@@ -27,6 +66,8 @@ struct CloudFolder: Sendable, Hashable {
 struct SyncState: Sendable, Equatable {
     /// Each notebook's modification date when it was last in step.
     var notebooks: [UUID: Date] = [:]
+    /// Each notebook's Recently Deleted stamp at that time, which tells a restore made elsewhere since from none.
+    var trashStamps: [UUID: Date] = [:]
     var folders: Set<UUID> = []
     var stickers: Set<String> = []
     /// Which synced copy all of that was agreed with.
@@ -41,9 +82,20 @@ struct SyncState: Sendable, Equatable {
     /// Nothing is agreed any more, so the next pass only adds: what is missing on either side is copied, never deleted.
     mutating func startAgain() {
         notebooks = [:]
+        trashStamps = [:]
         folders = []
         stickers = []
         copy = nil
+    }
+
+    mutating func agree(on id: UUID, _ notebook: (modifiedAt: Date, library: LibraryState)) {
+        notebooks[id] = notebook.modifiedAt
+        trashStamps[id] = notebook.library.changedAt(.deleted)
+    }
+
+    mutating func forget(_ id: UUID) {
+        notebooks[id] = nil
+        trashStamps[id] = nil
     }
 
     static func read(_ root: StorageRoot) -> SyncState {
@@ -51,6 +103,9 @@ struct SyncState: Sendable, Equatable {
         var state = SyncState()
         for (key, value) in json["notebooks"]?.objectValue ?? [:] {
             if let id = UUID(uuidString: key), let date = value.stringValue.flatMap(ManifestCodec.parseDate) { state.notebooks[id] = date }
+        }
+        for (key, value) in json["trashStamps"]?.objectValue ?? [:] {
+            if let id = UUID(uuidString: key), let date = value.stringValue.flatMap(ManifestCodec.parseDate) { state.trashStamps[id] = date }
         }
         state.folders = Set(json["folders"]?.arrayValue?.compactMap { $0.stringValue.flatMap(UUID.init(uuidString:)) } ?? [])
         state.stickers = Set(json["stickers"]?.arrayValue?.compactMap(\.stringValue) ?? [])
@@ -62,6 +117,7 @@ struct SyncState: Sendable, Equatable {
     func write(_ root: StorageRoot) throws {
         var values: [String: JSONValue] = [
             "notebooks": .object(Dictionary(uniqueKeysWithValues: notebooks.map { ($0.key.uuidString, ManifestCodec.encodeDate($0.value)) })),
+            "trashStamps": .object(Dictionary(uniqueKeysWithValues: trashStamps.map { ($0.key.uuidString, ManifestCodec.encodeDate($0.value)) })),
             "folders": .array(folders.map { .string($0.uuidString) }.sorted { ($0.stringValue ?? "") < ($1.stringValue ?? "") }),
             "stickers": .array(stickers.sorted().map(JSONValue.string)),
         ]
@@ -93,6 +149,27 @@ struct SyncReport: Sendable, Equatable {
     var changedHere: Bool {
         !pulled.isEmpty || !removedHere.isEmpty || !conflictCopies.isEmpty || !stateReceived.isEmpty || foldersChanged || stickersChanged
     }
+
+    /// Adds what the pass run straight after this one did. What is waiting is what that pass left waiting.
+    mutating func add(_ next: SyncReport) {
+        pushed += next.pushed
+        pulled += next.pulled
+        removedHere += next.removedHere
+        removedThere += next.removedThere
+        conflictCopies += next.conflictCopies
+        waiting = next.waiting
+        stateReceived += next.stateReceived
+        stateSent += next.stateSent
+        foldersChanged = foldersChanged || next.foldersChanged
+        stickersChanged = stickersChanged || next.stickersChanged
+        startedAgain = startedAgain || next.startedAgain
+    }
+}
+
+/// A pass that stopped part-way: what it had done by then, which is kept as agreed, and why it stopped.
+struct StoppedPass: Error {
+    let report: SyncReport
+    let reason: any Error
 }
 
 enum SyncError: LocalizedError {
@@ -112,6 +189,12 @@ extension LibraryState {
     /// Whether two copies file the notebook alike: favourite, lock, folder, tags and Recently Deleted.
     func agrees(with other: LibraryState) -> Bool {
         Filing.allCases.allSatisfy { files($0, like: other) }
+    }
+
+    /// Whether the notebook was taken back out of Recently Deleted after `stamp`, which is all a delete made then knew of.
+    func wasRestored(since stamp: Date?) -> Bool {
+        guard deletedAt == nil, let changed = changedAt(.deleted) else { return false }
+        return changed.timeIntervalSince(stamp ?? .distantPast) > 0.0005
     }
 
     /// Whether this copy lacks something `wanted` holds: an item filed differently, or stamped later.
@@ -179,6 +262,9 @@ enum LibrarySync {
     /// When a notebook was last changed, read straight from its manifest.
     static func stamp(ofPackage url: URL) -> Date? { glance(ofPackage: url)?.modifiedAt }
 
+    /// How a notebook is filed, read straight from its manifest.
+    static func filing(ofPackage url: URL) -> LibraryState? { glance(ofPackage: url)?.library }
+
     /// The two things a pass decides on, from one read of the manifest: when the pages changed, and how the notebook is filed.
     private static func glance(ofPackage url: URL) -> (modifiedAt: Date, library: LibraryState)? {
         guard let data = try? Data(contentsOf: url.appending(path: "manifest.json")), let json = try? JSONValue.parse(data),
@@ -226,6 +312,24 @@ enum LibrarySync {
         try? FileManager.default.removeItem(at: root.arriving)
     }
 
+    /// Clears away uploads a quit cut short. One begun within the hour may be another device's, still under way.
+    private static func sweepUploads(in cloud: CloudFolder, now: Date) {
+        let fileManager = FileManager.default
+        let contents = (try? fileManager.contentsOfDirectory(at: cloud.library, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for url in contents where url.pathExtension == CloudFolder.uploadExtension {
+            let begun = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if now.timeIntervalSince(begun) > 3600 { try? coordinated(writing: url) { try fileManager.removeItem(at: $0) } }
+        }
+    }
+
+    /// Whether a synced package was left by an upload cut short: it has no manifest, and none is on its way down.
+    private static func isCutShort(_ package: URL) -> Bool {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: package.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue else { return false }
+        return !["manifest.json", ".manifest.json.icloud"].contains { fileManager.fileExists(atPath: package.appending(path: $0).path(percentEncoded: false)) }
+    }
+
     private static func same(_ a: Date?, _ b: Date?) -> Bool {
         guard let a, let b else { return a == nil && b == nil }
         return abs(a.timeIntervalSince(b)) < 0.002
@@ -269,6 +373,8 @@ enum LibrarySync {
         // What was agreed holds only for the copy it was agreed with. With an erased copy, or another account's,
         // something missing there was never deleted: this pass starts again and only adds.
         let copy = try copyID(in: cloud)
+        // Looked at before anything is copied, so a pass that has to wait for the folders changes nothing.
+        _ = try contents(of: cloud.foldersFile)
         if let known = state.copy {
             if known != copy {
                 state.startAgain()
@@ -278,125 +384,150 @@ enum LibrarySync {
             // A state from before copies were named can only tell an erased copy by its being empty.
             state.startAgain()
             report.startedAgain = true
+        } else if copy != nil {
+            // Nor can it tell a copy erased and filled again by another device, where a missing folder or sticker was never deleted.
+            state.folders = []
+            state.stickers = []
         }
         if let copy {
             state.copy = copy
         } else {
+            // The fresh start is saved first: once the copy has a name, a state without one is taken to have agreed with it.
+            if report.startedAgain { try state.write(root) }
             let made = UUID().uuidString
             try coordinated(writing: cloud.copyFile) { try Data(made.utf8).write(to: $0, options: .atomic) }
             state.copy = made
         }
+        sweepUploads(in: cloud, now: now)
         let here = Set(root.packageIDs()), there = packageIDs(in: cloud.library)
         let deleted = Set(((try? fileManager.contentsOfDirectory(atPath: cloud.tombstones.path(percentEncoded: false))) ?? []).compactMap(UUID.init(uuidString:)))
+        func deleteMarker(_ id: UUID) throws -> DeleteMarker? {
+            guard deleted.contains(id), let data = try contents(of: cloud.tombstone(id)) else { return nil }
+            return DeleteMarker(data)
+        }
 
-        for id in here.union(there).union(state.notebooks.keys).sorted(by: { $0.uuidString < $1.uuidString }) {
-            try checkStillWanted()
-            guard await take(id) else { report.waiting.append(id); continue }
-            notebook: do {
-                let isHere = here.contains(id), isThere = there.contains(id)
-                let local = isHere ? glance(ofPackage: root.package(id)) : nil
-                let remote = isThere ? glance(ofPackage: cloud.package(id)) : nil
-                let agreed = state.notebooks[id]
-                if (isHere && local == nil) || (isThere && remote == nil) {
-                    // A manifest that can't be read yet (still arriving, or damaged) is never copied over a good one.
-                    report.waiting.append(id)
-                    break notebook
-                }
-                switch (local, remote) {
-                case (let local?, let remote?):
-                    // The pages go by their date. How the notebook is filed is settled apart from them, so a pull
-                    // never takes a lock off and a favourite never counts as an edit.
-                    let inStep = same(local.modifiedAt, remote.modifiedAt)
-                    let unchangedHere = inStep || (agreed != nil && same(local.modifiedAt, agreed))
-                    let unchangedThere = inStep || (agreed != nil && same(remote.modifiedAt, agreed))
-                    let wanted = LibraryState.settled(here: local.library, there: remote.library, written: (!unchangedHere, !unchangedThere), now: now)
-                    var hereHolds = local.library, thereHolds = remote.library
-                    // Written in on either side, it is no longer deleted: a marker left beside it would mislead a new device.
-                    if !inStep, deleted.contains(id) { try? fileManager.removeItem(at: cloud.tombstone(id)) }
-                    if inStep {
-                        state.notebooks[id] = local.modifiedAt
-                    } else if unchangedHere {
-                        try pull(id, from: cloud, into: root, filedAs: wanted)
-                        hereHolds = wanted ?? remote.library
-                        state.notebooks[id] = remote.modifiedAt
-                        report.pulled.append(id)
-                    } else if unchangedThere {
-                        try push(id, from: root, to: cloud)
-                        thereHolds = local.library
-                        state.notebooks[id] = local.modifiedAt
-                        report.pushed.append(id)
-                    } else {
-                        // Both sides changed. The older version is kept as a notebook of its own first; once that is
-                        // done the newer goes through like any other change, and can be tried again if it fails.
-                        let remoteIsNewer = remote.modifiedAt > local.modifiedAt
-                        let copy = try keepCopy(of: id, fromSyncedCopy: !remoteIsNewer, locked: local.library.isLocked || remote.library.isLocked,
-                                                root: root, cloud: cloud)
-                        report.conflictCopies.append(copy)
-                        state.notebooks[id] = remoteIsNewer ? local.modifiedAt : remote.modifiedAt
-                        if remoteIsNewer {
+        do {
+            for id in here.union(there).union(state.notebooks.keys).sorted(by: { $0.uuidString < $1.uuidString }) {
+                try checkStillWanted()
+                guard await take(id) else { report.waiting.append(id); continue }
+                notebook: do {
+                    let isHere = here.contains(id)
+                    let local = isHere ? glance(ofPackage: root.package(id)) : nil
+                    // An upload cut short left a package no device can read. With the notebook here, it is sent again.
+                    let isThere = there.contains(id) && !(local != nil && isCutShort(cloud.package(id)))
+                    let remote = isThere ? glance(ofPackage: cloud.package(id)) : nil
+                    let agreed = state.notebooks[id]
+                    if (isHere && local == nil) || (isThere && remote == nil) {
+                        // A manifest that can't be read yet (still arriving, or damaged) is never copied over a good one.
+                        report.waiting.append(id)
+                        break notebook
+                    }
+                    switch (local, remote) {
+                    case (let local?, let remote?):
+                        // The pages go by their date. How the notebook is filed is settled apart from them, so a pull
+                        // never takes a lock off and a favourite never counts as an edit.
+                        let inStep = same(local.modifiedAt, remote.modifiedAt)
+                        let unchangedHere = inStep || (agreed != nil && same(local.modifiedAt, agreed))
+                        let unchangedThere = inStep || (agreed != nil && same(remote.modifiedAt, agreed))
+                        let wanted = LibraryState.settled(here: local.library, there: remote.library, written: (!unchangedHere, !unchangedThere), now: now)
+                        var hereHolds = local.library, thereHolds = remote.library
+                        // A marker beside a version it wasn't made for would mislead a new device: writing or a restore overrules it.
+                        if let marker = try deleteMarker(id), !inStep || marker.covers((remote.modifiedAt, wanted ?? remote.library)) == false {
+                            try? fileManager.removeItem(at: cloud.tombstone(id))
+                        }
+                        if inStep {
+                            state.notebooks[id] = local.modifiedAt
+                        } else if unchangedHere {
                             try pull(id, from: cloud, into: root, filedAs: wanted)
                             hereHolds = wanted ?? remote.library
                             state.notebooks[id] = remote.modifiedAt
                             report.pulled.append(id)
-                        } else {
+                        } else if unchangedThere {
                             try push(id, from: root, to: cloud)
                             thereHolds = local.library
                             state.notebooks[id] = local.modifiedAt
                             report.pushed.append(id)
+                        } else {
+                            // Both sides changed. The older version is kept as a notebook of its own first; once that is
+                            // done the newer goes through like any other change, and can be tried again if it fails.
+                            let remoteIsNewer = remote.modifiedAt > local.modifiedAt
+                            let copy = try keepCopy(of: id, fromSyncedCopy: !remoteIsNewer, locked: local.library.isLocked || remote.library.isLocked,
+                                                    root: root, cloud: cloud)
+                            report.conflictCopies.append(copy)
+                            state.notebooks[id] = remoteIsNewer ? local.modifiedAt : remote.modifiedAt
+                            // Saved at once, so a pass cut short from here on doesn't find the conflict again and copy it twice.
+                            try state.write(root)
+                            if remoteIsNewer {
+                                try pull(id, from: cloud, into: root, filedAs: wanted)
+                                hereHolds = wanted ?? remote.library
+                                state.notebooks[id] = remote.modifiedAt
+                                report.pulled.append(id)
+                            } else {
+                                try push(id, from: root, to: cloud)
+                                thereHolds = local.library
+                                state.notebooks[id] = local.modifiedAt
+                                report.pushed.append(id)
+                            }
                         }
-                    }
-                    if let wanted {
-                        // A stamp raised with nothing filed differently isn't a change worth reporting.
-                        if hereHolds.trails(wanted), try refile(id, as: wanted, inPackage: root.package(id)), !hereHolds.agrees(with: wanted) {
-                            report.stateReceived.append(id)
+                        if let wanted {
+                            // A stamp raised with nothing filed differently isn't a change worth reporting.
+                            if hereHolds.trails(wanted), try refile(id, as: wanted, inPackage: root.package(id)), !hereHolds.agrees(with: wanted) {
+                                report.stateReceived.append(id)
+                            }
+                            if thereHolds.trails(wanted) {
+                                var sent = false
+                                try coordinated(writing: cloud.package(id)) { sent = try refile(id, as: wanted, inPackage: $0) }
+                                if sent, !thereHolds.agrees(with: wanted) { report.stateSent.append(id) }
+                            }
                         }
-                        if thereHolds.trails(wanted) {
-                            var sent = false
-                            try coordinated(writing: cloud.package(id)) { sent = try refile(id, as: wanted, inPackage: $0) }
-                            if sent, !thereHolds.agrees(with: wanted) { report.stateSent.append(id) }
+                        state.trashStamps[id] = (wanted ?? remote.library).changedAt(.deleted)
+                    case (let local?, nil):
+                        // A marker carries a delete only to the version it was made for, and not over a restore made since.
+                        if let marker = try deleteMarker(id), agreed != nil, marker.covers(local) ?? same(local.modifiedAt, agreed) {
+                            try remove(root.package(id), root: root)
+                            state.forget(id)
+                            report.removedHere.append(id)
+                        } else {
+                            // New here, or changed here after it was deleted elsewhere: writing wins over a delete.
+                            try? fileManager.removeItem(at: cloud.tombstone(id))
+                            try push(id, from: root, to: cloud)
+                            state.agree(on: id, local)
+                            report.pushed.append(id)
                         }
+                    case (nil, let remote?):
+                        if let agreed, same(remote.modifiedAt, agreed), !remote.library.wasRestored(since: state.trashStamps[id]) {
+                            // It was here and in step, it's gone, and nobody has written in it or restored it since: it was deleted on this device.
+                            try DeleteMarker(modifiedAt: remote.modifiedAt, trashStamp: remote.library.changedAt(.deleted)).encoded().write(to: cloud.tombstone(id), options: .atomic)
+                            try coordinated(writing: cloud.package(id)) { try fileManager.removeItem(at: $0) }
+                            state.forget(id)
+                            report.removedThere.append(id)
+                        } else if agreed == nil, let marker = try deleteMarker(id), marker.covers(remote) ?? true {
+                            try coordinated(writing: cloud.package(id)) { try fileManager.removeItem(at: $0) }
+                        } else {
+                            // New there, or written in or restored there since this device last saw it: that wins over a delete.
+                            try? fileManager.removeItem(at: cloud.tombstone(id))
+                            try pull(id, from: cloud, into: root)
+                            state.agree(on: id, remote)
+                            report.pulled.append(id)
+                        }
+                    case (nil, nil):
+                        state.forget(id)
                     }
-                case (let local?, nil):
-                    if deleted.contains(id), agreed != nil, same(local.modifiedAt, agreed) {
-                        try remove(root.package(id), root: root)
-                        state.notebooks[id] = nil
-                        report.removedHere.append(id)
-                    } else {
-                        // New here, or changed here after it was deleted elsewhere: writing wins over a delete.
-                        try? fileManager.removeItem(at: cloud.tombstone(id))
-                        try push(id, from: root, to: cloud)
-                        state.notebooks[id] = local.modifiedAt
-                        report.pushed.append(id)
-                    }
-                case (nil, let remote?):
-                    if let agreed, same(remote.modifiedAt, agreed) {
-                        // It was here and in step, it's gone, and nobody has written in it since: it was deleted on this device.
-                        try Data().write(to: cloud.tombstone(id))
-                        try coordinated(writing: cloud.package(id)) { try fileManager.removeItem(at: $0) }
-                        state.notebooks[id] = nil
-                        report.removedThere.append(id)
-                    } else if agreed == nil, deleted.contains(id) {
-                        try coordinated(writing: cloud.package(id)) { try fileManager.removeItem(at: $0) }
-                    } else {
-                        // New there, or written in there since this device last saw it: writing wins over a delete.
-                        try? fileManager.removeItem(at: cloud.tombstone(id))
-                        try pull(id, from: cloud, into: root)
-                        state.notebooks[id] = remote.modifiedAt
-                        report.pulled.append(id)
-                    }
-                case (nil, nil):
-                    state.notebooks[id] = nil
+                } catch {
+                    log.error("sync of \(id) failed: \(error.localizedDescription)")
+                    report.waiting.append(id)
                 }
-            } catch {
-                log.error("sync of \(id) failed: \(error.localizedDescription)")
-                report.waiting.append(id)
+                await release(id)
             }
-            await release(id)
-        }
 
-        try checkStillWanted()
-        report.foldersChanged = try syncFolders(root: root, cloud: cloud, state: &state)
-        report.stickersChanged = try syncStickers(root: root, cloud: cloud, state: &state)
+            try checkStillWanted()
+            report.foldersChanged = try syncFolders(root: root, cloud: cloud, state: &state)
+            report.stickersChanged = try syncStickers(root: root, cloud: cloud, state: &state)
+        } catch {
+            // What was done before the pass stopped is kept as agreed, and handed back so the library hears of it.
+            try? state.write(root)
+            throw StoppedPass(report: report, reason: error)
+        }
         try state.write(root)
         return report
     }
@@ -464,8 +595,21 @@ enum LibrarySync {
         if let error = coordinationError ?? failure { throw error }
     }
 
+    /// A notebook new to the synced copy is assembled under another name and moved in whole, so an upload cut
+    /// short never leaves a package without its manifest for every device to wait on.
     private static func push(_ id: UUID, from root: StorageRoot, to cloud: CloudFolder) throws {
-        try coordinated(writing: cloud.package(id)) { try mirror(root.package(id), to: $0) }
+        let fileManager = FileManager.default, target = cloud.package(id)
+        guard !fileManager.fileExists(atPath: target.path(percentEncoded: false)) else {
+            return try coordinated(writing: target) { try mirror(root.package(id), to: $0) }
+        }
+        let staging = cloud.upload(id)
+        do {
+            try coordinated(writing: staging) { try mirror(root.package(id), to: $0) }
+            try coordinated(writing: target) { try fileManager.moveItem(at: staging, to: $0) }
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
     }
 
     /// The notebook is assembled beside the library and swapped in whole, so a pull that stops halfway changes nothing.
