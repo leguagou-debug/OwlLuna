@@ -4194,24 +4194,24 @@
         }
       }
     },
-    "A backup is one file holding every notebook, folder and sticker. Restoring adds what is missing and never replaces a notebook: one that differs from the backup comes back beside yours as a copy." : {
+    "A backup is one file holding your whole library: every notebook, locked or recently deleted ones included, with your folders, smart shelves, stickers and writing history. It is not encrypted, so keep it somewhere you trust. Restoring adds what is missing and never replaces a notebook: one that differs from the backup comes back beside yours as a copy." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein Backup ist eine einzelne Datei mit allen Notizbüchern, Ordnern und Stickern. Beim Wiederherstellen wird Fehlendes hinzugefügt und nie ein Notizbuch ersetzt: Weicht eines vom Backup ab, wird es als Kopie neben deinem wiederhergestellt."
+            "value" : "Ein Backup ist eine einzelne Datei mit deiner ganzen Bibliothek: allen Notizbüchern, auch gesperrten und zuletzt gelöschten, samt deinen Ordnern, intelligenten Regalen, Stickern und deinem Schreibverlauf. Es ist nicht verschlüsselt, bewahre es also an einem Ort auf, dem du vertraust. Beim Wiederherstellen wird Fehlendes hinzugefügt und nie ein Notizbuch ersetzt: Weicht eines vom Backup ab, wird es als Kopie neben deinem wiederhergestellt."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Una copia de seguridad es un único archivo con todos los cuadernos, carpetas y pegatinas. Al restaurar se añade lo que falta y nunca se reemplaza un cuaderno: si uno es distinto del de la copia, se restaura junto al tuyo como una copia."
+            "value" : "Una copia de seguridad es un único archivo con toda tu biblioteca: todos los cuadernos, incluidos los bloqueados y los eliminados recientemente, con tus carpetas, estantes inteligentes, pegatinas e historial de escritura. No está cifrada, así que guárdala en un lugar de confianza. Al restaurar se añade lo que falta y nunca se reemplaza un cuaderno: si uno es distinto del de la copia, se restaura junto al tuyo como una copia."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Une sauvegarde est un fichier unique qui contient tous vos carnets, dossiers et autocollants. La restauration ajoute ce qui manque et ne remplace jamais un carnet : s’il diffère de la sauvegarde, il revient à côté du vôtre sous forme de copie."
+            "value" : "Une sauvegarde est un fichier unique qui contient toute votre bibliothèque : tous vos carnets, y compris ceux qui sont verrouillés ou supprimés récemment, avec vos dossiers, étagères intelligentes, autocollants et votre historique d’écriture. Elle n’est pas chiffrée : conservez-la dans un endroit de confiance. La restauration ajoute ce qui manque et ne remplace jamais un carnet : s’il diffère de la sauvegarde, il revient à côté du vôtre sous forme de copie."
           }
         }
       }
@@ -4278,6 +4278,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un fichier endommagé (%@) a été mis de côté et conservé. Le carnet a été ouvert à partir de sa dernière copie valide."
+          }
+        }
+      }
+    },
+    "A different Apple Account is signed in" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderer Apple Account ist angemeldet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay otra cuenta de Apple con la sesión iniciada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un autre compte Apple est connecté"
           }
         }
       }
@@ -5630,6 +5652,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sauvegarder la bibliothèque…"
+          }
+        }
+      }
+    },
+    "Back up your library, including locked notebooks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup deiner Bibliothek erstellen, einschließlich gesperrter Notizbücher"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hacer una copia de seguridad de tu biblioteca, incluidos los cuadernos bloqueados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarder votre bibliothèque, y compris les carnets verrouillés"
           }
         }
       }
@@ -8743,24 +8787,24 @@
         }
       }
     },
-    "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history stays on this device." : {
+    "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jedes Notizbuch wird als Ganzes in deinen privaten iCloud-Speicher kopiert und von dort auf deine anderen iPads. Ein hier geöffnetes Notizbuch wird synchronisiert, sobald du es schließt. Wurde eines auf zwei Geräten geändert, bevor sie synchronisieren konnten, bleibt die neuere Version erhalten und die ältere wird als Konfliktkopie daneben gesichert. Der Schreibverlauf bleibt auf diesem Gerät."
+            "value" : "Jedes Notizbuch wird als Ganzes in deinen privaten iCloud-Speicher kopiert und von dort auf deine anderen iPads. Ein hier geöffnetes Notizbuch wird synchronisiert, sobald du es schließt. Wurde eines auf zwei Geräten geändert, bevor sie synchronisieren konnten, bleibt die neuere Version erhalten und die ältere wird als Konfliktkopie daneben gesichert. Der Schreibverlauf wird nicht synchronisiert. Wenn du die Synchronisierung ausschaltest, bleibt die Kopie in iCloud. Um sie zu entfernen, schalte die Synchronisierung auf jedem Gerät aus und lösche dann die Daten von OwlLuna unter Einstellungen › dein Name › iCloud."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cada cuaderno se copia entero en tu almacenamiento privado de iCloud y, desde allí, en tus otros iPad. Un cuaderno abierto aquí se sincroniza al cerrarlo. Si se modificó en dos dispositivos antes de que pudieran sincronizarse, se conserva la versión más reciente y la anterior se guarda a su lado como copia en conflicto. El historial de escritura se queda en este dispositivo."
+            "value" : "Cada cuaderno se copia entero en tu almacenamiento privado de iCloud y, desde allí, en tus otros iPad. Un cuaderno abierto aquí se sincroniza al cerrarlo. Si se modificó en dos dispositivos antes de que pudieran sincronizarse, se conserva la versión más reciente y la anterior se guarda a su lado como copia en conflicto. El historial de escritura no se sincroniza. Al desactivar la sincronización, la copia se queda en iCloud. Para eliminarla, desactiva la sincronización en todos los dispositivos y luego borra los datos de OwlLuna en Ajustes › tu nombre › iCloud."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chaque carnet est copié en entier dans votre espace de stockage iCloud privé, puis de là vers vos autres iPad. Un carnet ouvert ici est synchronisé à sa fermeture. S’il a été modifié sur deux appareils avant qu’ils aient pu se synchroniser, la version la plus récente est conservée et l’ancienne est enregistrée à côté sous forme de copie en conflit. L’historique d’écriture reste sur cet appareil."
+            "value" : "Chaque carnet est copié en entier dans votre espace de stockage iCloud privé, puis de là vers vos autres iPad. Un carnet ouvert ici est synchronisé à sa fermeture. S’il a été modifié sur deux appareils avant qu’ils aient pu se synchroniser, la version la plus récente est conservée et l’ancienne est enregistrée à côté sous forme de copie en conflit. L’historique d’écriture n’est pas synchronisé. Désactiver la synchronisation laisse la copie dans iCloud. Pour la supprimer, désactivez la synchronisation sur chaque appareil, puis supprimez les données d’OwlLuna dans Réglages › votre nom › iCloud."
           }
         }
       }
@@ -11014,6 +11058,28 @@
         }
       }
     },
+    "iCloud is still downloading your library. Sync will try again shortly." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud lädt deine Bibliothek noch. Die Synchronisierung wird gleich erneut versucht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud aún está descargando tu biblioteca. La sincronización se volverá a intentar en breve."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud télécharge encore votre bibliothèque. La synchronisation réessaiera sous peu."
+          }
+        }
+      }
+    },
     "iCloud isn't available. Sign in to iCloud and turn on iCloud Drive in Settings; this copy of OwlLuna also has to be built with the iCloud capability." : {
       "localizations" : {
         "de" : {
@@ -11646,6 +11712,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Journal"
+          }
+        }
+      }
+    },
+    "Keep a copy of your notebooks in iCloud?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Kopie deiner Notizbücher in iCloud aufbewahren?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Guardar una copia de tus cuadernos en iCloud?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver une copie de vos carnets dans iCloud ?"
           }
         }
       }
@@ -14570,6 +14658,28 @@
         }
       }
     },
+    "Not Now" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt nicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus tard"
+          }
+        }
+      }
+    },
     "Not on a shelf" : {
       "localizations" : {
         "de" : {
@@ -16072,6 +16182,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contour"
+          }
+        }
+      }
+    },
+    "OwlLuna can copy every notebook, folder and sticker to your private iCloud storage, so your other devices have them. Nothing is copied until you choose to, and Settings › iCloud can change it later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OwlLuna kann alle Notizbücher, Ordner und Sticker in deinen privaten iCloud-Speicher kopieren, damit deine anderen Geräte sie haben. Nichts wird kopiert, bevor du dich dafür entscheidest, und unter Einstellungen › iCloud lässt es sich später ändern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OwlLuna puede copiar todos los cuadernos, carpetas y pegatinas en tu almacenamiento privado de iCloud para que tus otros dispositivos los tengan. No se copia nada hasta que tú lo decidas, y puedes cambiarlo más adelante en Ajustes › iCloud."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OwlLuna peut copier tous vos carnets, dossiers et autocollants dans votre espace de stockage iCloud privé, pour que vos autres appareils les aient. Rien n’est copié tant que vous ne l’avez pas choisi, et Réglages › iCloud permet de changer d’avis."
           }
         }
       }
@@ -17588,6 +17720,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Imprime un nouveau motif avec une autre paire d’encres"
+          }
+        }
+      }
+    },
+    "Privacy Policy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datenschutzerklärung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Política de privacidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Politique de confidentialité"
           }
         }
       }
@@ -21548,68 +21702,68 @@
         }
       }
     },
-    "Study guides are written by Apple Intelligence on the iPad itself, and this iPad doesn't have it. OwlLuna never sends your notes anywhere to be read." : {
+    "Study guides are written by Apple Intelligence on the iPad itself, and this iPad doesn't have it. OwlLuna has no other way to write one." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben, und dieses iPad hat es nicht. OwlLuna sendet deine Notizen nie irgendwohin, um sie zu lesen."
+            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben, und dieses iPad hat es nicht. OwlLuna hat keinen anderen Weg, eine zu schreiben."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad, y este iPad no lo tiene. OwlLuna nunca envía tus notas a ningún sitio para leerlas."
+            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad, y este iPad no lo tiene. OwlLuna no tiene otra forma de escribirlas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même, et cet iPad n'en dispose pas. OwlLuna n'envoie jamais vos notes ailleurs pour les lire."
+            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même, et cet iPad n'en dispose pas. OwlLuna n'a aucun autre moyen d'en rédiger un."
           }
         }
       }
     },
-    "Study guides are written by Apple Intelligence on the iPad itself, which needs iPadOS 26 or later. Your notes never leave it." : {
+    "Study guides are written by Apple Intelligence on the iPad itself, which needs iPadOS 26 or later. OwlLuna has no other way to write one." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben, wofür iPadOS 26 oder neuer nötig ist. Deine Notizen verlassen es nie."
+            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben, wofür iPadOS 26 oder neuer nötig ist. OwlLuna hat keinen anderen Weg, eine zu schreiben."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad, que necesita iPadOS 26 o posterior. Tus notas nunca salen de él."
+            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad, que necesita iPadOS 26 o posterior. OwlLuna no tiene otra forma de escribirlas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même, ce qui nécessite iPadOS 26 ou ultérieur. Vos notes ne le quittent jamais."
+            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même, ce qui nécessite iPadOS 26 ou ultérieur. OwlLuna n'a aucun autre moyen d'en rédiger un."
           }
         }
       }
     },
-    "Study guides are written by Apple Intelligence on the iPad itself. Turn it on in Settings, under Apple Intelligence and Siri, and come back. Your notes never leave the iPad." : {
+    "Study guides are written by Apple Intelligence on the iPad itself. Turn it on in Settings, under Apple Intelligence and Siri, and come back. Your notes are read on this iPad." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben. Schalte es in den Einstellungen unter „Apple Intelligence & Siri“ ein und komm zurück. Deine Notizen verlassen das iPad nie."
+            "value" : "Lernhilfen werden von Apple Intelligence auf dem iPad selbst geschrieben. Schalte es in den Einstellungen unter „Apple Intelligence & Siri“ ein und komm zurück. Deine Notizen werden auf diesem iPad gelesen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad. Actívalo en Ajustes, en Apple Intelligence y Siri, y vuelve. Tus notas nunca salen del iPad."
+            "value" : "Las guías de estudio las escribe Apple Intelligence en el propio iPad. Actívalo en Ajustes, en Apple Intelligence y Siri, y vuelve. Tus notas se leen en este iPad."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même. Activez-le dans Réglages, sous Apple Intelligence et Siri, puis revenez. Vos notes ne quittent jamais l'iPad."
+            "value" : "Les guides d'étude sont rédigés par Apple Intelligence sur l'iPad lui-même. Activez-le dans Réglages, sous Apple Intelligence et Siri, puis revenez. Vos notes sont lues sur cet iPad."
           }
         }
       }
@@ -21790,6 +21944,28 @@
         }
       }
     },
+    "Support" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Support"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soporte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistance"
+          }
+        }
+      }
+    },
     "Swap Question and Answer" : {
       "localizations" : {
         "de" : {
@@ -21834,24 +22010,24 @@
         }
       }
     },
-    "OwlLuna can write down what was said, so you can read it, search for it and jump to any moment. It is done on this iPad: the recording is never sent anywhere." : {
+    "OwlLuna can write down what was said, so you can read it, search for it and jump to any moment. The recording is transcribed on this iPad." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna kann aufschreiben, was gesagt wurde, damit du es lesen, durchsuchen und zu jedem Moment springen kannst. Das geschieht auf diesem iPad: Die Aufnahme wird nie irgendwohin gesendet."
+            "value" : "OwlLuna kann aufschreiben, was gesagt wurde, damit du es lesen, durchsuchen und zu jedem Moment springen kannst. Die Aufnahme wird auf diesem iPad transkribiert."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna puede poner por escrito lo que se dijo, para que puedas leerlo, buscarlo y saltar a cualquier momento. Se hace en este iPad: la grabación nunca se envía a ningún sitio."
+            "value" : "OwlLuna puede poner por escrito lo que se dijo, para que puedas leerlo, buscarlo y saltar a cualquier momento. La grabación se transcribe en este iPad."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna peut mettre par écrit ce qui a été dit, pour que vous puissiez le lire, le rechercher et aller à n’importe quel moment. Tout se fait sur cet iPad : l’enregistrement n’est jamais envoyé nulle part."
+            "value" : "OwlLuna peut mettre par écrit ce qui a été dit, pour que vous puissiez le lire, le rechercher et aller à n’importe quel moment. L’enregistrement est transcrit sur cet iPad."
           }
         }
       }
@@ -21922,24 +22098,24 @@
         }
       }
     },
-    "OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your device." : {
+    "OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad and in your own iCloud." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna ist kostenlos und Open Source. Keine Werbung, keine Abos, kein Tracking. Deine Notizen bleiben auf deinem Gerät."
+            "value" : "OwlLuna ist kostenlos und Open Source. Keine Werbung, keine Abos, kein Tracking. Deine Notizen bleiben auf deinem iPad und in deinem eigenen iCloud-Speicher."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna es gratis y de código abierto. Sin anuncios, sin suscripciones, sin rastreo. Tus notas se quedan en tu dispositivo."
+            "value" : "OwlLuna es gratis y de código abierto. Sin anuncios, sin suscripciones, sin rastreo. Tus notas se quedan en tu iPad y en tu propio iCloud."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna est gratuit et open source. Pas de publicité, pas d’abonnement, pas de suivi. Vos notes restent sur votre appareil."
+            "value" : "OwlLuna est gratuit et open source. Pas de publicité, pas d’abonnement, pas de suivi. Vos notes restent sur votre iPad et dans votre propre espace iCloud."
           }
         }
       }
@@ -21966,24 +22142,24 @@
         }
       }
     },
-    "OwlLuna keeps a list of the days you wrote and which pages, on this device only. It's never shared." : {
+    "OwlLuna keeps a list of the days you wrote and which pages. It is not synced, but it is part of every backup you make." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna führt nur auf diesem Gerät eine Liste der Tage, an denen du geschrieben hast, und der zugehörigen Seiten. Sie wird nie geteilt."
+            "value" : "OwlLuna führt eine Liste der Tage, an denen du geschrieben hast, und der zugehörigen Seiten. Sie wird nicht synchronisiert, ist aber Teil jedes Backups, das du erstellst."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna guarda una lista de los días en que escribiste y en qué páginas, solo en este dispositivo. Nunca se comparte."
+            "value" : "OwlLuna guarda una lista de los días en que escribiste y en qué páginas. No se sincroniza, pero forma parte de cada copia de seguridad que haces."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OwlLuna conserve la liste des jours où vous avez écrit et des pages concernées, sur cet appareil uniquement. Elle n’est jamais partagée."
+            "value" : "OwlLuna conserve la liste des jours où vous avez écrit et des pages concernées. Elle n’est pas synchronisée, mais elle fait partie de chaque sauvegarde que vous créez."
           }
         }
       }
@@ -22050,6 +22226,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synchroniser avec iCloud"
+          }
+        }
+      }
+    },
+    "Sync with This Account" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit diesem Account synchronisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizar con esta cuenta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniser avec ce compte"
           }
         }
       }
@@ -23556,6 +23754,28 @@
         }
       }
     },
+    "This iPad's notebooks were last synced with another account's iCloud. Syncing with this account copies them to its iCloud storage and brings in the notebooks it holds." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Notizbücher auf diesem iPad wurden zuletzt mit der iCloud eines anderen Accounts synchronisiert. Beim Synchronisieren mit diesem Account werden sie in dessen iCloud-Speicher kopiert, und die dort vorhandenen Notizbücher kommen hinzu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cuadernos de este iPad se sincronizaron por última vez con el iCloud de otra cuenta. Al sincronizar con esta cuenta, se copian en su almacenamiento de iCloud y se añaden los cuadernos que contiene."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les carnets de cet iPad ont été synchronisés pour la dernière fois avec l’iCloud d’un autre compte. La synchronisation avec ce compte les copie dans son espace de stockage iCloud et ajoute les carnets qu’il contient."
+          }
+        }
+      }
+    },
     "This is the last page." : {
       "localizations" : {
         "de" : {
@@ -23574,6 +23794,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "C’est la dernière page."
+          }
+        }
+      }
+    },
+    "This library has locked notebooks. To back them up, set a passcode on this iPad in Settings first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Bibliothek enthält gesperrte Notizbücher. Um sie zu sichern, richte zuerst in den Einstellungen einen Code auf diesem iPad ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta biblioteca tiene cuadernos bloqueados. Para incluirlos en una copia de seguridad, configura primero un código en este iPad en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette bibliothèque contient des carnets verrouillés. Pour les sauvegarder, définissez d’abord un code sur cet iPad dans Réglages."
           }
         }
       }
@@ -24914,6 +25156,28 @@
         }
       }
     },
+    "Turn Off Sync" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierung deaktivieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivar la sincronización"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactiver la synchronisation"
+          }
+        }
+      }
+    },
     "Turns back to the question" : {
       "localizations" : {
         "de" : {
@@ -25992,24 +26256,24 @@
         }
       }
     },
-    "Written on this iPad from what your notes say. Nothing was sent anywhere. Check it against your notes: it can be wrong." : {
+    "Written on this iPad from what your notes say. Check it against your notes: it can be wrong." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auf diesem iPad aus dem geschrieben, was in deinen Notizen steht. Nichts wurde irgendwohin gesendet. Vergleiche es mit deinen Notizen: Es kann falsch sein."
+            "value" : "Auf diesem iPad aus dem geschrieben, was in deinen Notizen steht. Vergleiche es mit deinen Notizen: Es kann falsch sein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escrito en este iPad a partir de lo que dicen tus notas. No se envió nada a ningún sitio. Compáralo con tus notas: puede equivocarse."
+            "value" : "Escrito en este iPad a partir de lo que dicen tus notas. Compáralo con tus notas: puede equivocarse."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rédigé sur cet iPad à partir de ce que disent vos notes. Rien n'a été envoyé ailleurs. Vérifiez avec vos notes : il peut se tromper."
+            "value" : "Rédigé sur cet iPad à partir de ce que disent vos notes. Vérifiez avec vos notes : il peut se tromper."
           }
         }
       }

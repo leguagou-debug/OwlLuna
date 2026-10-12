@@ -250,7 +250,7 @@ struct StudyGuideSheet: View {
 
     private var onDeviceNote: some View {
         Label {
-            Text("Written on this iPad from what your notes say. Nothing was sent anywhere. Check it against your notes: it can be wrong.")
+            Text("Written on this iPad from what your notes say. Check it against your notes: it can be wrong.")
                 .fixedSize(horizontal: false, vertical: true)
         } icon: {
             Image(systemName: "lock.ipad").accessibilityHidden(true)
@@ -309,9 +309,9 @@ struct StudyGuideSheet: View {
     private var unavailableReason: String {
         switch status {
         case .ready: ""
-        case .needsUpdate: String(localized: "Study guides are written by Apple Intelligence on the iPad itself, which needs iPadOS 26 or later. Your notes never leave it.")
-        case .notEligible: String(localized: "Study guides are written by Apple Intelligence on the iPad itself, and this iPad doesn't have it. OwlLuna never sends your notes anywhere to be read.")
-        case .turnedOff: String(localized: "Study guides are written by Apple Intelligence on the iPad itself. Turn it on in Settings, under Apple Intelligence and Siri, and come back. Your notes never leave the iPad.")
+        case .needsUpdate: String(localized: "Study guides are written by Apple Intelligence on the iPad itself, which needs iPadOS 26 or later. OwlLuna has no other way to write one.")
+        case .notEligible: String(localized: "Study guides are written by Apple Intelligence on the iPad itself, and this iPad doesn't have it. OwlLuna has no other way to write one.")
+        case .turnedOff: String(localized: "Study guides are written by Apple Intelligence on the iPad itself. Turn it on in Settings, under Apple Intelligence and Siri, and come back. Your notes are read on this iPad.")
         case .preparing: String(localized: "Apple Intelligence is still getting ready on this iPad. Try again in a little while.")
         }
     }

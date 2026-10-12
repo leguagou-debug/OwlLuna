@@ -40,7 +40,7 @@ struct ActivityLog: Sendable, Hashable {
     }
 }
 
-/// `Library/activity.json`, the private writing log: which pages were written on which day, on this device only.
+/// `Library/activity.json`, the private writing log: which pages were written on which day. Never synced; a backup holds it.
 enum ActivityFile {
     static let currentVersion = 1
     static let detailedDays = 400

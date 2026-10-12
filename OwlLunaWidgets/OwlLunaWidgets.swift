@@ -97,7 +97,7 @@ struct WritingWeekWidget: Widget {
                 .containerBackground(Color.widgetPaper, for: .widget)
         }
         .configurationDisplayName("This Week")
-        .description("The days you wrote this week. Your writing history stays on this device.")
+        .description("The days you wrote this week, from your writing history.")
         .supportedFamilies([.systemSmall, .accessoryRectangular])
     }
 }

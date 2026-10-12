@@ -21,19 +21,28 @@ enum WidgetBridge {
         return snapshot
     }
 
+    /// Writes the cover of the notebook the widget names, and takes the last one away when it names none, so a notebook
+    /// that was locked or deleted doesn't leave its cover behind. Returns whether the file changed.
+    static func writeCover(of record: NotebookRecord?, root: StorageRoot, to directory: URL) async -> Bool {
+        let file = directory.appending(path: WidgetSnapshot.coverFile)
+        guard let record else {
+            lastCoverKey = nil
+            guard FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else { return false }
+            try? FileManager.default.removeItem(at: file)
+            return true
+        }
+        let request = record.coverRequest(width: 176, scale: 2, colorScheme: .light, contrast: .standard, root: root)
+        guard request.key != lastCoverKey, let png = await CoverCache.shared.image(for: request)?.pngData() else { return false }
+        try? png.write(to: file, options: .atomic)
+        lastCoverKey = request.key
+        return true
+    }
+
     /// UI-test libraries never reach the widgets.
     static func update(_ app: AppModel) async {
         guard app.phase == .ready, LaunchOptions.value("-storageRoot") == nil, let directory = WidgetSnapshot.directory else { return }
         let snapshot = snapshot(library: app.library, activity: app.activity)
-        var coverChanged = false
-        if let record = app.library.lastOpenedNotebook(includingLocked: false) {
-            let request = record.coverRequest(width: 176, scale: 2, colorScheme: .light, contrast: .standard, root: app.root)
-            if request.key != lastCoverKey, let png = await CoverCache.shared.image(for: request)?.pngData() {
-                try? png.write(to: directory.appending(path: WidgetSnapshot.coverFile), options: .atomic)
-                lastCoverKey = request.key
-                coverChanged = true
-            }
-        }
+        let coverChanged = await writeCover(of: app.library.lastOpenedNotebook(includingLocked: false), root: app.root, to: directory)
         guard snapshot != lastWritten || coverChanged else { return }
         do {
             try snapshot.write(to: directory)

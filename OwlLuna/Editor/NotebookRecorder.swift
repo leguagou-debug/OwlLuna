@@ -40,6 +40,15 @@ final class NotebookRecorder: NSObject {
         self.document = document
         super.init()
         document.recorder = self
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterrupted), name: AVAudioSession.interruptionNotification, object: nil)
+    }
+
+    /// iPadOS took the microphone away (a call, or the app being suspended). What was recorded is saved there, so the
+    /// button never shows a recording that isn't being made.
+    @objc private nonisolated func sessionInterrupted(_ notification: Notification) {
+        let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+        guard raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began else { return }
+        Task { @MainActor in self.stopRecording() }
     }
 
     var recordings: [RecordingEntry] { document.manifest.recordings }

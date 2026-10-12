@@ -138,7 +138,13 @@ export default function PrivacyPolicy() {
                 It has no networking code of its own and no server to talk to. It has no way to send your notes to me
                 or to anyone else.
               </li>
-              <li>It does not read or create any identifier for you or for your device.</li>
+              <li>
+                It does not read or create any identifier for you or for your device, with one exception that stays on
+                the iPad. So that <a href="#icloud">iCloud sync</a> can notice a different Apple Account signing in, it
+                keeps a scrambled marker made from the token iPadOS gives the app for the signed-in iCloud account. The
+                marker cannot be turned back into the account, tells one account from another and nothing more, and is
+                never sent anywhere.
+              </li>
               <li>It has nothing to buy, so it handles no payment details.</li>
             </ul>
             <p>
@@ -153,7 +159,8 @@ export default function PrivacyPolicy() {
               <li>
                 <strong>Your notebooks.</strong> Handwriting (with the moment each stroke was made, which replay and
                 the time-lapse use), typed text, pictures, scans, imported PDFs, audio recordings and their transcripts,
-                flashcards and when you last reviewed them, tags, bookmarks, links, and the page you left off on.
+                flashcards and when you last reviewed them, tags, bookmarks, links, the page you left off on, and when
+                you last locked, favourited, filed, tagged or deleted the notebook.
               </li>
               <li>
                 <strong>The words read from your pages</strong> (handwriting, scans, PDFs, typed text and transcripts),
@@ -182,7 +189,8 @@ export default function PrivacyPolicy() {
               </li>
               <li>
                 <strong>Siri and Shortcuts.</strong> The names and page counts of your notebooks, so you can ask for
-                one by name. This includes the names of locked notebooks. When you ask Siri for a notebook aloud,{' '}
+                one by name. Locked notebooks are not offered; a shortcut you made before locking a notebook keeps its
+                name and still opens it, once you unlock it. When you ask Siri for a notebook aloud,{' '}
                 <Out href={apple.features}>Apple handles that request</Out>, the name included, as it does any Siri
                 request, which may not stay on the iPad.
               </li>
@@ -204,12 +212,12 @@ export default function PrivacyPolicy() {
               iCloud sync is the one way OwlLuna itself copies your notebooks off the iPad without you sending them
               somewhere yourself.
             </p>
-            <Stamp title="It is on unless you turn it off" tone="mustard" className={styles.note}>
+            <Stamp title="It asks first" className={styles.note}>
               <p>
-                If your iPad is signed in to iCloud with iCloud Drive on, OwlLuna starts syncing the first time it
-                opens, without asking. Settings › iCloud in the app turns it off. If the iPad is not signed in to
-                iCloud, that switch is greyed out and cannot be turned off beforehand: sync starts the next time OwlLuna
-                opens after you sign in.
+                On a device that has never synced, OwlLuna copies nothing until you say yes. If the iPad is signed in
+                to iCloud with iCloud Drive on, it asks once when it opens. Settings › iCloud in the app has the switch,
+                and you can set it at any time, also before you sign in to iCloud. A device that was already syncing
+                with an earlier version of OwlLuna carries on without being asked.
               </p>
             </Stamp>
             <h3 className={`display ${styles.sub}`}>What is copied</h3>
@@ -219,8 +227,18 @@ export default function PrivacyPolicy() {
                 its pages, and its flashcards. Locked notebooks are copied like any other.
               </li>
               <li>Your folders, and the stickers you made.</li>
+              <li>
+                A small file holding a random ID that names this copy of your library. It lets a device tell when the
+                copy was erased, or is another account&rsquo;s.
+              </li>
             </ul>
             <p>Your writing history, smart shelves, settings and the search index are not copied.</p>
+            <p>
+              To tell what has changed since last time, each device also keeps a small record of what it last synced:
+              the random IDs and dates of its notebooks, the IDs of its folders, the file names of its stickers, the ID
+              of the iCloud copy, and the account marker described under <a href="#collected">What I collect</a>. That
+              record stays on the device.
+            </p>
             <h3 className={`display ${styles.sub}`}>Where it goes</h3>
             <p>
               Into the app&rsquo;s private container in your own iCloud storage, under your Apple Account. It is
@@ -234,9 +252,10 @@ export default function PrivacyPolicy() {
               it syncs there too.
             </p>
             <p>
-              OwlLuna syncs with whichever Apple Account the iPad is signed in to. Before you pass the iPad on to
-              someone else, or sign in with a different account, delete the app or turn sync off. Otherwise the
-              notebooks on the iPad are copied to that account&rsquo;s iCloud storage.
+              OwlLuna syncs with the Apple Account the iPad is signed in to. If a different account signs in, sync stops
+              and asks before anything is copied to that account&rsquo;s iCloud storage or brought in from it. If you
+              say yes, the notebooks on the iPad are copied there and the notebooks that account holds are added;
+              nothing is deleted. Before you pass the iPad on to someone else, delete the app.
             </p>
             <h3 className={`display ${styles.sub}`}>Turning it off, and removing the copy</h3>
             <p>
@@ -247,8 +266,8 @@ export default function PrivacyPolicy() {
               To remove the iCloud copy, first turn sync off on every device, because a device that still has it on will
               put the notebooks back. Then delete OwlLuna&rsquo;s data from your iCloud storage: iPadOS Settings › your
               name › iCloud lists the apps that keep data there (Apple renames those screens from time to time). If you
-              turn sync on again afterwards, your notebooks are uploaded again, but folders and stickers that had been
-              synced before are removed from that device, so make a backup first.
+              turn sync on again afterwards, the device sees that the copy is gone and uploads its notebooks, folders
+              and stickers again. Nothing is removed from the device.
             </p>
             <h3 className={`display ${styles.sub}`}>When you delete a notebook</h3>
             <p>
@@ -271,7 +290,8 @@ export default function PrivacyPolicy() {
               </LedgerRow>
               <LedgerRow label="Microphone">
                 Only while you are recording: from when you start a recording until you stop it or close the notebook.
-                The recording is saved in the notebook it was made in.
+                On an iPad it also stops, and is saved, when OwlLuna leaves the screen: when you switch to another app
+                or lock the iPad. The recording is saved in the notebook it was made in.
               </LedgerRow>
               <LedgerRow label="Photos">
                 You choose pictures in Apple&rsquo;s photo picker, and the app receives only those. It never looks
@@ -351,7 +371,8 @@ export default function PrivacyPolicy() {
               <li>
                 <strong>Back up.</strong> Settings › Backup makes one file of your whole library and hands it to the
                 share sheet. The file is not encrypted, and it contains every notebook, including locked ones and any
-                still in Recently Deleted, along with your writing history. Keep it somewhere you trust.
+                still in Recently Deleted, along with your writing history. If any notebook is locked, making a backup
+                asks for Face ID, Touch ID or the passcode first. Keep the file somewhere you trust.
               </li>
               <li>
                 <strong>Copy or drag.</strong> Text you copy goes to the iPadOS clipboard, and a picture you drop on a
@@ -376,14 +397,15 @@ export default function PrivacyPolicy() {
             </p>
             <p>
               It is not encryption. A locked notebook&rsquo;s files are stored like any other notebook&rsquo;s, and its
-              iCloud copy and any backup file hold it in full. Its title is still shown in the library and is still
-              offered to Siri and Shortcuts.
+              iCloud copy and any backup file hold it in full. Its title is still shown in the library. It is not
+              offered to Siri and Shortcuts, and making a backup asks you to unlock first.
             </p>
             <p>
-              A lock does not reach your other devices straight away. It travels only when the notebook is next edited
-              and synced; until then they open the notebook without asking and may show it in Spotlight and their
-              widgets. A newer copy of the notebook arriving from another device also replaces the lock setting with
-              that device&rsquo;s.
+              With iCloud sync on, a lock reaches each of your other devices the next time that device syncs, whether
+              or not the notebook has been written in since, and it is then taken out of that device&rsquo;s Spotlight
+              and widgets. Until a device has synced, it still opens the notebook without asking. Newer pages arriving
+              from a device that had not yet received the lock do not remove it, and if a notebook changed on two
+              devices is kept as a conflicted copy, the copy is locked as well.
             </p>
           </Part>
 

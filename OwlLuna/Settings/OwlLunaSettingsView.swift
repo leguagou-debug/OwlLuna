@@ -37,6 +37,7 @@ struct OwlLunaSettingsView: View {
 
     private let repository = URL(string: "https://github.com/owaisazmal/OwlLuna")!
     private let author = URL(string: "https://github.com/owaisazmal")!
+    private let website = URL(string: "https://owaisazmal.github.io/OwlLuna")!
 
     var body: some View {
         NavigationStack {
@@ -164,7 +165,7 @@ struct OwlLunaSettingsView: View {
     }
 
     private var historySection: some View {
-        SettingsSection("Writing History", note: "OwlLuna keeps a list of the days you wrote and which pages, on this device only. It's never shared.") {
+        SettingsSection("Writing History", note: "OwlLuna keeps a list of the days you wrote and which pages. It is not synced, but it is part of every backup you make.") {
             Toggle("Keep Writing History", isOn: Bindable(activity).isEnabled).settingsRow()
             SettingsActionRow(title: "Clear Writing History…", systemImage: "trash", role: .destructive) { confirmingHistoryClear = true }
                 .disabled(!activity.hasHistory)
@@ -190,13 +191,26 @@ struct OwlLunaSettingsView: View {
     @ViewBuilder
     private var syncSection: some View {
         if let sync = app?.sync {
-            SettingsSection("iCloud", note: "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history stays on this device.") {
+            SettingsSection("iCloud", note: "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud.") {
                 Toggle("Sync with iCloud", isOn: Bindable(sync).isEnabled)
-                    .disabled(sync.availability != .available)
                     .accessibilityIdentifier("settings.sync.toggle")
                     .settingsRow()
                 if case .unavailable(let reason) = sync.availability {
-                    Text(reason).font(.subheadline).foregroundStyle(Color.textSecondary).settingsRow()
+                    Text(reason).font(.subheadline).foregroundStyle(Color.textSecondary)
+                        .accessibilityIdentifier("settings.sync.unavailable")
+                        .settingsRow()
+                } else if sync.question == .accountChanged {
+                    Text(SyncQuestion.accountChangedMessage).font(.subheadline).foregroundStyle(Color.textSecondary)
+                        .accessibilityIdentifier("settings.sync.account")
+                        .settingsRow()
+                    SettingsActionRow(title: "Sync with This Account", systemImage: "arrow.triangle.2.circlepath") {
+                        Task { await sync.answer(true) }
+                    }
+                    .accessibilityIdentifier("settings.sync.account.allow")
+                    SettingsActionRow(title: "Turn Off Sync", systemImage: "icloud.slash") {
+                        Task { await sync.answer(false) }
+                    }
+                    .accessibilityIdentifier("settings.sync.account.refuse")
                 } else if sync.isEnabled {
                     SettingsActionRow(title: "Sync Now", systemImage: "arrow.triangle.2.circlepath", isBusy: sync.isSyncing) {
                         Task { await sync.syncNow() }
@@ -218,7 +232,7 @@ struct OwlLunaSettingsView: View {
     }
 
     private var backupSection: some View {
-        SettingsSection("Backup", note: "A backup is one file holding every notebook, folder and sticker. Restoring adds what is missing and never replaces a notebook: one that differs from the backup comes back beside yours as a copy.") {
+        SettingsSection("Backup", note: "A backup is one file holding your whole library: every notebook, locked or recently deleted ones included, with your folders, smart shelves, stickers and writing history. It is not encrypted, so keep it somewhere you trust. Restoring adds what is missing and never replaces a notebook: one that differs from the backup comes back beside yours as a copy.") {
             SettingsActionRow(title: "Back Up Library…", systemImage: "externaldrive", isBusy: backupWork == .backingUp, action: backUp)
                 .accessibilityIdentifier("settings.backup.create")
             if let lastBackup {
@@ -236,6 +250,12 @@ struct OwlLunaSettingsView: View {
     private var aboutSection: some View {
         SettingsSection("About") {
             Colophon(author: author)
+            SettingsLinkRow(title: "Privacy Policy", systemImage: "hand.raised",
+                            destination: website.appending(path: "privacy", directoryHint: .isDirectory))
+                .accessibilityIdentifier("settings.about.privacy")
+            SettingsLinkRow(title: "Support", systemImage: "lifepreserver",
+                            destination: website.appending(path: "support", directoryHint: .isDirectory))
+                .accessibilityIdentifier("settings.about.support")
             SettingsLinkRow(title: "Source Code on GitHub", systemImage: "chevron.left.forwardslash.chevron.right", destination: repository)
             SettingsLinkRow(title: "Report a Problem or Request a Feature", systemImage: "exclamationmark.bubble",
                             destination: repository.appendingPathComponent("issues"))
@@ -271,6 +291,14 @@ struct OwlLunaSettingsView: View {
         backupWork = .backingUp
         Task {
             defer { backupWork = nil }
+            // The file holds locked notebooks in full, so making it asks what opening one would.
+            if store.hasLockedNotebooks {
+                guard NotebookLock.shared.isAvailable else {
+                    backupMessage = String(localized: "This library has locked notebooks. To back them up, set a passcode on this iPad in Settings first.")
+                    return
+                }
+                guard await NotebookLock.shared.confirm(String(localized: "Back up your library, including locked notebooks")) else { return }
+            }
             do {
                 let url = try await store.makeBackup()
                 lastBackup = url
@@ -316,7 +344,7 @@ private struct Colophon: View {
                 Text(verbatim: "\(String(localized: "Version")) \(version)").metaStyle()
             }
             .accessibilityElement(children: .combine)
-            Text("OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your device.")
+            Text("OwlLuna is free and open source. No ads, no subscriptions, no tracking. Your notes stay on your iPad and in your own iCloud.")
                 .font(.subheadline)
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import LocalAuthentication
 
 protocol Authenticating: Sendable {
@@ -94,6 +95,11 @@ final class NotebookLock {
 }
 
 extension LibraryStore {
+    /// Whether any notebook is locked, ones in Recently Deleted included: a backup holds those too.
+    var hasLockedNotebooks: Bool {
+        ((try? context.fetch(FetchDescriptor<NotebookRecord>(predicate: #Predicate { $0.isLocked }))) ?? []).isEmpty == false
+    }
+
     /// Locks a notebook, or takes its lock off, once whoever is holding the iPad has shown it is theirs.
     /// Returns what went wrong, if the iPad can't ask.
     func toggleLock(_ record: NotebookRecord) async -> String? {

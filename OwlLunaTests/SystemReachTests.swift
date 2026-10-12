@@ -36,6 +36,24 @@ final class SystemReachTests: XCTestCase {
         XCTAssertEqual(entries.first { $0.id == biology.id }?.pageCount, 2)
     }
 
+    func testAMissingListOfWhatWasIndexedIsToldApartFromAnEmptyOne() throws {
+        XCTAssertNil(SpotlightIndexer.known(in: nil), "cleared with the caches: everything in Spotlight is taken out and indexed afresh")
+        XCTAssertNil(SpotlightIndexer.known(in: Data("{".utf8)))
+        XCTAssertEqual(SpotlightIndexer.known(in: Data("{}".utf8)), [:], "an empty list is a library with nothing indexed yet")
+        XCTAssertEqual(SpotlightIndexer.known(in: try JSONEncoder().encode(["A": "x|1|1||0"])), ["A": "x|1|1||0"])
+    }
+
+    func testTheWidgetsCoverGoesWhenNoNotebookIsNamed() async throws {
+        let directory = temporaryRoot(self).url
+        let cover = directory.appending(path: WidgetSnapshot.coverFile)
+        try Data([1, 2, 3]).write(to: cover)
+        let changed = await WidgetBridge.writeCover(of: nil, root: temporaryRoot(self), to: directory)
+        XCTAssertTrue(changed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cover.path(percentEncoded: false)), "a locked or deleted notebook's cover isn't left behind")
+        let again = await WidgetBridge.writeCover(of: nil, root: temporaryRoot(self), to: directory)
+        XCTAssertFalse(again)
+    }
+
     func testOnlyWhatChangedIsIndexedAgain() {
         let biology = SpotlightEntry(id: UUID(), title: "Biology", pageCount: 3, modifiedAt: Date(timeIntervalSince1970: 1000))
         let physics = SpotlightEntry(id: UUID(), title: "Physics", pageCount: 1, modifiedAt: Date(timeIntervalSince1970: 2000))

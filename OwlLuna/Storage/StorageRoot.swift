@@ -13,6 +13,8 @@ struct StorageRoot: Sendable, Hashable {
     var activityFile: URL { library.appending(path: "activity.json") }
     var smartShelvesFile: URL { library.appending(path: "smart-shelves.json") }
     var deleting: URL { url.appending(path: "Deleting", directoryHint: .isDirectory) }
+    /// Where a notebook coming in from the synced copy is assembled before it is swapped into the library.
+    var arriving: URL { url.appending(path: "Arriving", directoryHint: .isDirectory) }
     var stickers: URL { url.appending(path: "Stickers", directoryHint: .isDirectory) }
 
     func package(_ id: UUID) -> URL {

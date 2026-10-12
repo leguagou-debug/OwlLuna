@@ -32,6 +32,7 @@ final class LibraryStore {
     private(set) var smartShelves: [SmartShelf] = []
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "library")
     @ObservationIgnored private var changesInFlight: [UUID: [UUID: @Sendable (inout NotebookManifest) -> Void]] = [:]
+    @ObservationIgnored private var manifestWrites: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var folderWrite: Task<Void, Never>?
     @ObservationIgnored private var smartShelfWrite: Task<Void, Never>?
     /// Called with the notebooks a permanent delete actually removed.
@@ -191,7 +192,7 @@ final class LibraryStore {
         if let document = DocumentRegistry.shared.document(for: record.id) {
             document.updateCover(cover)
         } else {
-            update(record.id) { $0.cover = cover }
+            update(record.id) { $0.cover = cover; $0.modifiedAt = .now }
         }
     }
 
@@ -264,14 +265,20 @@ final class LibraryStore {
         if !expired.isEmpty { deletePermanently(expired) }
     }
 
+    /// Each change is stamped, which is what carries it to other devices without dating the notebook.
     private func changeLibraryState(_ records: [NotebookRecord], index: (NotebookRecord) -> Void,
                                     manifest change: @escaping @Sendable (inout LibraryState) -> Void) {
+        let now = Date.now
         for record in records where !record.isReadOnly {
             index(record)
             if let document = DocumentRegistry.shared.document(for: record.id) {
                 document.updateLibraryState(change)
             } else {
-                update(record.id) { change(&$0.library) }
+                update(record.id) {
+                    let before = $0.library
+                    change(&$0.library)
+                    $0.library.stamp(changesSince: before, at: now)
+                }
             }
         }
         saveIndex()
@@ -279,12 +286,15 @@ final class LibraryStore {
 
     /// Read-modify-write of a closed notebook's manifest. A document that starts opening meanwhile gets the
     /// change applied again (see `reapplyChangesInFlight`); if the write fails, the index is re-read from the file.
+    /// Writes to one notebook are chained, so two changes made back to back both land.
     @discardableResult
     func update(_ id: UUID, _ change: @escaping @Sendable (inout NotebookManifest) -> Void) -> Task<Void, Never> {
         let package = NotebookPackage(root: root, id: id)
         let token = UUID()
         changesInFlight[id, default: [:]][token] = change
-        return Task {
+        let previous = manifestWrites[id]
+        let write = Task {
+            await previous?.value
             do {
                 _ = try await package.updateManifest(change)
             } catch {
@@ -293,8 +303,13 @@ final class LibraryStore {
                 if let manifest = try? await package.readManifest().manifest { index(manifest) }
             }
             changesInFlight[id]?[token] = nil
-            if changesInFlight[id]?.isEmpty == true { changesInFlight[id] = nil }
+            if changesInFlight[id]?.isEmpty == true {
+                changesInFlight[id] = nil
+                manifestWrites[id] = nil
+            }
         }
+        manifestWrites[id] = write
+        return write
     }
 
     func reapplyChangesInFlight(to document: NotebookDocument) {

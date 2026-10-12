@@ -13,7 +13,7 @@ export function PrivacySummary() {
           <SectionHeading eyebrow="Privacy" title="What OwlLuna knows about you: nothing." id="privacy-summary-title">
             <p>
               There is no account to make and no server of mine behind the app. Your notebooks are files on your iPad,
-              and iCloud sync, which is on unless you turn it off, keeps a copy in your own iCloud.
+              and iCloud sync, which asks before it starts, keeps a copy in your own iCloud.
             </p>
           </SectionHeading>
           <Button href="/privacy/" variant="cloth">

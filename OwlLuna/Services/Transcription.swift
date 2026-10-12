@@ -116,7 +116,7 @@ enum Transcription {
     }
 }
 
-/// Transcribes with the system's recogniser, on the device only: a recording is never sent anywhere.
+/// Transcribes with the system's recogniser, on the device only: a recording is never sent away to be transcribed.
 struct DeviceTranscriber: SpeechTranscribing {
     /// What one run has gathered. The recogniser calls back on its own queue, so everything here is behind a lock.
     private final class Run: @unchecked Sendable {

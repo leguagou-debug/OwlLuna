@@ -84,7 +84,7 @@ struct TranscriptView: View {
     private func offer(_ recording: RecordingEntry) -> some View {
         ScrollView {
             EmptyPlate("No Transcript Yet", systemImage: "quote.bubble",
-                       message: Text("OwlLuna can write down what was said, so you can read it, search for it and jump to any moment. It is done on this iPad: the recording is never sent anywhere."))
+                       message: Text("OwlLuna can write down what was said, so you can read it, search for it and jump to any moment. The recording is transcribed on this iPad."))
         }
         .scrollBounceBehavior(.basedOnSize)
         // The button stays in reach however long the words above it run.

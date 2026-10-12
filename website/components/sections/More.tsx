@@ -174,8 +174,8 @@ export function More() {
                     <span className={styles.flag}>Experimental</span>
                   </p>
                   <p className={styles.rowText}>
-                    Sync between your iPads is on by default, and{' '}
-                    <span className={styles.path}>Settings › iCloud</span> turns it off. Each notebook is copied whole,
+                    Sync between your iPads asks before it starts, and{' '}
+                    <span className={styles.path}>Settings › iCloud</span> has the switch. Each notebook is copied whole,
                     and one changed on two devices keeps both versions.
                   </p>
                   <p className={styles.rowText}>

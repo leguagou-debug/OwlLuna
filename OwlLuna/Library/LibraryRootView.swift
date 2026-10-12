@@ -33,6 +33,8 @@ struct LibraryRootView: View {
     @State private var performingAction = false
     /// A link that came before the app was ready or while the launch splash was up, carried out once it can be.
     @State private var heldAction: AppAction?
+    /// What sync is waiting to be told, shown once the library is in front.
+    @State private var syncQuestion: SyncCenter.Question?
     @State private var window = EditorWindow()
     @SceneStorage("owlluna.openNotebook") private var restoredNotebook = ""
     @SceneStorage("owlluna.besideNotebook") private var restoredBeside = ""
@@ -102,6 +104,15 @@ struct LibraryRootView: View {
         .notice("The note couldn't be created", isPresented: Binding(get: { quickNoteError != nil }, set: { if !$0 { quickNoteError = nil } }),
                 message: Text(quickNoteError ?? "")) {
             Button("OK", role: .cancel) {}
+        }
+        .onChange(of: app.sync.question, initial: true) { _, question in syncQuestion = question }
+        .notice(Text(SyncQuestion.title(syncQuestion ?? .firstSync)),
+                isPresented: Binding(get: { syncQuestion != nil && libraryInFront }, set: { if !$0 { syncQuestion = nil } }),
+                message: Text(SyncQuestion.message(syncQuestion ?? .firstSync))) {
+            Button(SyncQuestion.refuse(syncQuestion ?? .firstSync), role: .cancel) { Task { await app.sync.answer(false) } }
+                .accessibilityIdentifier("sync.question.refuse")
+            Button(SyncQuestion.allow(syncQuestion ?? .firstSync)) { Task { await app.sync.answer(true) } }
+                .accessibilityIdentifier("sync.question.allow")
         }
         .background(SceneReader {
             sceneID = $0

@@ -85,9 +85,9 @@ export const groups: Group[] = [
         question: 'Where are my notes kept?',
         answer: (
           <p>
-            On your iPad. Unless you turn iCloud sync off, your notebooks, folders and stickers are also copied to the
-            app’s private container in your own iCloud storage, which Apple syncs between your devices. Sync is still
-            experimental.
+            On your iPad. With iCloud sync on, your notebooks, folders and stickers are also copied to the app’s
+            private container in your own iCloud storage, which Apple syncs between your devices. OwlLuna asks before
+            it syncs for the first time. Sync is still experimental.
           </p>
         ),
       },
@@ -96,8 +96,9 @@ export const groups: Group[] = [
         question: 'How do I turn iCloud sync off?',
         answer: (
           <p>
-            In the app, open <Path steps={['Settings', 'iCloud']} /> and turn sync off. It is on until you do. Your writing
-            history is never synced, whichever way the switch is set. Each device has its own switch, and turning it
+            In the app, open <Path steps={['Settings', 'iCloud']} /> and turn sync off. The switch can be set at any
+            time, also before the iPad is signed in to iCloud. Your writing history is never synced, whichever way
+            the switch is set. Each device has its own switch, and turning it
             off does not remove what is already in iCloud. The <Link href="/privacy/#icloud">Privacy Policy</Link> says
             how to remove that.
           </p>
@@ -147,7 +148,8 @@ export const groups: Group[] = [
           <p>
             No. A lock keeps a notebook closed in the app: it asks for Face ID, Touch ID or the iPad’s passcode every
             time the notebook is opened. Its files are not encrypted beyond what iPadOS does for every app, and a
-            backup or an iCloud copy holds it like any other notebook.
+            backup or an iCloud copy holds it like any other notebook. Making a backup of a library with locked
+            notebooks asks you to unlock first.
           </p>
         ),
       },

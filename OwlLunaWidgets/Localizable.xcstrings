@@ -477,24 +477,24 @@
         }
       }
     },
-    "The days you wrote this week. Your writing history stays on this device." : {
+    "The days you wrote this week, from your writing history." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Tage, an denen du diese Woche geschrieben hast. Dein Schreibverlauf bleibt auf diesem Gerät."
+            "value" : "Die Tage, an denen du diese Woche geschrieben hast, aus deinem Schreibverlauf."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los días que escribiste esta semana. Tu historial de escritura se queda en este dispositivo."
+            "value" : "Los días que escribiste esta semana, según tu historial de escritura."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les jours où vous avez écrit cette semaine. Votre historique d’écriture reste sur cet appareil."
+            "value" : "Les jours où vous avez écrit cette semaine, d’après votre historique d’écriture."
           }
         }
       }

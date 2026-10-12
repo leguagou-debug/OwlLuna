@@ -30,6 +30,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
     private let file = URL.cachesDirectory.appending(path: "spotlight.json")
     private var known: [String: String] = [:]
     private var isLoaded = false
+    private var startsOver = false
     private var checksEverything = true
     private var changed: Set<UUID> = []
     private var pending: Task<Void, Never>?
@@ -98,6 +99,18 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
         guard isLive else { return }
         load()
         guard Self.isEnabled else { return await removeAll() }
+        if startsOver {
+            // Without the list of what was indexed, nothing says which items are stale: all of them go, and what the
+            // library offers now is indexed afresh.
+            do {
+                try await CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
+                startsOver = false
+                save()
+            } catch {
+                log.error("clearing Spotlight failed: \(error.localizedDescription)")
+                return
+            }
+        }
         let records = library.notebooks()
         let entries = Self.entries(records)
         let index = CSSearchableIndex.default()
@@ -150,6 +163,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
         try? await CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
         known = [:]
         checksEverything = true
+        startsOver = false
         save()
     }
 
@@ -167,10 +181,18 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
         }.value
     }
 
+    /// What the file says was indexed, or nil when it is missing or unreadable (iPadOS may clear Caches).
+    static func known(in data: Data?) -> [String: String]? {
+        data.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) }
+    }
+
     private func load() {
         guard !isLoaded else { return }
         isLoaded = true
-        known = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+        let read = Self.known(in: try? Data(contentsOf: file))
+        known = read ?? [:]
+        startsOver = read == nil
+        if startsOver { checksEverything = true }
     }
 
     private func save() {

@@ -40,9 +40,12 @@ final class AppModel {
             flashcards.forget(notebooks: $0)
         }
         sync.busy = { Set(DocumentRegistry.shared.openDocuments.map(\.id)) }
-        sync.onLibraryChanged = { [library, flashcards] _ in
+        // What a sync brought in (a lock, a deletion) reaches Spotlight and the widgets as a change made here would.
+        sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] _ in
             await library.reloadFromDisk()
             await flashcards.load()
+            spotlight.schedule(library, after: .zero)
+            if let self { await WidgetBridge.update(self) }
         }
         library.onIndexSaved = { [sync, spotlight, flashcards, weak library] in
             Task { await flashcards.loadNewNotebooks() }
@@ -82,7 +85,10 @@ final class AppModel {
         }
         #endif
         let root = root
-        Task.detached(priority: .utility) { LibraryStore.sweepDeleted(root: root) }
+        let sweep = Task.detached(priority: .utility) {
+            LibraryStore.sweepDeleted(root: root)
+            LibrarySync.sweepArriving(root: root)
+        }
         // An index made by an older build reads every manifest once, for what that build didn't keep.
         let indexSchema = UserDefaults.standard.integer(forKey: SettingsKey.indexSchema)
         await LibraryIndex.refresh(root: root, context: container.mainContext, full: indexWasRecovered || indexSchema < LibraryIndex.schemaNumber)
@@ -94,6 +100,7 @@ final class AppModel {
         phase = .ready
         spotlight.schedule(library)
         Task {
+            await sweep.value
             await sync.resolve()
             await sync.syncNow()
         }

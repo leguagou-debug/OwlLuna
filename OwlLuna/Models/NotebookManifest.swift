@@ -145,6 +145,40 @@ extension LibraryState {
         get { extra["locked"]?.boolValue ?? false }
         set { extra["locked"] = newValue ? .bool(true) : nil }
     }
+
+    /// What follows a notebook to other devices without counting as writing in it.
+    enum Filing: String, CaseIterable, Sendable {
+        case favorite, locked, folder, tags, deleted
+    }
+
+    /// When each of those was last changed here. Sync settles them one by one and apart from the pages, so a lock is
+    /// only ever taken off by a later unlock. Older builds keep the stamps as an unknown key.
+    func changedAt(_ filing: Filing) -> Date? {
+        extra["changedAt"]?[filing.rawValue]?.stringValue.flatMap(ManifestCodec.parseDate)
+    }
+
+    mutating func setChangedAt(_ date: Date?, for filing: Filing) {
+        var stamps = extra["changedAt"]?.objectValue ?? [:]
+        stamps[filing.rawValue] = date.map(ManifestCodec.encodeDate)
+        extra["changedAt"] = stamps.isEmpty ? nil : .object(stamps)
+    }
+
+    func files(_ filing: Filing, like other: LibraryState) -> Bool {
+        switch filing {
+        case .favorite: isFavorite == other.isFavorite
+        case .locked: isLocked == other.isLocked
+        case .folder: folderID == other.folderID
+        case .tags: tags == other.tags
+        case .deleted:
+            // Dates are kept to the millisecond.
+            if let deletedAt, let theirs = other.deletedAt { abs(deletedAt.timeIntervalSince(theirs)) < 0.0005 } else { deletedAt == other.deletedAt }
+        }
+    }
+
+    /// Stamps whatever a change just made differs from how the notebook was filed before it.
+    mutating func stamp(changesSince before: LibraryState, at date: Date) {
+        for filing in Filing.allCases where !files(filing, like: before) { setChangedAt(date, for: filing) }
+    }
 }
 
 struct UndecodedField: Sendable, Hashable {

@@ -26,11 +26,16 @@ extension LibraryStore {
             name = existing.name
         }
         guard name != old else { return name }
-        let spelled = name
+        let spelled = name, now = Date.now
+        // A notebook's own tags are stamped like any library change; a page's tags are part of the page, so they date it.
         let change: @Sendable (inout NotebookManifest) -> Void = { manifest in
-            if Tags.contains(manifest.library.tags, old) { manifest.library.tags = Tags.renaming(manifest.library.tags, old, to: spelled) }
+            if Tags.contains(manifest.library.tags, old) {
+                manifest.library.tags = Tags.renaming(manifest.library.tags, old, to: spelled)
+                manifest.library.setChangedAt(now, for: .tags)
+            }
             for index in manifest.pages.indices where Tags.contains(manifest.pages[index].tags, old) {
                 manifest.pages[index].tags = Tags.renaming(manifest.pages[index].tags, old, to: spelled)
+                manifest.modifiedAt = max(manifest.modifiedAt, now)
             }
         }
         var writes: [Task<Void, Never>] = []

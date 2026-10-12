@@ -58,7 +58,37 @@ final class SyncUITests: XCTestCase {
         let toggle = app.switches["settings.sync.toggle"]
         for _ in 0..<6 where !toggle.exists { app.swipeUp() }
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
-        XCTAssertFalse(toggle.isEnabled, "without iCloud the switch can't be turned on")
+        XCTAssertTrue(toggle.isEnabled, "the switch can be set before iCloud is there")
+        XCTAssertTrue(app.staticTexts["settings.sync.unavailable"].waitForExistence(timeout: 5), "and the row beneath says why nothing syncs yet")
         attach(app, "sync-unavailable")
+    }
+
+    func testAnotherAppleAccountIsAskedAboutFirst() throws {
+        let first = XCUIApplication()
+        first.launchArguments = ["-storageRoot", "syncAccount", "-resetStorage", "-seedLibrary", "3", "-cloudFolder", "account1", "-resetCloud",
+                                 "-cloudAccount", "one", "-syncsWithICloud", "YES"]
+        first.launch()
+        XCTAssertTrue(first.buttons["notebook.Physics II 3"].waitForExistence(timeout: 30))
+        openSettings(first)
+        let status = first.staticTexts["settings.sync.status"]
+        for _ in 0..<6 where !status.exists { first.swipeUp() }
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "the first account's sync finishes")
+        first.terminate()
+
+        let second = XCUIApplication()
+        second.launchArguments = ["-storageRoot", "syncAccount", "-cloudFolder", "account2", "-resetCloud", "-cloudAccount", "two", "-syncsWithICloud", "YES"]
+        second.launch()
+        let allow = second.buttons["sync.question.allow"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 30), "sync stops and asks")
+        XCTAssertTrue(second.staticTexts["A different Apple Account is signed in"].exists)
+        attach(second, "sync-account-question")
+        allow.tap()
+        XCTAssertTrue(allow.waitForNonExistence(timeout: 10))
+        openSettings(second)
+        let sent = second.staticTexts["settings.sync.status"]
+        for _ in 0..<6 where !sent.exists { second.swipeUp() }
+        XCTAssertTrue(sent.waitForExistence(timeout: 30))
+        XCTAssertTrue(sent.label.contains("3 notebooks sent") || sent.label.contains("up to date"), sent.label)
+        attach(second, "sync-account-allowed")
     }
 }

@@ -245,8 +245,12 @@ enum ManifestCodec {
 
     // MARK: Scalars
 
+    /// Snapped to the millisecond and written from just above it: the formatter cuts off rather than rounds, so a date
+    /// read back and written again used to slip a millisecond earlier.
     static func encodeDate(_ date: Date) -> JSONValue {
-        .string(date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true)))
+        let milliseconds = (date.timeIntervalSinceReferenceDate * 1000).rounded()
+        let snapped = Date(timeIntervalSinceReferenceDate: (milliseconds + 0.25) / 1000)
+        return .string(snapped.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true)))
     }
 
     static func parseDate(_ string: String) -> Date? {

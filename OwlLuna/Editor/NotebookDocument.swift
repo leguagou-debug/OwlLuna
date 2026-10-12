@@ -528,10 +528,13 @@ final class NotebookDocument {
         structureChanged()
     }
 
-    /// Favourite, trash and folder changes made from the library while this notebook is open.
+    /// Favourite, lock, tag, trash and folder changes made from the library while this notebook is open. They are
+    /// stamped, not dated: see `LibraryState.changedAt`.
     func updateLibraryState(_ change: (inout LibraryState) -> Void) {
         guard !isReadOnly else { return }
+        let before = manifest.library
         change(&manifest.library)
+        manifest.library.stamp(changesSince: before, at: .now)
         manifestVersion += 1
         scheduleSave()
     }

@@ -19,7 +19,7 @@ export const site = {
   /** An address for privacy and support questions. Empty shows GitHub Issues alone. */
   contactEmail: '',
   /** The day the privacy policy last changed, as YYYY-MM-DD. */
-  policyUpdated: '2026-10-11',
+  policyUpdated: '2026-10-12',
 }
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''

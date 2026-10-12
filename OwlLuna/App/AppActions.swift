@@ -83,6 +83,13 @@ struct NotebookQuery: EntityStringQuery {
         return AppModel.shared.library.notebooks().sorted { ($0.lastOpenedAt ?? $0.modifiedAt) > ($1.lastOpenedAt ?? $1.modifiedAt) }
     }
 
+    /// What Siri and Shortcuts are offered to choose from. A locked notebook's name isn't handed out, as it isn't to Spotlight.
+    @MainActor
+    static func offered(_ records: [NotebookRecord], matching string: String? = nil) -> [NotebookRecord] {
+        records.filter { !$0.isLocked && (string.map($0.title.localizedCaseInsensitiveContains) ?? true) }
+    }
+
+    /// A shortcut made before its notebook was locked still finds it; opening it asks as the library does.
     @MainActor
     func entities(for identifiers: [UUID]) async throws -> [NotebookEntity] {
         await library().filter { identifiers.contains($0.id) }.map(NotebookEntity.init)
@@ -90,12 +97,12 @@ struct NotebookQuery: EntityStringQuery {
 
     @MainActor
     func suggestedEntities() async throws -> [NotebookEntity] {
-        await library().prefix(24).map(NotebookEntity.init)
+        Self.offered(await library()).prefix(24).map(NotebookEntity.init)
     }
 
     @MainActor
     func entities(matching string: String) async throws -> [NotebookEntity] {
-        await library().filter { $0.title.localizedCaseInsensitiveContains(string) }.map(NotebookEntity.init)
+        Self.offered(await library(), matching: string).map(NotebookEntity.init)
     }
 }
 
