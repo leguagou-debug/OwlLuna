@@ -1,0 +1,20 @@
+'use client'
+
+import { useSyncExternalStore } from 'react'
+
+const query = '(prefers-reduced-motion: reduce)'
+
+function subscribe(changed: () => void) {
+  const media = window.matchMedia(query)
+  media.addEventListener('change', changed)
+  return () => media.removeEventListener('change', changed)
+}
+
+/** Whether Reduce Motion is on. It is off while the page hydrates, so the server's markup and the browser's agree. */
+export function useStill(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => false,
+  )
+}

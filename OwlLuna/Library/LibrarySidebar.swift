@@ -47,7 +47,7 @@ struct SpineChip: View {
             .frame(width: 7, height: 20)
             .overlay(alignment: .leading) { Rectangle().fill(.black.opacity(0.2)).frame(width: 2) }
             .clipShape(RoundedRectangle(cornerRadius: 1.5))
-            .overlay { RoundedRectangle(cornerRadius: 1.5).strokeBorder(Color.hairline, lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: 1.5).strokeBorder(RowInk(resting: .hairline), lineWidth: 1) }
             .accessibilityHidden(true)
     }
 }
@@ -124,6 +124,7 @@ struct LibrarySidebar: View {
                         Label("New Folder", systemImage: "folder.badge.plus")
                     }
                 }
+                .background(CellFocusRing(shown: true))
             } header: {
                 Text("Shelves").metaStyle(.footnote)
             }
@@ -144,6 +145,7 @@ struct LibrarySidebar: View {
                             }
                         }
                         .accessibilityIdentifier("sidebar.newSmartShelf")
+                        .background(CellFocusRing(shown: true))
                     }
                 } header: {
                     Text("Smart shelves").metaStyle(.footnote)
@@ -262,13 +264,15 @@ struct LibrarySidebar: View {
                     Image(systemName: icon)
                         .symbolEffect(.bounce, value: bounces)
                         .symbolEffectsRemoved(reduceMotion)
+                        .foregroundStyle(RowInk(resting: .sidebarTint))
                 }
             }
             Spacer()
             if let count, count > 0, !dynamicTypeSize.isAccessibilitySize {
-                Text(count, format: .number).font(.subheadline.monospacedDigit()).foregroundStyle(.primary)
+                Text(count, format: .number).font(.subheadline.monospacedDigit())
             }
         }
+        .foregroundStyle(RowInk(resting: .ink))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(count.map { $0 > 0 ? "\(title), \($0)" : title } ?? title)
         .accessibilityAddTraits(.isButton)
@@ -282,7 +286,7 @@ struct LibrarySidebar: View {
             Text(folder.name).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             Spacer()
             if count > 0, !dynamicTypeSize.isAccessibilitySize {
-                Text(count, format: .number).font(.subheadline.monospacedDigit()).foregroundStyle(.primary)
+                Text(count, format: .number).font(.subheadline.monospacedDigit())
             }
             if row.hasChildren {
                 Button { withAnimation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion)) { toggle(folder) } } label: {
@@ -293,11 +297,12 @@ struct LibrarySidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(Color.textSecondary)
+                .foregroundStyle(RowInk(resting: .textSecondary))
                 .accessibilityHidden(true)
             }
         }
         .padding(.leading, CGFloat(row.depth) * Space.x4)
+        .foregroundStyle(RowInk(resting: .ink))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "\(folder.name), folder, \(count) notebooks"))
         .accessibilityValue(tree.parent(of: folder.id).map { String(localized: "Inside \(tree.name(of: $0))") } ?? "")
@@ -341,9 +346,68 @@ struct LibrarySidebar: View {
 }
 
 private extension View {
-    /// Tags a row with its scope, and cuts the highlight of the one on show as square as the controls.
+    /// Tags a row with its scope, and lays the one on show on cloth cut as square as the controls. The cloth stands in for the focus ring.
     func scoped(_ value: LibraryScope, chosen: LibraryScope?) -> some View {
-        tag(value).listRowBackground(RoundedRectangle.plate.fill(value == chosen ? Color.well : .clear).padding(.horizontal, Space.x2))
+        tag(value)
+            .environment(\.rowChosen, value == chosen)
+            .background(CellFocusRing(shown: false))
+            .listRowBackground(RowCloth().opacity(value == chosen ? 1 : 0).padding(.horizontal, Space.x2))
+    }
+}
+
+private extension EnvironmentValues {
+    @Entry var rowChosen = false
+}
+
+/// A sidebar row's colour: its own at rest, the cloth's ink on the row that is chosen.
+private struct RowInk: ShapeStyle {
+    let resting: Color
+
+    func resolve(in environment: EnvironmentValues) -> Color { environment.rowChosen ? .onPrimaryCloth : resting }
+}
+
+/// The cobalt cloth under the chosen row, woven and edged like the cloth buttons.
+private struct RowCloth: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let shape = RoundedRectangle.plate
+        shape.fill(Color.primaryCloth)
+            .overlay {
+                if contrast != .increased {
+                    shape.fill(ImagePaint(image: ClothWeave.tile, scale: 1))
+                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0), .black.opacity(0.20)],
+                                                      startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                }
+            }
+    }
+}
+
+/// Shows or hides the focus ring UIKit draws round the list cell this sits in, which `focusEffectDisabled` doesn't reach.
+private struct CellFocusRing: UIViewRepresentable {
+    let shown: Bool
+
+    func makeUIView(context: Context) -> Probe {
+        let probe = Probe()
+        probe.isUserInteractionEnabled = false
+        return probe
+    }
+
+    func updateUIView(_ probe: Probe, context: Context) { probe.shown = shown }
+
+    final class Probe: UIView {
+        var shown = true { didSet { apply() } }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            apply()
+        }
+
+        private func apply() {
+            guard let cell = sequence(first: self as UIView, next: \.superview).first(where: { $0 is UICollectionViewCell }),
+                  (cell.focusEffect != nil) != shown else { return }
+            cell.focusEffect = shown ? UIFocusHaloEffect() : nil
+        }
     }
 }
 

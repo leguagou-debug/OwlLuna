@@ -41,14 +41,12 @@ final class DesignTokenTests: XCTestCase {
         print("CONTRAST\n" + report.joined(separator: "\n"))
     }
 
-    /// A focused sidebar row is filled with the sidebar tint under white text; its icons sit on the surface.
-    func testSidebarTintCarriesWhiteTextAndItsIconsShow() {
+    /// The sidebar's icons sit on the surface. The row that is chosen is cloth, which `testControlTextPairsReachAA` covers.
+    func testSidebarIconsShowOnTheSurface() {
         for style in [UIUserInterfaceStyle.light, .dark] {
             for level in [UIAccessibilityContrast.normal, .high] {
                 let traits = UITraitCollection { $0.userInterfaceStyle = style; $0.accessibilityContrast = level }
-                let tint = UIColor.sidebarTint.resolvedColor(with: traits)
-                XCTAssertGreaterThanOrEqual(contrast(.white, tint), 4.5)
-                XCTAssertGreaterThanOrEqual(contrast(tint, UIColor.surface.resolvedColor(with: traits)), 3)
+                XCTAssertGreaterThanOrEqual(contrast(UIColor.sidebarTint.resolvedColor(with: traits), UIColor.surface.resolvedColor(with: traits)), 3)
             }
         }
     }

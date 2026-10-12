@@ -181,6 +181,10 @@ Contributions toward any of these are very welcome:
 - [ ] A ruler that spans pages (PencilKit's ruler belongs to one canvas, and each page has its own)
 - [ ] Native-speaker review of the Spanish, French and German translations, and more languages
 
+## Website
+
+The app's site, with its Privacy Policy and Support page, is in [`website/`](website/README.md) and is published to GitHub Pages at <https://owaisazmal.github.io/OwlLuna/>.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests go in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues).
