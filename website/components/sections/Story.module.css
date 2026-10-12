@@ -248,3 +248,9 @@
     max-width: none;
   }
 }
+
+@media (min-width: 1000px) and (max-width: 1099px) {
+  .stampSpot {
+    right: -14px;
+  }
+}

@@ -19,7 +19,7 @@ function Spine({ cloth }: { cloth: ClothColor }) {
   return <span className={styles.spine} style={{ '--cloth': clothColors[cloth] } as CSSProperties} aria-hidden="true" />
 }
 
-/** The library's sidebar, drawn: shelves with spine chips, a folder whose own folders fold away, a smart shelf and tags as paper labels. */
+/** The library's sidebar, drawn: shelves, a folder that folds away, a smart shelf and tags. */
 export function Sidebar() {
   const frame = useRef<HTMLElement>(null)
   const [open, setOpen] = useState(true)

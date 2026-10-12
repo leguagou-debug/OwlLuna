@@ -25,7 +25,6 @@
   --label-ink: #1b2230;
   --label-ink-secondary: #5a6070;
   --moon: #f4de3c;
-  --moon-light: #fbf07a;
   --rule: #d6cfbe;
   --card-white: #fffdf6;
 
@@ -33,7 +32,6 @@
   --radius-plate: 4px;
   --radius-track: 6px;
   --radius-bar: 8px;
-  --radius-sheet: 12px;
 
   --x1: 4px;
   --x2: 8px;
@@ -45,7 +43,6 @@
   --x10: 40px;
   --x12: 48px;
   --x16: 64px;
-  --x24: 96px;
 
   --line: 1.5px;
   --measure: 1180px;
@@ -101,7 +98,7 @@
   }
 }
 
-/* Printed matter keeps its colours at night, as covers, index cards and the splash tiles do in the app. */
+/* Printed matter keeps its colours at night, as it does in the app. */
 .print {
   color-scheme: light;
   --paper: #f1ede4;
@@ -267,12 +264,6 @@ button {
   background: var(--board);
   border: var(--line) solid var(--outline);
   border-radius: var(--radius-plate);
-}
-
-.rule {
-  border: 0;
-  border-top: 1px solid var(--hairline);
-  margin: 0;
 }
 
 .visually-hidden {

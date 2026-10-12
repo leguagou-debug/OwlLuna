@@ -30,6 +30,7 @@ export function PenTray() {
   const scroller = useRef<HTMLDivElement>(null)
   const newest = useRef<HTMLButtonElement>(null)
   const rubbing = useRef<AnimationPlaybackControls | null>(null)
+  const touched = useRef(false)
   const inView = useInView(stage, { once: true, amount: 0.3 })
   const still = useStill()
 
@@ -74,6 +75,7 @@ export function PenTray() {
   }, [full])
 
   const take = (id: string) => {
+    touched.current = true
     rubbing.current?.stop()
     rubbed.set(0)
     setPenId(id)
@@ -88,6 +90,7 @@ export function PenTray() {
   }
 
   const erase = () => {
+    touched.current = true
     setTool('eraser')
     if (rubbed.get() >= 1) return
     rubbing.current?.stop()
@@ -95,12 +98,19 @@ export function PenTray() {
     else rubbing.current = animate(rubbed, 1, { duration: 0.8, ease: ease.inOut })
   }
 
+  const lasso = () => {
+    touched.current = true
+    setTool('lasso')
+  }
+
   const ink = { kind: pen.kind, color: pen.color, opacity: pen.opacity, play: inView, still }
+  const strength = `${Math.round(pen.opacity * 100)}%`
+  const said = tool === 'pen' ? `${pen.widthName} width, ${strength} opacity` : helpers[tool].does
 
   return (
     <div className={styles.stage} ref={stage}>
       <noscript>
-        <style>{`[data-ink] path{stroke-dasharray:none!important;opacity:1!important}`}</style>
+        <style>{`g[data-ink] path{stroke-dasharray:none!important;opacity:1!important}`}</style>
       </noscript>
       <div className={styles.desk}>
         <div className={`print ${styles.sheet}`}>
@@ -212,7 +222,7 @@ export function PenTray() {
               className={styles.slot}
               aria-pressed={tool === name}
               aria-label={helpers[name].name}
-              onClick={name === 'eraser' ? erase : () => setTool('lasso')}
+              onClick={name === 'eraser' ? erase : lasso}
               initial={false}
               animate="rest"
               whileHover="lift"
@@ -240,7 +250,7 @@ export function PenTray() {
               </svg>
               {pen.widthName}
             </Fact>
-            <Fact term="Opacity">{Math.round(pen.opacity * 100)}%</Fact>
+            <Fact term="Opacity">{strength}</Fact>
           </>
         ) : (
           <div className={`${styles.fact} ${styles.wide}`}>
@@ -249,6 +259,9 @@ export function PenTray() {
           </div>
         )}
       </dl>
+      <p className="visually-hidden" role="status">
+        {touched.current ? said : ''}
+      </p>
     </div>
   )
 }

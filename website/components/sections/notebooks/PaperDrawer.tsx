@@ -6,6 +6,7 @@ import { ease, quick } from '@/lib/motion'
 import { Panel } from '../../ui/Panel'
 import { colours, families, sheet } from './papers'
 import { useArrival } from '@/components/ui/useArrival'
+import { useStill } from '@/components/ui/useStill'
 import styles from './PaperDrawer.module.css'
 
 const order = new Map(families.flatMap((family) => family.templates).map((template, index) => [template.name, index]))
@@ -15,6 +16,7 @@ const lean = (index: number) => (index % 2 === 0 ? -3 : 3)
 export function PaperDrawer() {
   const root = useRef<HTMLDivElement>(null)
   const { arrived: play } = useArrival(root, { amount: 0.2 })
+  const still = useStill()
   const label = useId()
   const [colour, setColour] = useState(colours[0])
   const [deal, setDeal] = useState(0)
@@ -43,7 +45,7 @@ export function PaperDrawer() {
                         d="M3 8.5 6.5 12 13 4.5"
                         initial={false}
                         animate={{ pathLength: chosen ? 1 : 0, opacity: chosen ? 1 : 0 }}
-                        transition={{ pathLength: { duration: chosen ? 0.24 : 0, ease: ease.glide }, opacity: { duration: 0.01 } }}
+                        transition={still ? { duration: 0 } : { pathLength: { duration: chosen ? 0.24 : 0, ease: ease.glide }, opacity: { duration: 0.01 } }}
                       />
                     </svg>
                   </span>

@@ -2,11 +2,12 @@
 
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/Button'
 import { lively, quick } from '@/lib/motion'
 import { IndexCard } from '../../ui/IndexCard'
 import { Tape } from '../../ui/Tape'
 import { Written } from './Ink'
-import { write } from './hand'
+import { write } from '@/components/ui/hand'
 import styles from './CardPile.module.css'
 
 type Grade = 'again' | 'good' | 'easy'
@@ -55,9 +56,7 @@ export function CardPile() {
   const turning = useRef(false)
   const sitting = useRef(0)
   const focus = useRef<'good' | 'show' | 'deal' | null>(null)
-  const show = useRef<HTMLButtonElement>(null)
-  const good = useRef<HTMLButtonElement>(null)
-  const deal = useRef<HTMLButtonElement>(null)
+  const keys = useRef<HTMLDivElement>(null)
   const [queue, setQueue] = useState(order)
   const [turn, setTurn] = useState(0)
   const [revealed, setRevealed] = useState(false)
@@ -71,9 +70,7 @@ export function CardPile() {
   useEffect(() => {
     const target = focus.current
     focus.current = null
-    if (target === 'good') good.current?.focus()
-    if (target === 'show') show.current?.focus()
-    if (target === 'deal') deal.current?.focus()
+    if (target) keys.current?.querySelectorAll('button')[target === 'good' ? 1 : 0]?.focus()
   }, [revealed, turn, queue.length])
 
   const turnOver = async (from?: 'show') => {
@@ -82,6 +79,7 @@ export function CardPile() {
     if (from === 'show') focus.current = 'good'
     if (reduced) {
       setRevealed(next)
+      setSaid((next ? card.back : card.front).says)
       return
     }
     const started = sitting.current
@@ -90,6 +88,7 @@ export function CardPile() {
     turning.current = false
     if (started !== sitting.current) return
     setRevealed(next)
+    setSaid((next ? card.back : card.front).says)
     swing.set({ rotateY: next ? -90 : 90 })
     swing.start({ rotateY: 0, transition: { type: 'spring', duration: 0.5, bounce: 0.36 } })
   }
@@ -183,28 +182,22 @@ export function CardPile() {
         </AnimatePresence>
       </div>
 
-      <div className={styles.answers}>
+      <div ref={keys} className={styles.answers}>
         {!card ? (
-          <button ref={deal} type="button" className={`${styles.key} ${styles.wide}`} onClick={dealAgain}>
+          <Button className={`${styles.key} ${styles.wide}`} onClick={dealAgain}>
             Go through them again
-          </button>
+          </Button>
         ) : revealed ? (
           grades.map((choice) => (
-            <button
-              key={choice.grade}
-              ref={choice.grade === 'good' ? good : undefined}
-              type="button"
-              className={`${styles.key} ${choice.grade === 'good' ? `cloth ${styles.cloth}` : ''}`}
-              onClick={() => answer(choice)}
-            >
+            <Button key={choice.grade} variant={choice.grade === 'good' ? 'cloth' : 'plate'} className={styles.key} onClick={() => answer(choice)}>
               <span>{choice.name}</span>
               <span className={styles.wait}>{choice.wait}</span>
-            </button>
+            </Button>
           ))
         ) : (
-          <button ref={show} type="button" className={`cloth ${styles.key} ${styles.cloth} ${styles.wide}`} onClick={() => turnOver('show')}>
+          <Button variant="cloth" className={`${styles.key} ${styles.wide}`} onClick={() => turnOver('show')}>
             Show Answer
-          </button>
+          </Button>
         )}
       </div>
       <p className="visually-hidden" role="status">

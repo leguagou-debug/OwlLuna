@@ -61,11 +61,6 @@
   stroke: var(--tomato);
 }
 
-.dot {
-  fill: var(--ink-secondary);
-  stroke: none;
-}
-
 @media (max-width: 560px) {
   .row {
     grid-template-columns: 1fr;

@@ -31,12 +31,12 @@ The Privacy Policy describes what the app's code does. If a change to the app to
 ## How it is put together
 
 - `app/`: the pages (home, `privacy/`, `support/`), the root layout and the design tokens in `globals.css`.
-- `components/ui/`: the app's own pieces rebuilt for the web: cloth and plate buttons, the Card panel, the Ledger, the Stamp, index cards, cloth covers and study tape.
+- `components/ui/`: the app's own pieces rebuilt for the web: cloth and plate buttons, the Card panel, the Ledger, the Stamp, index cards, cloth covers, study tape and the splash's hand lettering.
 - `components/hero/`: the launch splash as the page's opening. The tiles, their artwork and their timings are taken from `OwlLuna/Launch/` in the app.
 - `components/sections/`: the parts of the home page.
 - `lib/`: site settings and the motion curves.
 
-The look follows [docs/DESIGN.md](../docs/DESIGN.md): paper, ink, moon yellow and tomato, flat ink-outlined rectangles with the app's corner scale, and cobalt cloth for the one action that finishes a task. Printed matter (tiles, covers, index cards) keeps its colours at night; everything else follows the light and dark tokens. Animation is done with [Motion](https://motion.dev), and with Reduce Motion nothing moves.
+The look follows [docs/DESIGN.md](../docs/DESIGN.md): paper, ink, moon yellow and tomato, flat ink-outlined rectangles with the app's corner scale, and cobalt cloth for the one action that finishes a task. Printed matter (tiles, covers, index cards) keeps its colours at night; everything else follows the light and dark tokens. Animation is done with [Motion](https://motion.dev). With Reduce Motion nothing moves, the button on the hero's ticker pauses what loops, and a visitor whose scripts are off or slow to arrive is shown the finished scene still.
 
 ## Fonts
 

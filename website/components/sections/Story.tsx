@@ -47,7 +47,7 @@ export function Story() {
                 <div className={styles.slot}>
                   <Tape color="sage" className={styles.slotTape} />
                   <IndexCard side={' '} className={styles.card}>
-                    <ol className={styles.principles}>
+                    <ol role="list" className={styles.principles}>
                       <li>
                         <span className={styles.numeral} aria-hidden="true">1.</span>
                         <span>

@@ -6,7 +6,7 @@
   flex-direction: column;
   background: var(--desk);
   border: var(--line) solid var(--outline);
-  border-radius: var(--radius-bar);
+  border-radius: var(--radius-plate);
   overflow: hidden;
 }
 

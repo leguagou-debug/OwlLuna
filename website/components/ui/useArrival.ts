@@ -5,7 +5,7 @@ import { useState, type RefObject } from 'react'
 
 type View = Pick<UseInViewOptions, 'amount' | 'margin'>
 
-/** Whether an element has scrolled into view. What is on screen at load has arrived already, so nothing is hidden without scripts. */
+/** Whether an element has scrolled into view. What is on screen at load has arrived already. */
 export function useArrival(ref: RefObject<Element | null>, view: View = {}) {
   const [waited, setWaited] = useState(false)
   const inView = useInView(ref, { once: true, ...view })

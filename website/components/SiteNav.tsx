@@ -20,13 +20,16 @@ export function SiteNav() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const menu = useRef<HTMLDivElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
 
   useEffect(() => setOpen(false), [pathname])
 
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
     }
     const onPointer = (event: PointerEvent) => {
       if (menu.current && !menu.current.contains(event.target as Node)) setOpen(false)
@@ -66,8 +69,18 @@ export function SiteNav() {
             {site.appStoreUrl ? 'Get the app' : 'GitHub'}
             <Away />
           </Button>
-          <div className={styles.menu} ref={menu}>
+          <noscript>
+            <style>{`.${styles.menu}{display:none!important}`}</style>
+          </noscript>
+          <div
+            className={styles.menu}
+            ref={menu}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+            }}
+          >
             <button
+              ref={button}
               type="button"
               className={styles.menuButton}
               aria-expanded={open}
@@ -87,20 +100,22 @@ export function SiteNav() {
                   transition={quick}
                 >
                   <div className={`cloth ${styles.cardBand}`}>Menu</div>
-                  <ul>
-                    {links.map((link) => (
-                      <li key={link.href}>
-                        <Link
-                          href={link.href}
-                          className={styles.cardRow}
-                          aria-current={current(link.href) ? 'page' : undefined}
-                          onClick={() => setOpen(false)}
-                        >
-                          {link.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                  <nav aria-label="Site">
+                    <ul>
+                      {links.map((link) => (
+                        <li key={link.href}>
+                          <Link
+                            href={link.href}
+                            className={styles.cardRow}
+                            aria-current={current(link.href) ? 'page' : undefined}
+                            onClick={() => setOpen(false)}
+                          >
+                            {link.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
                 </motion.div>
               ) : null}
             </AnimatePresence>

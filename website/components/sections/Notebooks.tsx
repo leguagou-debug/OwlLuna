@@ -19,7 +19,7 @@ const notes = [
   },
   {
     title: 'Favourites and sorting',
-    text: 'Mark the notebooks you want close to hand, and sort the shelf by last opened, modified, created or title.',
+    text: 'Touch and hold a notebook and choose Favourite to keep it close to hand, and sort the shelf by last opened, modified, created or title.',
   },
 ]
 

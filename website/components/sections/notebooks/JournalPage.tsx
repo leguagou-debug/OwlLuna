@@ -1,10 +1,11 @@
 'use client'
 
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useRef, useSyncExternalStore } from 'react'
 import { ease, rising } from '@/lib/motion'
 import { words } from './covers'
 import { useArrival } from '@/components/ui/useArrival'
+import { useStill } from '@/components/ui/useStill'
 import styles from './JournalPage.module.css'
 
 const sample = '2026-10-11'
@@ -46,11 +47,11 @@ const strokes = lines
     return [...written, { ...stroke, delay: last ? last.delay + last.duration + 0.06 : 0.7 }]
   }, [])
 
-/** Today's journal page: dotted ivory paper printed with the weekday, the date and the day of the year, then written on. */
+/** Today's journal page: dotted ivory paper printed with the weekday, the date and the day of the year. */
 export function JournalPage() {
   const page = useRef<HTMLDivElement>(null)
   const { arrived: play } = useArrival(page, { amount: 0.4 })
-  const reduced = useReducedMotion()
+  const still = useStill()
   const key = useSyncExternalStore(subscribe, today, () => sample)
   const head = masthead(key)
   const at = (delay: number, transition: object = {}) => (play ? { ...transition, delay } : { duration: 0 })
@@ -82,7 +83,7 @@ export function JournalPage() {
               initial={false}
               animate={play ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
               transition={
-                play && !reduced
+                play && !still
                   ? { duration: stroke.duration, ease: 'linear', delay: stroke.delay, opacity: { duration: 0.01, delay: stroke.delay } }
                   : { duration: 0 }
               }

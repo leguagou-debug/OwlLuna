@@ -95,8 +95,8 @@
 
 .sub {
   margin: var(--x8) 0 var(--x2);
-  font-size: 1.06rem;
-  font-weight: 650;
+  font-size: 1.25rem;
+  line-height: 1.2;
 }
 
 .list {
@@ -157,6 +157,10 @@
 }
 
 @media (max-width: 959px) {
+  .aside {
+    max-width: 44rem;
+  }
+
   .contents {
     position: static;
   }

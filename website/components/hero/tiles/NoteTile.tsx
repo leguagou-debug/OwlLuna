@@ -2,11 +2,11 @@
 
 import { motion } from 'motion/react'
 import { ease } from '@/lib/motion'
-import { printed } from '../noteHand'
+import { write } from '@/components/ui/hand'
 import { inks, useScene } from '../scene'
 import styles from '../BentoHero.module.css'
 
-const words = ['Write', 'Sketch', 'Study'].map(printed)
+const words = ['Write', 'Sketch', 'Study'].map((word) => write(word))
 const baseline = (row: number) => 31 + 36 * row
 const wordStart = 35
 const box = 'M4,13.5 L19.5,13 L20,29 L4.5,29.5 Z'
@@ -20,12 +20,12 @@ const shadows = [
 const pen = { fill: 'none', stroke: inks.ink, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
 const drawn = { duration: 0.3, ease: ease.inOut }
 
-/** The note page: ruled paper with a margin and punched holes, filled in by hand with a checklist and a row of moon phases. */
+/** The note page: ruled paper filled in by hand with a checklist and moon phases. */
 export function NoteTile() {
-  const { beat, draw } = useScene()
+  const { beat, draw, still } = useScene()
   return (
     <div className={styles.note}>
-      <motion.span className={styles.noteRules} {...beat({ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' }, 640, { duration: 0.75, ease: ease.glide })} />
+      <motion.span className={styles.noteRules} {...beat({ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' }, 640, { duration: still ? 0 : 0.75, ease: ease.glide })} />
       <motion.span className={styles.noteHeader} style={{ originX: 0 }} {...beat({ scaleX: 0 }, { scaleX: 1 }, 600, { duration: 0.52, ease: ease.glide })} />
       <motion.span className={styles.noteMargin} style={{ originY: 0 }} {...beat({ scaleY: 0 }, { scaleY: 1 }, 560, { duration: 0.52, ease: ease.glide })} />
       {[0, 1, 2].map((index) => (

@@ -1,10 +1,10 @@
 'use client'
 
 import { motion, useAnimationFrame, useInView, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform, type MotionValue } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Replayed, Written, useInk } from './Ink'
 import { Sheet } from './Sheet'
-import { write } from './hand'
+import { write } from '@/components/ui/hand'
 import styles from './Replay.module.css'
 
 const length = 16
@@ -39,7 +39,7 @@ const sketch = [
 const stamp = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const lineAt = (seconds: number) => spoken.reduce((found, line, index) => (line.at <= seconds ? index : found), 0)
 
-/** A recording replayed with its ink: the notes are faint until the sound reaches them, and a tap on ink or on a line of the transcript jumps there. */
+/** A recording replayed with its ink: the notes are faint until the sound reaches them. */
 export function Replay() {
   const figure = useRef<HTMLElement>(null)
   const scrub = useRef<HTMLInputElement>(null)
@@ -104,6 +104,14 @@ export function Replay() {
     setPlaying(true)
   }
 
+  const nudge = (event: KeyboardEvent<HTMLInputElement>) => {
+    const back = event.key === 'ArrowLeft' || event.key === 'ArrowDown'
+    if (!back && event.key !== 'ArrowRight' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    rest.current = 0
+    clock.set(Math.min(length, Math.max(0, clock.get() + (back ? -1 : 1))))
+  }
+
   return (
     <figure ref={figure} className={styles.figure}>
       <div className={styles.desk}>
@@ -150,6 +158,7 @@ export function Replay() {
                 clock.set(Number(event.currentTarget.value))
               }}
               onPointerDown={hold}
+              onKeyDown={nudge}
             />
           </span>
           <span className={styles.length}>{stamp(length)}</span>
@@ -158,7 +167,7 @@ export function Replay() {
         <div className={styles.transcript}>
           <div className={styles.transcriptHead}>
             <span className="meta">Transcript</span>
-            <span className="meta">Made on the iPad</span>
+            <span className="meta">Made on the device</span>
           </div>
           <ol className={styles.said}>
             {spoken.map((line, index) => (

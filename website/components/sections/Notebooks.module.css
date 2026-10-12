@@ -69,7 +69,8 @@
 
 .plate {
   position: relative;
-  height: 260px;
+  height: auto;
+  aspect-ratio: 1;
   overflow: hidden;
   border-bottom: var(--line) solid var(--outline);
 }
@@ -107,6 +108,7 @@
     grid-row: 1;
     grid-column: 1;
     height: auto;
+    aspect-ratio: auto;
     min-height: 300px;
     border-bottom: 0;
     border-right: var(--line) solid var(--outline);

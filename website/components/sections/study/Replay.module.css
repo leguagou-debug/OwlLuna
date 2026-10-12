@@ -250,6 +250,10 @@
   color: var(--ink-secondary);
 }
 
+.saying .stamp {
+  color: var(--text-secondary);
+}
+
 .words {
   display: grid;
 }

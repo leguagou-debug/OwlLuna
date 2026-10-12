@@ -84,7 +84,7 @@ export function Study() {
                   <div className={styles.leaf}>
                     <p className="meta">What a study guide gives you</p>
                     <p className={`display ${styles.leafTitle}`}>Key Points</p>
-                    <ol className={styles.keys}>
+                    <ol className={styles.keys} role="list">
                       {keyPoints.map((point, index) => (
                         <li key={point} className={styles.key}>
                           <span className={`display ${styles.numeral}`} aria-hidden="true">
@@ -115,7 +115,7 @@ export function Study() {
                 <h3 className={`display ${styles.title}`}>The main points, written on the iPad</h3>
                 <p>
                   A study guide is the main points of what you wrote, and practice questions to go with them. Apple Intelligence writes it on the iPad
-                  itself.
+                  itself, so it needs iPadOS 26 or later and an iPad with Apple Intelligence turned on.
                 </p>
               </Reveal>
             </div>
@@ -145,7 +145,7 @@ export function Study() {
               <p>Tapping ink jumps the sound to when it was written. In a transcript, tap a line to hear it with the ink you wrote as it was said.</p>
             </Reveal>
             <Reveal className={styles.point} delay={0.14}>
-              <h3 className="meta">Transcripts stay on the iPad</h3>
+              <h3 className="meta">Transcribed on the device</h3>
               <p>
                 Ask for a transcript and the recording is written down on the iPad, never on a server. If the iPad can’t transcribe a language on the
                 device, the app says so and sends nothing.

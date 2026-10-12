@@ -56,7 +56,7 @@ const unevenness: [number, number][] = [
 export type HandLetter = { d: string; transform: string }
 export type Handwriting = { text: string; letters: HandLetter[]; width: number }
 
-/** A line in the splash's leaning capitals: each letter's strokes and place, tops at 0 and feet at 21, with the width the line takes. */
+/** A line in the splash's leaning capitals, tops at 0 and feet at 21. */
 export function write(text: string, seed = 0): Handwriting {
   let x = 0
   let count = seed

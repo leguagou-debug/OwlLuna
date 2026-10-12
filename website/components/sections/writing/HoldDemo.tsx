@@ -68,6 +68,7 @@ export function HoldDemo() {
   const measure = useRef<SVGPathElement>(null)
   const moving = useRef<AnimationPlaybackControls | null>(null)
   const resting = useRef(0)
+  const touched = useRef(false)
   const inView = useInView(stage, { once: true, amount: 0.45 })
   const still = useStill()
 
@@ -137,7 +138,7 @@ export function HoldDemo() {
   return (
     <div className={`print ${styles.stage} ${styles.moon}`} ref={stage}>
       <noscript>
-        <style>{`[data-ink] path{stroke-dasharray:none!important;opacity:1!important}`}</style>
+        <style>{`g[data-ink] path{stroke-dasharray:none!important;opacity:1!important}`}</style>
       </noscript>
       <div className={styles.desk}>
         <div className={styles.sheet}>
@@ -206,7 +207,10 @@ export function HoldDemo() {
                 className={styles.slot}
                 aria-pressed={shape === name}
                 aria-label={figures[name].name}
-                onClick={() => draw(name)}
+                onClick={() => {
+                  touched.current = true
+                  draw(name)
+                }}
                 initial={false}
                 animate="rest"
                 whileHover="lift"
@@ -224,7 +228,9 @@ export function HoldDemo() {
             className={styles.action}
             aria-disabled={!held}
             onClick={() => {
-              if (held) straighten(false)
+              if (!held) return
+              touched.current = true
+              straighten(false)
             }}
             initial={false}
             animate="rest"
@@ -245,13 +251,16 @@ export function HoldDemo() {
         </div>
         <div className={styles.fact}>
           <dt className="meta">Stroke</dt>
-          <dd className={styles.value} role="status">
+          <dd className={styles.value}>
             {held ? <Glyph name="check" className={styles.mark} weight={2.2} /> : null}
             {phase === 'undone' ? <Glyph name="undo" className={styles.mark} weight={2} /> : null}
             {says[phase]}
           </dd>
         </div>
       </dl>
+      <p className="visually-hidden" role="status">
+        {touched.current && (phase === 'held' || phase === 'undone') ? says[phase] : ''}
+      </p>
     </div>
   )
 }

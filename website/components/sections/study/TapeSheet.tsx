@@ -2,11 +2,12 @@
 
 import { motion, useInView } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { useStill } from '@/components/ui/useStill'
 import { landing, quick } from '@/lib/motion'
 import { Tape } from '../../ui/Tape'
-import { Drawn, drawn, pen } from './Ink'
+import { Drawn, pen, useDrawn } from './Ink'
 import { Sheet } from './Sheet'
-import { capHeight, write } from './hand'
+import { capHeight, write } from '@/components/ui/hand'
 import styles from './TapeSheet.module.css'
 
 const heading = write('The Moon')
@@ -32,11 +33,14 @@ const away = { opacity: 0, y: '-90%', rotate: -7, scale: 1.12 }
 const down = { opacity: 1, y: '0%', rotate: 0, scale: 1 }
 const up = { opacity: 0, y: '-72%', rotate: -5, scale: 1 }
 
-/** A page of notes with four strips of study tape over the answers. Each strip lifts on a tap and goes back on the next. */
+/** A page of notes with four strips of study tape over the answers. */
 export function TapeSheet() {
   const figure = useRef<HTMLElement>(null)
   const touched = useRef(false)
   const play = useInView(figure, { once: true, amount: 0.4 })
+  const still = useStill()
+  const drawn = useDrawn()
+  const placed = play || still
   const [landed, setLanded] = useState(false)
   const [lifted, setLifted] = useState<boolean[]>(() => notes.map(() => false))
   const [said, setSaid] = useState('')
@@ -100,10 +104,10 @@ export function TapeSheet() {
                       data-study-art
                       className={styles.layer}
                       initial={away}
-                      animate={!play ? away : isLifted ? up : down}
+                      animate={!placed ? away : isLifted ? up : down}
                       whileHover={isLifted ? undefined : { y: '-9%', rotate: -1.4 }}
                       transition={
-                        landed
+                        landed || still
                           ? isLifted
                             ? { ...quick, opacity: { duration: 0.16 } }
                             : { type: 'spring', duration: 0.46, bounce: 0.46, opacity: { duration: 0.08 } }
@@ -126,7 +130,7 @@ export function TapeSheet() {
               return (
                 <g key={phase.x}>
                   {phase.shadow ? (
-                    <motion.path data-study-art d={phase.shadow} fill="currentColor" initial={{ opacity: 0 }} animate={{ opacity: play ? 1 : 0 }} transition={{ duration: 0.16, delay: wait + 0.2 }} />
+                    <motion.path data-study-art d={phase.shadow} fill="currentColor" initial={{ opacity: 0 }} animate={{ opacity: placed ? 1 : 0 }} transition={still ? { duration: 0 } : { duration: 0.16, delay: wait + 0.2 }} />
                   ) : null}
                   <motion.circle cx={phase.x} cy="11" r="10" {...pen} strokeWidth="2.4" {...drawn(play, wait, 0.3)} />
                 </g>

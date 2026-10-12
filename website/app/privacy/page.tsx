@@ -29,7 +29,7 @@ const contents = [
   ['on-your-ipad', 'What the app keeps on your iPad'],
   ['icloud', 'iCloud sync'],
   ['permissions', 'Permissions'],
-  ['on-device', "What Apple's frameworks do"],
+  ['on-device', 'What Apple’s frameworks do'],
   ['sending', 'What leaves when you send it'],
   ['locks', 'Locked notebooks'],
   ['deleting', 'Keeping and deleting'],
@@ -59,6 +59,7 @@ function Out({ href, children }: { href: string; children: ReactNode }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer">
       {children}
+      <span className="visually-hidden"> (opens in a new tab)</span>
     </a>
   )
 }
@@ -116,7 +117,8 @@ export default function PrivacyPolicy() {
             <p>
               OwlLuna is made by <Out href={site.author.url}>{site.author.name}</Out>, an independent developer. On this
               page &ldquo;I&rdquo; means me, and &ldquo;the app&rdquo; means OwlLuna for iPad. The app also runs on a Mac
-              with Apple silicon, and wherever this page says iPad, the same holds there.
+              with Apple silicon, and it keeps and syncs your data the same way there. The Settings paths on this page,
+              and what happens when the app is deleted, describe iPadOS.
             </p>
             <p>
               The app is open source under the MIT License, so everything said here can be checked against{' '}
@@ -126,7 +128,7 @@ export default function PrivacyPolicy() {
 
           <Part id="collected">
             <p className={styles.plain}>Nothing.</p>
-            <ul className={styles.list}>
+            <ul className={styles.list} role="list">
               <li>The app has no account, sign-in or registration.</li>
               <li>
                 It contains no analytics, no crash reporter, no advertising and no tracking. There is no third-party
@@ -140,13 +142,14 @@ export default function PrivacyPolicy() {
               <li>It has nothing to buy, so it handles no payment details.</li>
             </ul>
             <p>
-              That is why the app&rsquo;s privacy label on the App Store reads &ldquo;Data Not Collected&rdquo;.
+              That is why the app&rsquo;s privacy label on the App Store {site.appStoreUrl ? 'reads' : 'will read'}{' '}
+              &ldquo;Data Not Collected&rdquo;.
             </p>
           </Part>
 
           <Part id="on-your-ipad">
             <p>Everything you make in OwlLuna is saved as files in the app&rsquo;s own storage on your iPad:</p>
-            <ul className={styles.list}>
+            <ul className={styles.list} role="list">
               <li>
                 <strong>Your notebooks.</strong> Handwriting (with the moment each stroke was made, which replay and
                 the time-lapse use), typed text, pictures, scans, imported PDFs, audio recordings and their transcripts,
@@ -157,7 +160,7 @@ export default function PrivacyPolicy() {
                 so that search can find them.
               </li>
               <li>
-                <strong>Your settings</strong>, pens, folders and smart shelves.
+                <strong>Your settings</strong>, pens, folders, smart shelves and the stickers you made.
               </li>
               <li>
                 <strong>Your writing history.</strong> For each day, which pages you wrote on. It holds no text and no
@@ -165,7 +168,7 @@ export default function PrivacyPolicy() {
               </li>
             </ul>
             <p>Some of this is handed to iPadOS, on the same iPad, so that system features work:</p>
-            <ul className={styles.list}>
+            <ul className={styles.list} role="list">
               <li>
                 <strong>Spotlight.</strong> Each notebook&rsquo;s title, cover and the words in it, so it can be found
                 from the Home Screen. Settings › Search in the app turns this off and removes what was indexed. Locked
@@ -173,11 +176,15 @@ export default function PrivacyPolicy() {
               </li>
               <li>
                 <strong>Widgets.</strong> The title, page number and cover of the notebook you last opened, and how
-                many pages you wrote on recent days. The app leaves locked notebooks out when it writes this.
+                many pages you wrote on recent days. When it writes this, the app does not name a locked notebook or
+                show its cover; the page counts do include pages written in locked notebooks. A notebook made from a PDF
+                or a scan has its first page as its cover.
               </li>
               <li>
                 <strong>Siri and Shortcuts.</strong> The names and page counts of your notebooks, so you can ask for
-                one by name. This includes the names of locked notebooks.
+                one by name. This includes the names of locked notebooks. When you ask Siri for a notebook aloud,{' '}
+                <Out href={apple.features}>Apple handles that request</Out>, the name included, as it does any Siri
+                request, which may not stay on the iPad.
               </li>
             </ul>
             <p>
@@ -194,16 +201,19 @@ export default function PrivacyPolicy() {
 
           <Part id="icloud">
             <p>
-              iCloud sync is the one way your notebooks leave the iPad without you sending them somewhere yourself.
+              iCloud sync is the one way OwlLuna itself copies your notebooks off the iPad without you sending them
+              somewhere yourself.
             </p>
             <Stamp title="It is on unless you turn it off" tone="mustard" className={styles.note}>
               <p>
                 If your iPad is signed in to iCloud with iCloud Drive on, OwlLuna starts syncing the first time it
-                opens, without asking. Settings › iCloud in the app turns it off.
+                opens, without asking. Settings › iCloud in the app turns it off. If the iPad is not signed in to
+                iCloud, that switch is greyed out and cannot be turned off beforehand: sync starts the next time OwlLuna
+                opens after you sign in.
               </p>
             </Stamp>
-            <h3 className={styles.sub}>What is copied</h3>
-            <ul className={styles.list}>
+            <h3 className={`display ${styles.sub}`}>What is copied</h3>
+            <ul className={styles.list} role="list">
               <li>
                 Every notebook, whole: everything listed under &ldquo;Your notebooks&rdquo; above, the words read from
                 its pages, and its flashcards. Locked notebooks are copied like any other.
@@ -211,7 +221,7 @@ export default function PrivacyPolicy() {
               <li>Your folders, and the stickers you made.</li>
             </ul>
             <p>Your writing history, smart shelves, settings and the search index are not copied.</p>
-            <h3 className={styles.sub}>Where it goes</h3>
+            <h3 className={`display ${styles.sub}`}>Where it goes</h3>
             <p>
               Into the app&rsquo;s private container in your own iCloud storage, under your Apple Account. It is
               Apple&rsquo;s service: Apple moves the files between your devices, and I have no access to them. OwlLuna
@@ -228,17 +238,19 @@ export default function PrivacyPolicy() {
               someone else, or sign in with a different account, delete the app or turn sync off. Otherwise the
               notebooks on the iPad are copied to that account&rsquo;s iCloud storage.
             </p>
-            <h3 className={styles.sub}>Turning it off, and removing the copy</h3>
+            <h3 className={`display ${styles.sub}`}>Turning it off, and removing the copy</h3>
             <p>
               Settings › iCloud in the app has the switch, and each device has its own. Turning it off stops that
               device syncing. It does not remove what is already in iCloud.
             </p>
             <p>
               To remove the iCloud copy, first turn sync off on every device, because a device that still has it on will
-              put the notebooks back. Then delete OwlLuna&rsquo;s data in iPadOS Settings › your name › iCloud › Manage
-              Storage (Apple renames that screen from time to time).
+              put the notebooks back. Then delete OwlLuna&rsquo;s data from your iCloud storage: iPadOS Settings › your
+              name › iCloud lists the apps that keep data there (Apple renames those screens from time to time). If you
+              turn sync on again afterwards, your notebooks are uploaded again, but folders and stickers that had been
+              synced before are removed from that device, so make a backup first.
             </p>
-            <h3 className={styles.sub}>When you delete a notebook</h3>
+            <h3 className={`display ${styles.sub}`}>When you delete a notebook</h3>
             <p>
               A notebook you delete for good is removed from iCloud the next time that device syncs, and from your other
               devices after that, unless one of them holds newer writing in it, in which case the notebook is kept and
@@ -282,8 +294,9 @@ export default function PrivacyPolicy() {
               </LedgerRow>
             </Ledger>
             <p>
-              You can withdraw any of them in iPadOS Settings › Privacy &amp; Security. The rest of the app keeps
-              working, and the feature that needs the permission says so when you use it.
+              You can withdraw them in iPadOS Settings, on OwlLuna&rsquo;s own page under Apps or under Privacy &amp;
+              Security (Face ID is under Face ID &amp; Passcode). The rest of the app keeps working, and recording,
+              transcripts and Today&rsquo;s Events tell you when their permission is off.
             </p>
           </Part>
 
@@ -292,7 +305,7 @@ export default function PrivacyPolicy() {
               Reading your notes is done by frameworks that are part of iPadOS. The app passes them the text or the
               picture and makes no network request of its own.
             </p>
-            <ul className={styles.list}>
+            <ul className={styles.list} role="list">
               <li>
                 <strong>Search, handwriting to text and stickers.</strong> Handwriting, scans and photo pages are read,
                 and the subject of a photo is cut out for a sticker, by Apple&rsquo;s Vision framework on the iPad.
@@ -325,8 +338,10 @@ export default function PrivacyPolicy() {
           </Part>
 
           <Part id="sending">
-            <p>The app sends nothing on its own. Things leave it only when you do one of these:</p>
-            <ul className={styles.list}>
+            <p>
+              Apart from <a href="#icloud">iCloud sync</a>, nothing leaves the app unless you do one of these:
+            </p>
+            <ul className={styles.list} role="list">
               <li>
                 <strong>Export or print.</strong> A notebook as a PDF, pages as images, or a page as a time-lapse video
                 is handed to the iPadOS share sheet or print panel. The file is named after the notebook, and a PDF
@@ -363,6 +378,12 @@ export default function PrivacyPolicy() {
               It is not encryption. A locked notebook&rsquo;s files are stored like any other notebook&rsquo;s, and its
               iCloud copy and any backup file hold it in full. Its title is still shown in the library and is still
               offered to Siri and Shortcuts.
+            </p>
+            <p>
+              A lock does not reach your other devices straight away. It travels only when the notebook is next edited
+              and synced; until then they open the notebook without asking and may show it in Spotlight and their
+              widgets. A newer copy of the notebook arriving from another device also replaces the lock setting with
+              that device&rsquo;s.
             </p>
           </Part>
 
@@ -437,7 +458,8 @@ export default function PrivacyPolicy() {
               ) : (
                 <>, open an issue on GitHub.</>
               )}{' '}
-              Issues are public, so please leave anything private out of them.
+              Issues are public, so please leave anything private out of them. Posting needs a free GitHub account, and
+              GitHub handles what you post under its own <Out href={github}>Privacy Statement</Out>.
             </p>
             <div className={styles.actions}>
               <Button href={site.newIssue} variant="cloth">

@@ -7,15 +7,14 @@ type Props = {
   children: ReactNode
   /** Small caps at the band's trailing end. */
   note?: string
-  tone?: 'cobalt' | 'tomato'
   className?: string
 }
 
 /** The app's Card: a flat, ink-outlined panel under a cloth band that names it. */
-export function Panel({ title, note, tone = 'cobalt', children, className }: Props) {
+export function Panel({ title, note, children, className }: Props) {
   return (
     <div className={[styles.panel, className].filter(Boolean).join(' ')}>
-      <div className={[styles.band, 'cloth', tone === 'tomato' ? styles.tomato : ''].filter(Boolean).join(' ')}>
+      <div className={`cloth ${styles.band}`}>
         <span className={styles.title}>{title}</span>
         {note ? <span className={styles.note}>{note}</span> : null}
       </div>

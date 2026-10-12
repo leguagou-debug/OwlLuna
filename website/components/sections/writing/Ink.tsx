@@ -84,7 +84,7 @@ type Props = {
 const unwritten = { pathLength: 0, opacity: 0 }
 const written = { pathLength: 1, opacity: 1 }
 
-/** One stroke of a pen, written `at` seconds in over `takes` seconds, in the character of its kind; `still` shows it whole at once. */
+/** One stroke of a pen, written `at` seconds in over `takes` seconds. */
 export function InkStroke({ d, kind, color, opacity = 1, at, takes, play, still = false }: Props) {
   const recipe = recipes[kind]
   const transition = still ? { duration: 0 } : { pathLength: { duration: takes, delay: at, ease: ease.inOut }, opacity: { duration: 0.01, delay: at } }

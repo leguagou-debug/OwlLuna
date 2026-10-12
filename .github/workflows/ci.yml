@@ -7,12 +7,14 @@ on:
       - '**.md'
       - 'docs/**'
       - 'website/**'
+      - '.github/workflows/website.yml'
       - 'LICENSE'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'website/**'
+      - '.github/workflows/website.yml'
       - 'LICENSE'
   workflow_dispatch:
 

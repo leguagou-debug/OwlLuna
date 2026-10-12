@@ -2,6 +2,7 @@
 
 import { motion } from 'motion/react'
 import { ease, landing } from '@/lib/motion'
+import { useStill } from '@/components/ui/useStill'
 import styles from './art.module.css'
 
 const days = [
@@ -20,6 +21,7 @@ const wave = (turns: number, y: number) => `M7.6,${y} q2.6,-5 5.2,0${' t5.2,0'.r
 
 /** The This-week strip: seven small sheets land in a row, and the days that were written fill with ink. */
 export function WeekStrip() {
+  const still = useStill()
   return (
     <motion.svg
       className={styles.svg}
@@ -52,7 +54,7 @@ export function WeekStrip() {
                   className={styles.pen}
                   d={wave(turns, 14 + row * 9)}
                   variants={{ away: { pathLength: 0, opacity: 0 }, placed: { pathLength: 1, opacity: 1 } }}
-                  transition={{ duration: 0.28, ease: ease.inOut, delay, opacity: { duration: 0.01, delay } }}
+                  transition={still ? { duration: 0 } : { duration: 0.28, ease: ease.inOut, delay, opacity: { duration: 0.01, delay } }}
                 />
               )
             })}

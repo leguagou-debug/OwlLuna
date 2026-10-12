@@ -26,7 +26,7 @@ const books: Book[] = [
 
 const drop = { type: 'spring', duration: 0.55, bounce: 0.5 } as const
 
-/** A shelf of notebooks in the three cover styles, standing on a ledge. Tapping one ties on, or takes off, its favourite ribbon. */
+/** A shelf of notebooks in the three cover styles, standing on a ledge. */
 export function Shelf() {
   const row = useRef<HTMLUListElement>(null)
   const { arrived: play } = useArrival(row, { amount: 0.3 })
@@ -45,7 +45,7 @@ export function Shelf() {
           <svg viewBox="0 0 10 20" width="10" height="20" aria-hidden="true">
             <path d="M0,0H10V20L5,16L0,20Z" />
           </svg>
-          <span className="meta">Tap a notebook to tie on its favourite ribbon</span>
+          <span className="meta">Try it: tap a cover for its favourite ribbon</span>
         </span>
       </figcaption>
       <ul className={styles.row} ref={row}>

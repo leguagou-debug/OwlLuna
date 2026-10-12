@@ -166,7 +166,7 @@ export function More() {
                     restore on this or another iPad. Restoring adds what is missing and never replaces a notebook: one
                     that differs from the backup comes back beside yours as a copy.
                   </p>
-                  <p className={styles.rowText}>It carries your flashcards and smart shelves with it.</p>
+                  <p className={styles.rowText}>It carries your flashcards, smart shelves and writing history with it.</p>
                 </div>
                 <div className={styles.half}>
                   <p className={styles.rowName}>

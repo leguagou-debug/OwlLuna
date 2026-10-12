@@ -13,7 +13,7 @@ const inked = { pathLength: 1, opacity: 1 }
 
 type Props = { ticked?: boolean; delay?: number; className?: string }
 
-/** The hand-drawn checkbox of the splash's note page: ticked, the tick draws itself as it scrolls into view; unticked, the box does. */
+/** The hand-drawn checkbox of the splash's note page. */
 export function TickBox({ ticked = true, delay = 0, className }: Props) {
   const ref = useRef<SVGSVGElement>(null)
   const { arrived } = useArrival(ref, { amount: 1 })

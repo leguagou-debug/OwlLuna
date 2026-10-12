@@ -14,11 +14,6 @@
   border-bottom: var(--line) solid var(--outline);
 }
 
-.tomato {
-  background-color: var(--tomato);
-  color: var(--on-tomato);
-}
-
 .title {
   font-size: 0.82rem;
   font-weight: 700;
@@ -32,7 +27,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
 }
 
 .body {

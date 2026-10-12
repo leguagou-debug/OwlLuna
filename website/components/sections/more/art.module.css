@@ -18,6 +18,10 @@
   fill: var(--paper);
 }
 
+.labelOnTomato {
+  fill: var(--on-tomato);
+}
+
 .pen {
   fill: none;
   stroke: var(--ink);
@@ -58,7 +62,15 @@
   stroke-linecap: round;
   stroke-dasharray: calc(var(--len) * 1px) calc(100px - var(--len) * 1px);
   stroke-dashoffset: calc(var(--len) * 1px);
-  animation: lap 3.4s linear infinite;
+  animation: lap 2.5s linear 2;
+}
+
+.svg[data-waiting] .laser {
+  animation: none;
+}
+
+:global(html[data-still]) .laser {
+  animation-play-state: paused;
 }
 
 .laserCore {

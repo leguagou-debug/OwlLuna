@@ -12,10 +12,6 @@
   border-right: var(--line) solid var(--outline);
 }
 
-.tomato {
-  background-color: var(--tomato);
-}
-
 .mustard {
   background-color: var(--mustard);
 }

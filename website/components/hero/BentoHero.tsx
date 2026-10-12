@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { landing } from '@/lib/motion'
 import { site } from '@/lib/site'
 import { Away, Button } from '../ui/Button'
-import { SceneProvider } from './scene'
+import { PauseProvider, SceneProvider } from './scene'
 import { NoteTile } from './tiles/NoteTile'
 import { OwlTile } from './tiles/OwlTile'
 import { CardsTile, MoonTile, TickerTile, VolumeTile, WordTile } from './tiles/SmallTiles'
@@ -27,17 +27,20 @@ type Spec = {
 }
 
 const tiles: Spec[] = [
+  { name: 'pitch', fill: 'boardFill', enter: { x: 0, y: -1.3 }, tilt: 3, delay: 120, bounce: 0.36, order: 3 },
   { name: 'ticker', fill: 'tomatoFill', enter: { x: 1.25, y: 0 }, tilt: 2, delay: 210, bounce: 0.38, order: 4 },
   { name: 'volume', fill: 'boardFill', enter: { x: 0, y: 0 }, tilt: -14, delay: 560, bounce: 0.5, order: 6 },
   { name: 'note', fill: 'boardFill', enter: { x: 1.25, y: 0 }, tilt: 4, delay: 150, bounce: 0.4, order: 2 },
   { name: 'cards', fill: 'moonFill', enter: { x: 1.35, y: 0 }, tilt: 7, delay: 265, bounce: 0.42, order: 5 },
   { name: 'moon', fill: 'inkFill', enter: { x: 0, y: -1.7 }, tilt: -8, delay: 320, bounce: 0.44, order: 7 },
-  { name: 'pitch', fill: 'boardFill', enter: { x: 0, y: -1.3 }, tilt: 3, delay: 120, bounce: 0.36, order: 3 },
   { name: 'owl', fill: 'moonFill', enter: { x: -1.25, y: 0 }, tilt: -5, delay: 30, bounce: 0.38, order: 1 },
   { name: 'word', fill: 'inkFill', enter: { x: 0, y: 1.35 }, leave: { x: -1.1, y: 0 }, tilt: 1.5, delay: 90, bounce: 0.36, order: 0 },
 ]
 
-/** The same query as the stylesheet's stacked arrangement, where the tiles stay put as the page scrolls. */
+/** How long the stylesheet waits for scripts before it shows the hero still, in milliseconds. */
+const patience = 3000
+
+/** The stylesheet's stacked arrangement, where the tiles stay put. */
 const stackedLayout = '(max-width: 900px), (max-aspect-ratio: 1 / 1)'
 
 const scenes: Record<Spec['name'], () => ReactNode> = {
@@ -51,12 +54,21 @@ const scenes: Record<Spec['name'], () => ReactNode> = {
   note: () => <NoteTile />,
 }
 
-/** The app's launch splash as the page's opening: tiles spring into a grid, each plays its scene, and they peel away as the page scrolls. */
+/** The app's launch splash as the page's opening. */
 export function BentoHero() {
   const stage = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: stage, offset: ['start start', 'end start'] })
   const reduced = useReducedMotion()
   const [stacked, setStacked] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [ready, setReady] = useState<'no' | 'yes' | 'late'>('no')
+
+  useEffect(() => setReady(performance.now() > patience ? 'late' : 'yes'), [])
+
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-still', paused)
+    return () => document.documentElement.removeAttribute('data-still')
+  }, [paused])
 
   useEffect(() => {
     const query = window.matchMedia(stackedLayout)
@@ -67,27 +79,38 @@ export function BentoHero() {
   }, [])
 
   return (
-    <section className={styles.stage} ref={stage} aria-label="OwlLuna">
+    <section className={styles.stage} ref={stage} aria-label="OwlLuna" data-ready={ready === 'no' ? undefined : ''}>
       <noscript>
         <style>{`[data-tile],[data-tile] [style]{transform:none!important;opacity:1!important;stroke-dasharray:none!important;clip-path:none!important}`}</style>
       </noscript>
-      <div className={styles.board}>
-        {tiles.map((spec) => (
-          <Tile key={spec.name} spec={spec} progress={scrollYProgress} peels={!reduced && !stacked}>
-            {scenes[spec.name]()}
-          </Tile>
-        ))}
-      </div>
+      <PauseProvider value={{ paused, toggle: () => setPaused((value) => !value) }}>
+        <div className={styles.board}>
+          {tiles.map((spec) => (
+            <Tile key={spec.name} spec={spec} progress={scrollYProgress} peels={!reduced && !stacked} paused={paused} late={ready === 'late'}>
+              {scenes[spec.name]()}
+            </Tile>
+          ))}
+        </div>
+      </PauseProvider>
     </section>
   )
 }
 
-type TileProps = { spec: Spec; progress: MotionValue<number>; peels: boolean; children: ReactNode }
+type TileProps = {
+  spec: Spec
+  progress: MotionValue<number>
+  peels: boolean
+  paused: boolean
+  /** Scripts arrived after the still was shown, so the tile stays where it is and its scene plays at once. */
+  late: boolean
+  children: ReactNode
+}
 
-function Tile({ spec, progress, peels, children }: TileProps) {
+function Tile({ spec, progress, peels, paused, late, children }: TileProps) {
   const cell = useRef<HTMLDivElement>(null)
   const born = useRef(0)
   const inView = useInView(cell, { once: true, amount: 0.15 })
+  const live = useInView(cell)
   const [scene, setScene] = useState({ play: false, shift: 0 })
 
   useEffect(() => {
@@ -96,8 +119,9 @@ function Tile({ spec, progress, peels, children }: TileProps) {
 
   useEffect(() => {
     if (!inView) return
-    setScene((current) => (current.play ? current : { play: true, shift: performance.now() - born.current > 500 ? spec.delay : 0 }))
-  }, [inView, spec.delay])
+    const shift = late ? Infinity : performance.now() - born.current > 500 ? spec.delay : 0
+    setScene((current) => (current.play ? current : { play: true, shift }))
+  }, [inView, late, spec.delay])
 
   const start = 0.05 + spec.order * 0.035
   const reach = peels ? 46 : 0
@@ -118,9 +142,9 @@ function Tile({ spec, progress, peels, children }: TileProps) {
           className={`print ${styles.tile} ${styles[spec.fill]} ${spec.name === 'pitch' ? styles.pitchTile : ''}`}
           initial={away}
           animate={scene.play ? rest : away}
-          transition={{ ...landing, bounce: spec.bounce, duration: sticker ? 0.7 : 0.9, delay: Math.max(0, spec.delay - scene.shift) / 1000 }}
+          transition={late ? { duration: 0 } : { ...landing, bounce: spec.bounce, duration: sticker ? 0.7 : 0.9, delay: Math.max(0, spec.delay - scene.shift) / 1000 }}
         >
-          <SceneProvider value={scene}>{children}</SceneProvider>
+          <SceneProvider value={{ ...scene, loop: scene.play && live && !paused }}>{children}</SceneProvider>
         </motion.div>
       </motion.div>
     </div>
@@ -132,7 +156,7 @@ function Pitch() {
     <div className={styles.pitch}>
       <div className={styles.pitchLabels}>
         <span className={styles.pitchLabel}>For iPad and Apple Pencil</span>
-        <span className={styles.pitchLabel}>Free · MIT</span>
+        <span className={styles.pitchLabel}>Free · MIT License</span>
       </div>
       <div className={styles.pitchWords}>
         <h1 className={`display ${styles.pitchTitle}`}>Handwritten notes for iPad. Free, for good.</h1>

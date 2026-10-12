@@ -23,12 +23,10 @@ const hand = (x: number, y: number, lengths: number[], hump = 6) => words(x, y, 
 const rules = Array.from({ length: 15 }, (_, index) => 63 + index * 17)
 const pen = { fill: 'none', stroke: page.ink, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
 
-type Props = { className?: string }
-
 /** A Print cover: two riso inks overprinted on paper stock, saddle-stitched, with the title on a knockout. */
-export function PrintCover({ title, className }: Props & { title: string }) {
+export function PrintCover({ title }: { title: string }) {
   return (
-    <div className={[styles.cover, className].filter(Boolean).join(' ')}>
+    <div className={styles.cover}>
       <span className={styles.leaves} aria-hidden="true" />
       <span className={`${styles.board} ${styles.printBoard}`}>
         <svg className={styles.art} viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -50,9 +48,9 @@ export function PrintCover({ title, className }: Props & { title: string }) {
 }
 
 /** A first-page cover: the notebook's opening page behind a cloth spine. */
-export function FirstPageCover({ color = 'navy', className }: Props & { color?: ClothColor }) {
+export function FirstPageCover({ color = 'navy' }: { color?: ClothColor }) {
   return (
-    <div className={[styles.cover, className].filter(Boolean).join(' ')} style={{ '--cover': clothColors[color] } as CSSProperties}>
+    <div className={styles.cover} style={{ '--cover': clothColors[color] } as CSSProperties}>
       <span className={styles.leaves} aria-hidden="true" />
       <span className={`${styles.board} ${styles.pageBoard}`}>
         <svg className={styles.art} viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -86,7 +84,7 @@ export function FirstPageCover({ color = 'navy', className }: Props & { color?: 
 }
 
 const padlock = (
-  <svg viewBox="0 0 24 24">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M7.5 11V7.8a4.5 4.5 0 0 1 9 0V11" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     <rect x="4.5" y="10.5" width="15" height="11" rx="1.6" fill="currentColor" />
     <rect x="11" y="14" width="2" height="4" rx="0.6" fill="#f7f1e3" />
@@ -94,9 +92,9 @@ const padlock = (
 )
 
 /** The face of a locked notebook, filling its frame: the label can no longer be read, and a padlock stands over it. */
-export function LockedBoard({ color = 'oxblood', className }: Props & { color?: ClothColor }) {
+export function LockedBoard({ color = 'oxblood' }: { color?: ClothColor }) {
   return (
-    <div className={[styles.face, className].filter(Boolean).join(' ')} style={{ '--cover': clothColors[color] } as CSSProperties} role="img" aria-label="A notebook's cover under a padlock">
+    <div className={styles.face} style={{ '--cover': clothColors[color] } as CSSProperties} role="img" aria-label="A notebook's cover under a padlock">
       <span className={`print ${styles.clothBoard} ${styles.faceBoard}`}>
         <span className={styles.blankLabel}>
           <i />

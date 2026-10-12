@@ -12,8 +12,8 @@ export function PrivacySummary() {
         <div className={styles.words}>
           <SectionHeading eyebrow="Privacy" title="What OwlLuna knows about you: nothing." id="privacy-summary-title">
             <p>
-              There is no account to make and no server behind the app. Your notebooks are files on your iPad, with a
-              copy in your own iCloud unless you turn sync off.
+              There is no account to make and no server of mine behind the app. Your notebooks are files on your iPad,
+              and iCloud sync, which is on unless you turn it off, keeps a copy in your own iCloud.
             </p>
           </SectionHeading>
           <Button href="/privacy/" variant="cloth">

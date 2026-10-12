@@ -26,6 +26,9 @@ export function TextDemo() {
 
   return (
     <div className={`print ${styles.stage} ${styles.tomato}`} ref={stage}>
+      <noscript>
+        <style>{`rect[data-caught]{opacity:1!important}rect[data-caught=line]{stroke-dasharray:none!important}`}</style>
+      </noscript>
       <div className={styles.desk}>
         <div className={styles.sheet}>
           <svg
@@ -46,6 +49,7 @@ export function TextDemo() {
             </motion.g>
             <motion.rect
               {...caught}
+              data-caught="line"
               rx="3"
               fill="none"
               stroke={ink}
@@ -56,6 +60,7 @@ export function TextDemo() {
             />
             <motion.rect
               {...caught}
+              data-caught="dashes"
               rx="3"
               fill="none"
               stroke="#E8B023"

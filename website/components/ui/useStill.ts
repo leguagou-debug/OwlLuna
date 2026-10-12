@@ -10,7 +10,7 @@ function subscribe(changed: () => void) {
   return () => media.removeEventListener('change', changed)
 }
 
-/** Whether Reduce Motion is on. It reads as off while the page hydrates, so the server's markup and the browser's agree. */
+/** Whether Reduce Motion is on. It reads as off while the page hydrates. */
 export function useStill(): boolean {
   return useSyncExternalStore(
     subscribe,

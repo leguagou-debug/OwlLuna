@@ -6,12 +6,6 @@
   padding-bottom: var(--x6);
 }
 
-.center {
-  align-items: center;
-  margin-inline: auto;
-  text-align: center;
-}
-
 .title {
   font-size: clamp(2rem, 3.4vw + 1rem, 3.5rem);
 }

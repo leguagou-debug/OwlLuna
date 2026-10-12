@@ -6,7 +6,7 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { Stamp } from '../ui/Stamp'
 import styles from './OpenSource.module.css'
 
-const guide = `${site.repo}/blob/main/CONTRIBUTING.md`
+const guide = site.contributing
 
 /** The closing call: the repository, its issues, the contributing guide and the licence. */
 export function OpenSource() {

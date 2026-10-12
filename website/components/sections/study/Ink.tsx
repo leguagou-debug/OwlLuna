@@ -2,19 +2,26 @@
 
 import { motion, useTransform, type MotionValue } from 'motion/react'
 import type { CSSProperties, ReactNode } from 'react'
+import { useStill } from '@/components/ui/useStill'
 import { ease } from '@/lib/motion'
-import { capHeight, type HandLetter, type Handwriting } from './hand'
+import { capHeight, type HandLetter, type Handwriting } from '@/components/ui/hand'
 
 export const pen = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' } as const
 const weight = 2.7
+const step = 0.04
+const dry = { pathLength: 0, opacity: 0 }
+const inked = { pathLength: 1, opacity: 1 }
 
-/** A pen stroke drawn from its start once `play` is set; it has no ink at all until then. */
-export const drawn = (play: boolean, wait: number, duration = 0.22) => ({
-  'data-study-art': true,
-  initial: { pathLength: 0, opacity: 0 },
-  animate: play ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 },
-  transition: { duration, ease: ease.inOut, delay: wait, opacity: { duration: 0.01, delay: wait } },
-})
+/** A pen stroke drawn once `play` is set. Under Reduce Motion the ink is simply there. */
+export function useDrawn() {
+  const still = useStill()
+  return (play: boolean, wait: number, duration = 0.22) => ({
+    'data-study-art': true,
+    initial: still ? false : dry,
+    animate: play || still ? inked : dry,
+    transition: still ? { duration: 0 } : { duration, ease: ease.inOut, delay: wait, opacity: { duration: 0.01, delay: wait } },
+  })
+}
 
 type FrameProps = { line: Handwriting; className?: string; children: ReactNode }
 
@@ -40,12 +47,13 @@ export function Written({ line, className }: { line: Handwriting; className?: st
   )
 }
 
-type DrawnProps = { line: Handwriting; play: boolean; delay?: number; step?: number; className?: string }
+type DrawnProps = { line: Handwriting; play: boolean; delay?: number }
 
 /** A line that writes itself, letter by letter, once `play` is set. */
-export function Drawn({ line, play, delay = 0, step = 0.04, className }: DrawnProps) {
+export function Drawn({ line, play, delay = 0 }: DrawnProps) {
+  const drawn = useDrawn()
   return (
-    <Frame line={line} className={className}>
+    <Frame line={line}>
       {line.letters.map((letter, index) => (
         <g key={index} transform={letter.transform}>
           <motion.path d={letter.d} {...pen} strokeWidth={weight} {...drawn(play, delay + index * step)} />
@@ -55,12 +63,12 @@ export function Drawn({ line, play, delay = 0, step = 0.04, className }: DrawnPr
   )
 }
 
-type ReplayedProps = { line: Handwriting; clock: MotionValue<number>; at: number; step: number; className?: string }
+type ReplayedProps = { line: Handwriting; clock: MotionValue<number>; at: number; step: number }
 
 /** A line written during a recording: each letter is faint until the clock reaches the moment it was written. */
-export function Replayed({ line, clock, at, step, className }: ReplayedProps) {
+export function Replayed({ line, clock, at, step }: ReplayedProps) {
   return (
-    <Frame line={line} className={className}>
+    <Frame line={line}>
       {line.letters.map((letter, index) => (
         <Stroke key={index} letter={letter} clock={clock} at={at + index * step} />
       ))}

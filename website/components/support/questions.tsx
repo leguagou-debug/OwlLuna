@@ -97,7 +97,9 @@ export const groups: Group[] = [
         answer: (
           <p>
             In the app, open <Path steps={['Settings', 'iCloud']} /> and turn sync off. It is on until you do. Your writing
-            history is never synced, whichever way the switch is set.
+            history is never synced, whichever way the switch is set. Each device has its own switch, and turning it
+            off does not remove what is already in iCloud. The <Link href="/privacy/#icloud">Privacy Policy</Link> says
+            how to remove that.
           </p>
         ),
       },
@@ -154,8 +156,8 @@ export const groups: Group[] = [
         question: 'Can I keep my notebooks out of Spotlight?',
         answer: (
           <p>
-            Yes. <Path steps={['Settings', 'Search']} /> in the app turns it off. The index is kept by iPadOS on the iPad, and a
-            locked notebook is never in it.
+            Yes. <Path steps={['Settings', 'Search']} /> in the app turns it off. The index is kept by iPadOS on the iPad, and
+            locked notebooks are left out of it.
           </p>
         ),
       },
@@ -180,8 +182,9 @@ export const groups: Group[] = [
         question: 'Why is there no study guide on my iPad?',
         answer: (
           <p>
-            The study guide is written by Apple Intelligence on the iPad itself, so it needs an iPad that has Apple
-            Intelligence. On one without it, the sheet says so and nothing else happens.
+            The study guide is written by Apple Intelligence on the iPad itself. It needs iPadOS 26 or later, an iPad
+            that has Apple Intelligence, and Apple Intelligence turned on in the iPad’s Settings. When one of these is
+            missing, the sheet says which and nothing else happens.
           </p>
         ),
       },
@@ -191,7 +194,9 @@ export const groups: Group[] = [
         answer: (
           <p>
             A recording is transcribed on the iPad, never on a server, and only if the iPad can do that for the
-            language spoken. If it can’t, the app says so and sends nothing.
+            language spoken. If it can’t, the app says so and sends nothing. If the app says speech recognition is off,
+            turn it on for OwlLuna in the iPad’s{' '}
+            <Path steps={['Settings', 'Privacy & Security', 'Speech Recognition']} />.
           </p>
         ),
       },
@@ -201,7 +206,7 @@ export const groups: Group[] = [
         answer: (
           <p>
             Feature requests go in <a href={site.issues}>GitHub Issues</a>, with the bug reports. To send a fix, read{' '}
-            <a href={`${site.repo}/blob/main/CONTRIBUTING.md`}>CONTRIBUTING.md</a> first: for anything larger than a
+            <a href={site.contributing}>CONTRIBUTING.md</a> first: for anything larger than a
             small fix, open an issue before you start.
           </p>
         ),

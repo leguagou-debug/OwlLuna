@@ -47,6 +47,11 @@
   text-decoration-color: var(--hairline);
 }
 
+.line a,
+.small a {
+  text-decoration-color: currentColor;
+}
+
 .footer a:hover {
   color: var(--accent);
   text-decoration-color: currentColor;

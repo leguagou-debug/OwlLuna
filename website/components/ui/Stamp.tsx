@@ -4,7 +4,7 @@ import styles from './Stamp.module.css'
 type Props = {
   title: string
   children: ReactNode
-  tone?: 'cobalt' | 'tomato' | 'mustard'
+  tone?: 'cobalt' | 'mustard'
   /** Buttons, the cancelling one first and the main one last. */
   actions?: ReactNode
   className?: string

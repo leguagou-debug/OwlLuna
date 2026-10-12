@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, useReducedMotion, useSpring } from 'motion/react'
+import { motion, useSpring } from 'motion/react'
 import { useEffect, useId, useRef } from 'react'
 import { ease } from '@/lib/motion'
 import { about, inks, useScene } from '../scene'
@@ -36,10 +36,9 @@ const shoulder = about(315.2, 213.2)
 const bobbing = [7.7, 0.3, 9, -1.6, 7.05, -3.5, 5.1, -5.4, 0]
 const lidTravel = 94
 
-/** The owl tile: a perch under a pale disc, and the owl hopping up onto it to write a line on its pad, look up and blink. */
+/** The owl tile: the owl hops onto its perch, writes a line, looks up and blinks. */
 export function OwlTile() {
-  const { play, at, beat, draw } = useScene()
-  const reduced = useReducedMotion()
+  const { play, loop, at, beat, draw } = useScene()
   const id = useId()
   const head = useRef<SVGCircleElement>(null)
   const gazeX = useSpring(0, { stiffness: 140, damping: 18 })
@@ -47,7 +46,11 @@ export function OwlTile() {
   const startsFollowing = at(2300)
 
   useEffect(() => {
-    if (!play || reduced) return
+    if (!loop) {
+      gazeX.set(0)
+      gazeY.set(0)
+      return
+    }
     const follow = (event: PointerEvent) => {
       const box = head.current?.getBoundingClientRect()
       if (!box || event.pointerType === 'touch') return
@@ -63,7 +66,7 @@ export function OwlTile() {
       window.clearTimeout(timer)
       window.removeEventListener('pointermove', follow)
     }
-  }, [play, reduced, startsFollowing, gazeX, gazeY])
+  }, [loop, startsFollowing, gazeX, gazeY])
 
   return (
     <div className={styles.owl}>
@@ -107,8 +110,8 @@ export function OwlTile() {
                   </clipPath>
                   <motion.g
                     initial={{ y: -lidTravel }}
-                    animate={play ? { y: [-lidTravel, 0, 0, -lidTravel, -lidTravel] } : { y: -lidTravel }}
-                    transition={{ duration: 2.6, times: [0, 0.035, 0.048, 0.09, 1], repeat: Infinity, delay: at(1700), ease: 'easeInOut' }}
+                    animate={loop ? { y: [-lidTravel, 0, 0, -lidTravel, -lidTravel] } : { y: -lidTravel }}
+                    transition={loop ? { duration: 2.6, times: [0, 0.035, 0.048, 0.09, 1], repeat: Infinity, delay: at(1700), ease: 'easeInOut' } : { duration: 0.1 }}
                   >
                     <rect x={eye.x - 45} y="97" width="90" height="94" fill={tones.face} />
                     <path d={`M${eye.x - 45},191 h90 M${eye.x - 24},150 q24,18 48,0`} fill="none" stroke={inks.ink} strokeWidth="5" />

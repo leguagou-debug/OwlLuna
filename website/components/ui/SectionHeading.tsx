@@ -8,13 +8,12 @@ type Props = {
   children?: ReactNode
   id?: string
   as?: 'h1' | 'h2'
-  align?: 'start' | 'center'
 }
 
 /** The library's editorial heading: small caps, a Fraunces line, and a lede under a hairline. */
-export function SectionHeading({ eyebrow, title, children, id, as: Tag = 'h2', align = 'start' }: Props) {
+export function SectionHeading({ eyebrow, title, children, id, as: Tag = 'h2' }: Props) {
   return (
-    <header className={[styles.heading, align === 'center' ? styles.center : ''].filter(Boolean).join(' ')}>
+    <header className={styles.heading}>
       <p className="meta">{eyebrow}</p>
       <Tag id={id} className={`display ${styles.title}`}>
         {title}

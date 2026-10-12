@@ -1,8 +1,11 @@
-import type { CSSProperties } from 'react'
-import { printed } from '../../hero/noteHand'
+'use client'
+
+import { useRef, type CSSProperties } from 'react'
+import { useArrival } from '@/components/ui/useArrival'
+import { write } from '@/components/ui/hand'
 import styles from './art.module.css'
 
-const heading = printed('tides')
+const heading = write('tides')
 const tide = 'M38,154 C60,154 77,110 99,110 C121,110 138,154 160,154 C182,154 199,110 221,110 C243,110 260,154 282,154'
 const lap = 'M258,118 C259,133 243,145 222,144 C202,143 185,133 186,118 C187,103 203,92 223,93 C243,94 257,104 258,118 Z'
 const tail = [
@@ -15,9 +18,13 @@ const along = (length: number) => ({ '--len': length }) as CSSProperties
 
 /** A page shown whole on a dark screen, with the laser pointer circling part of it. */
 export function LaserPage() {
+  const ref = useRef<SVGSVGElement>(null)
+  const { arrived } = useArrival(ref, { amount: 0.6 })
   return (
     <svg
+      ref={ref}
       className={styles.svg}
+      data-waiting={arrived ? undefined : ''}
       viewBox="0 0 320 200"
       role="img"
       aria-label="A page shown whole on a dark screen. A red laser dot circles one crest of a tide chart, leaving a short fading tail."

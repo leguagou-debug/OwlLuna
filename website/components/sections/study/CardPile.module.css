@@ -176,6 +176,7 @@
 }
 
 .answers {
+  --outline: var(--ink);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--x2);
@@ -185,37 +186,13 @@
   margin-inline: auto;
 }
 
-.key {
+.answers .key {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 1px;
   min-height: 58px;
   padding: var(--x1) var(--x2);
-  background: var(--board);
-  color: var(--ink);
-  border: var(--line) solid var(--edge);
-  border-radius: var(--radius-plate);
-  box-shadow: 0 0 0 var(--edge);
-  font-size: 1rem;
-  font-weight: 500;
-  line-height: 1.2;
-  cursor: pointer;
-  transition:
-    transform 0.18s var(--ease-standard),
-    box-shadow 0.18s var(--ease-standard),
-    background-color 0.18s var(--ease-standard);
-}
-
-.cloth {
-  background-color: var(--cloth);
-  color: var(--on-cloth);
-  font-weight: 600;
-  box-shadow:
-    inset 1px 1px 0 rgb(255 255 255 / 0.18),
-    inset -1px -1px 0 rgb(0 0 0 / 0.2),
-    0 0 0 var(--edge);
+  white-space: normal;
 }
 
 .wide {
@@ -236,26 +213,6 @@
   outline-offset: 3px;
 }
 
-@media (hover: hover) {
-  .key:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 2px 2px 0 var(--edge);
-  }
-
-  .cloth:hover {
-    box-shadow:
-      inset 1px 1px 0 rgb(255 255 255 / 0.18),
-      inset -1px -1px 0 rgb(0 0 0 / 0.2),
-      2px 2px 0 var(--edge);
-  }
-}
-
-.key:active {
-  transform: translate(0, 0);
-  box-shadow: 0 0 0 var(--edge);
-  transition-duration: 0.06s;
-}
-
 @media (min-width: 520px) {
   .desk {
     gap: var(--x5);
@@ -270,14 +227,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .key {
-    transition: none;
-  }
-
-  .key:hover {
-    transform: none;
-  }
-
   .words {
     animation: turned 0.18s var(--ease-standard);
   }

@@ -1,9 +1,11 @@
 'use client'
 
 import { motion } from 'motion/react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ease, lively } from '@/lib/motion'
-import { printed } from '../../hero/noteHand'
+import { useArrival } from '@/components/ui/useArrival'
+import { useStill } from '@/components/ui/useStill'
+import { write } from '@/components/ui/hand'
 import { ClothCover } from '../../ui/ClothCover'
 import styles from './SearchDemo.module.css'
 
@@ -33,11 +35,13 @@ const places: Place[] = [
 export function SearchDemo() {
   const [chosen, setChosen] = useState<Kind>('hand')
   const [touched, setTouched] = useState(false)
+  const field = useRef<HTMLDivElement>(null)
+  const { arrived } = useArrival(field, { amount: 0.9 })
   const place = places.find((item) => item.kind === chosen) ?? places[1]
 
   return (
     <div className={styles.demo}>
-      <div className={styles.field}>
+      <div ref={field} className={styles.field} data-waiting={arrived ? undefined : ''}>
         <svg className={styles.glass} viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.6" />
           <path d="M10.6 10.6 14 14" />
@@ -164,11 +168,12 @@ function Hit() {
   return <mark className={styles.hit}>tides</mark>
 }
 
-const word = printed('tides')
+const word = write('tides')
 const rules = [34, 50, 66, 82, 98, 114, 130].map((y) => `M0,${y} H108`).join(' ')
 const stroke = { hidden: { pathLength: 0, opacity: 0 }, shown: { pathLength: 1, opacity: 1 } }
 
 function HandSheet({ replay }: { replay: boolean }) {
+  const still = useStill()
   const play = replay ? { animate: 'shown' } : { whileInView: 'shown', viewport: { once: true, amount: 0.6 } }
   return (
     <motion.svg className={`print ${styles.sheet}`} viewBox="0 0 108 144" initial="hidden" {...play}>
@@ -194,7 +199,7 @@ function HandSheet({ replay }: { replay: boolean }) {
               className={styles.letter}
               d={letter.d}
               variants={stroke}
-              transition={{ duration: 0.2, ease: ease.inOut, delay: 0.16 + index * 0.08, opacity: { duration: 0.01, delay: 0.16 + index * 0.08 } }}
+              transition={still ? { duration: 0 } : { duration: 0.2, ease: ease.inOut, delay: 0.16 + index * 0.08, opacity: { duration: 0.01, delay: 0.16 + index * 0.08 } }}
             />
           </g>
         ))}

@@ -3,6 +3,7 @@
 import { motion, useInView } from 'motion/react'
 import { useId, useRef } from 'react'
 import { ease, landing } from '@/lib/motion'
+import { useStill } from '@/components/ui/useStill'
 import { Tape } from '../ui/Tape'
 import styles from './ReportSlip.module.css'
 
@@ -25,6 +26,7 @@ export function ReportSlip() {
   const stage = useRef<HTMLDivElement>(null)
   const inView = useInView(stage, { once: true, amount: 0.35 })
   const heading = useId()
+  const still = useStill()
 
   return (
     <div ref={stage} className={styles.stage}>
@@ -60,12 +62,16 @@ export function ReportSlip() {
                   className={styles.tick}
                   initial={{ pathLength: 0, opacity: 0 }}
                   animate={inView ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
-                  transition={{
-                    duration: 0.2,
-                    ease: ease.standard,
-                    delay: firstTick + tickGap * index,
-                    opacity: { duration: 0.01, delay: firstTick + tickGap * index },
-                  }}
+                  transition={
+                    still
+                      ? { duration: 0 }
+                      : {
+                          duration: 0.2,
+                          ease: ease.standard,
+                          delay: firstTick + tickGap * index,
+                          opacity: { duration: 0.01, delay: firstTick + tickGap * index },
+                        }
+                  }
                 />
               </svg>
               <span className={styles.label}>

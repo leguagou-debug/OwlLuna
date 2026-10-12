@@ -39,12 +39,13 @@ export function SiteFooter() {
 
       <div className={`wrap ${styles.small}`}>
         <p>
-          © {site.policyUpdated.slice(0, 4)} {site.author.name}. OwlLuna is released under the MIT License. Set in Fraunces,
+          © {site.since} {site.author.name}. OwlLuna is released under the MIT License. Set in Fraunces,
           Archivo and Bricolage Grotesque, used under the <a href={site.fontLicenses}>SIL Open Font License</a>.
         </p>
         <p>
-          Apple, iPad, iPadOS, Apple Pencil, iCloud, Face ID, Touch ID, Spotlight, Siri and App Store are trademarks of
-          Apple Inc., registered in the U.S. and other countries and regions.
+          Apple, iPad, iPadOS, Apple Pencil, Mac, iCloud, Face ID, Touch ID, Spotlight, Siri, SwiftUI, SwiftData,
+          PencilKit and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
+          Apple Intelligence is a trademark of Apple Inc.
         </p>
       </div>
     </footer>

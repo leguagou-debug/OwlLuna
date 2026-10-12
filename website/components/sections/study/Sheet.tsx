@@ -3,7 +3,7 @@ import styles from './Sheet.module.css'
 
 type Props = { lead: string; trail?: string; children: ReactNode; className?: string }
 
-/** A punched sheet of ruled paper with a red margin and two labels at its head. Its lines are one `--pitch` apart and its hand one `--cap` tall. */
+/** A punched sheet of ruled paper with a red margin and two labels at its head. */
 export function Sheet({ lead, trail, children, className }: Props) {
   return (
     <div className={[styles.frame, className].filter(Boolean).join(' ')}>

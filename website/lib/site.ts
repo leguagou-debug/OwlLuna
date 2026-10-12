@@ -10,7 +10,10 @@ export const site = {
   newIssue: `${repo}/issues/new`,
   license: `${repo}/blob/main/LICENSE`,
   fontLicenses: `${repo}/tree/main/OwlLuna/Resources/Fonts`,
+  contributing: `${repo}/blob/main/CONTRIBUTING.md`,
   author: { name: 'Owais Khan', url: 'https://github.com/owaisazmal' },
+  /** The years in the footer's copyright line, as in LICENSE. */
+  since: '2024–2026',
   /** The App Store page, once the app is published. Empty until then. */
   appStoreUrl: '',
   /** An address for privacy and support questions. Empty shows GitHub Issues alone. */

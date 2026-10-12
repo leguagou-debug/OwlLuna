@@ -2,6 +2,7 @@
 
 import { motion } from 'motion/react'
 import { ease, landing, lively } from '@/lib/motion'
+import { useStill } from '@/components/ui/useStill'
 import styles from './art.module.css'
 
 const grip = { originX: 0, originY: 1 }
@@ -10,6 +11,7 @@ const after = (delay: number) => ({ ...landing, delay, opacity: { duration: 0.12
 
 /** Two Home Screen widgets as plates: Today's Page, a tear-off calendar leaf, and Quick Note. */
 export function WidgetPlates() {
+  const still = useStill()
   return (
     <motion.svg
       className={styles.svg}
@@ -20,7 +22,7 @@ export function WidgetPlates() {
       whileInView="placed"
       viewport={{ once: true, amount: 0.4 }}
     >
-      <text className={`${styles.label} ${styles.labelPaper}`} x="20" y="28">
+      <text className={`${styles.label} ${styles.labelOnTomato}`} x="20" y="28">
         Home Screen
       </text>
 
@@ -41,7 +43,7 @@ export function WidgetPlates() {
           className={styles.tick}
           d="M70,147.5 l4,4.5 l8,-10"
           variants={{ away: { pathLength: 0, opacity: 0 }, placed: { pathLength: 1, opacity: 1 } }}
-          transition={{ duration: 0.22, ease: ease.standard, delay: 0.9, opacity: { duration: 0.01, delay: 0.9 } }}
+          transition={still ? { duration: 0 } : { duration: 0.22, ease: ease.standard, delay: 0.9, opacity: { duration: 0.01, delay: 0.9 } }}
         />
         <text className={styles.leafDone} x="88" y="152">
           Written

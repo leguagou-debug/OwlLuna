@@ -2,8 +2,11 @@
 
 import { motion } from 'motion/react'
 import { ease, lively, rising } from '@/lib/motion'
-import { about, inks, useScene } from '../scene'
+import { about, inks, usePause, useScene } from '../scene'
 import styles from '../BentoHero.module.css'
+
+/** Coming to rest when a loop stops. */
+const rest = { duration: 0.4, ease: ease.inOut }
 
 const stars = [
   { x: 186, y: 36, d: 'M0,-14 Q2,-2 14,0 Q2,2 0,14 Q-2,2 -14,0 Q-2,-2 0,-14 Z' },
@@ -14,15 +17,15 @@ const stars = [
 
 /** The moon tile: a crescent rises on a spring and rocks, while four stars pop in and twinkle. */
 export function MoonTile() {
-  const { play, at, beat } = useScene()
+  const { loop, at, beat } = useScene()
   return (
     <svg className={styles.art} viewBox="0 0 240 112" role="img" aria-label="A crescent moon among stars">
       <motion.g {...beat({ y: 135, opacity: 0 }, { y: 0, opacity: 1 }, 620, { ...lively, opacity: { duration: 0.12, delay: at(620) } })}>
         <motion.g
           style={about(112.1, 57.7)}
           initial={{ rotate: -9 }}
-          animate={play ? { rotate: 9 } : { rotate: -9 }}
-          transition={{ duration: 1.5, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse' }}
+          animate={loop ? { rotate: 9 } : { rotate: -9 }}
+          transition={loop ? { duration: 1.5, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse' } : rest}
         >
           <circle cx="112" cy="58" r="36" fill={inks.moon} />
           <circle cx="128" cy="45" r="30" fill={inks.ink} />
@@ -35,8 +38,8 @@ export function MoonTile() {
               d={star.d}
               fill={inks.moonLight}
               style={about(0, 0)}
-              animate={play ? { scale: [1, 0.62] } : { scale: 1 }}
-              transition={{ duration: 0.7, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse', delay: at(1600) + index * 0.23 }}
+              animate={loop ? { scale: [1, 0.62] } : { scale: 1 }}
+              transition={loop ? { duration: 0.7, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse', delay: at(1600) + index * 0.23 } : rest}
             />
           </motion.g>
         </g>
@@ -51,7 +54,7 @@ const stamp = about(150, 116)
 
 /** The flashcard tile: three index cards fan up from below, then the stamp lands on them and wobbles. */
 export function CardsTile() {
-  const { play, at, beat } = useScene()
+  const { loop, at, beat } = useScene()
   return (
     <svg className={styles.art} viewBox="0 0 240 176" role="img" aria-label="Three index cards under a stamp that says Study">
       {tilts.map((tilt, index) => (
@@ -73,8 +76,8 @@ export function CardsTile() {
         <motion.g
           style={stamp}
           initial={{ rotate: -11.5 }}
-          animate={play ? { rotate: -6.5 } : { rotate: -11.5 }}
-          transition={{ duration: 0.95, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse' }}
+          animate={loop ? { rotate: -6.5 } : { rotate: -11.5 }}
+          transition={loop ? { duration: 0.95, ease: ease.inOut, repeat: Infinity, repeatType: 'reverse' } : rest}
         >
           <rect x="94" y="95" width="112" height="42" rx="3" fill={inks.white} stroke={inks.tomato} strokeWidth="4" />
           <text x="150" y="127.6" textAnchor="middle" textLength="84" lengthAdjust="spacingAndGlyphs" className={styles.stampWord} fill={inks.tomato}>
@@ -91,7 +94,7 @@ export function VolumeTile() {
   const { beat } = useScene()
   return (
     <div className={styles.volume}>
-      <motion.span className={`${styles.label} ${styles.volumeLabel}`} {...beat({ opacity: 0, y: '90%' }, { opacity: 1, y: '0%' }, 800, { duration: 0.45, ease: ease.glide })}>
+      <motion.span aria-hidden="true" className={`${styles.label} ${styles.volumeLabel}`} {...beat({ opacity: 0, y: '90%' }, { opacity: 1, y: '0%' }, 800, { duration: 0.45, ease: ease.glide })}>
         Vol.
       </motion.span>
       <span className={styles.volumeDigits} aria-hidden="true">
@@ -108,11 +111,18 @@ export function VolumeTile() {
 
 const verbs = ['Write', 'Sketch', 'Study']
 
-/** The ticker: the three things the app is for, with ink diamonds between them, running leftwards for ever. */
+/** The ticker: the three things the app is for, running leftwards. */
 export function TickerTile() {
+  const { paused, toggle } = usePause()
   return (
     <div className={styles.ticker}>
       <span className="visually-hidden">Write, sketch, study.</span>
+      <button type="button" className={styles.pause} aria-pressed={paused} onClick={toggle}>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          {paused ? <path d="M4.5 2.5v11l9-5.5z" /> : <path d="M3.5 2.5h3v11h-3z M9.5 2.5h3v11h-3z" />}
+        </svg>
+        <span className="visually-hidden">Pause the animations</span>
+      </button>
       <div className={styles.tickerBand} aria-hidden="true">
         {[0, 1, 2, 3].map((turn) => (
           <span key={turn} className={styles.tickerTurn}>

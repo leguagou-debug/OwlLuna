@@ -15,7 +15,7 @@ type RowProps = {
   label: ReactNode
   children: ReactNode
   /** A mark at the row's leading end. */
-  mark?: 'none' | 'check' | 'cross' | 'dot'
+  mark?: 'none' | 'check' | 'cross'
 }
 
 export function LedgerRow({ label, children, mark = 'none' }: RowProps) {
@@ -30,12 +30,11 @@ export function LedgerRow({ label, children, mark = 'none' }: RowProps) {
   )
 }
 
-function Mark({ kind }: { kind: 'check' | 'cross' | 'dot' }) {
+function Mark({ kind }: { kind: 'check' | 'cross' }) {
   return (
     <svg className={[styles.mark, styles[kind]].join(' ')} viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       {kind === 'check' ? <path d="M3 8.5 6.5 12 13 4.5" /> : null}
       {kind === 'cross' ? <path d="M4 4l8 8M12 4l-8 8" /> : null}
-      {kind === 'dot' ? <circle cx="8" cy="8" r="2.5" /> : null}
     </svg>
   )
 }
