@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import type { CSSProperties } from 'react'
 import { Log } from '@/components/prototypes/Log'
 import { Tag } from '@/components/prototypes/Print'
-import { entries, firstDay, lastDay, sequence } from '@/components/prototypes/shots'
+import { entries, sequence, source } from '@/components/prototypes/shots'
 import { Away, Button } from '@/components/ui/Button'
 import { SectionHeading } from '@/components/ui/SectionHeading'
-import { formatDate, site } from '@/lib/site'
+import { Tape } from '@/components/ui/Tape'
+import { site } from '@/lib/site'
 import styles from './prototypes.module.css'
 
 export const metadata: Metadata = {
@@ -13,11 +15,12 @@ export const metadata: Metadata = {
     'Screenshots from the making of OwlLuna, in the order they were saved: first tries, options side by side, and the ones that were dropped.',
 }
 
-/** A date as its day and the first three letters of its month. */
-function short(iso: string): string {
-  const [day, month] = formatDate(iso).split(' ')
-  return `${day} ${month.slice(0, 3)}`
-}
+/** Three prints off the pile, fanned under the heading. Each leads to its part of the log. */
+const fan = [
+  { name: 'ink-samples', turn: -5, tape: 'sage' },
+  { name: 'pen-roll-close', turn: 2, tape: 'mustard' },
+  { name: 'splash-bento', turn: 6, tape: 'rose' },
+] as const
 
 export default function Prototypes() {
   return (
@@ -25,13 +28,7 @@ export default function Prototypes() {
       <section className="section-tight">
         <div className={`wrap ${styles.intro}`}>
           <div className={styles.lead}>
-            <SectionHeading as="h1" eyebrow="Prototypes" title="How it came to look like this">
-              <p>
-                The {sequence.length} screenshots here were saved between {formatDate(firstDay).split(' ')[0]} and{' '}
-                {formatDate(lastDay)}, while the app was being finished: first tries, options side by side, and a few
-                dead ends. Select one to see it whole.
-              </p>
-            </SectionHeading>
+            <SectionHeading as="h1" eyebrow="Prototypes" title="How it came to look like this" />
             <p className={styles.key}>
               <span className={styles.keyLine} aria-hidden="true">
                 <Tag verdict="kept" className={styles.keyTag} />
@@ -43,17 +40,32 @@ export default function Prototypes() {
               </span>
               <span className="visually-hidden">A screenshot marked Kept went into the app. One marked Dropped did not.</span>
             </p>
+            <ul className={styles.fan}>
+              {fan.map(({ name, turn, tape }) => {
+                const shot = sequence.find((each) => each.name === name)!
+                const lie = { '--shape': shot.width / shot.height, '--turn': `${turn}deg` } as CSSProperties
+                return (
+                  <li key={name} className={styles.fanned} style={lie}>
+                    <a href={`#${shot.entry.id}`} className={`print ${styles.loose}`}>
+                      <Tape color={tape} className={styles.tape} />
+                      <img src={source(shot, 'thumb')} width={shot.width} height={shot.height} alt="" />
+                      <span className="visually-hidden">{shot.entry.title}</span>
+                    </a>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
 
-          <nav className={styles.contents} aria-label="The days">
+          <nav className={styles.contents} aria-label="The parts">
             <p className={styles.band}>In order</p>
             <ol>
-              {entries.map((entry) => (
+              {entries.map((entry, index) => (
                 <li key={entry.id}>
                   <a href={`#${entry.id}`} className={styles.row}>
-                    <time dateTime={entry.date} className={`tabular ${styles.when}`}>
-                      {short(entry.date)}
-                    </time>
+                    <span className={`tabular ${styles.part}`} aria-hidden="true">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
                     <span className={styles.what}>{entry.title}</span>
                     <span className={`tabular ${styles.count}`}>
                       {entry.shots.length}

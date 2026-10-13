@@ -1,4 +1,4 @@
-import { asset } from '@/lib/site'
+import { asset, site } from '@/lib/site'
 
 export type Verdict = 'kept' | 'dropped'
 
@@ -18,10 +18,10 @@ export type Column = [share: number, ...names: string[]]
 
 export type Entry = {
   id: string
-  /** The day the screenshots were saved, as YYYY-MM-DD. */
-  date: string
   title: string
   note: string
+  /** Someone to thank under the note: the words that lead up to the name, and where the name links. */
+  credit?: { lead: string; name: string; url: string }
   shots: Shot[]
   /** How the entry is laid out on a wide screen: bands down the page, columns across each. */
   bands: Column[][]
@@ -30,7 +30,6 @@ export type Entry = {
 export const entries: Entry[] = [
   {
     id: 'stock',
-    date: '2026-10-03',
     title: 'Taking stock',
     note: 'A review pass. Nine screens went onto one sheet, in light and dark, and whatever looked wrong got a before and an after.',
     shots: [
@@ -39,7 +38,7 @@ export const entries: Entry[] = [
         width: 1864,
         height: 1813,
         alt: 'A sheet of nine iPad screenshots: the library, the editor toolbar, Find in Notebook, New Notebook, Add a Link and Settings by day, then the library, Select Ink and Handwriting as Text at night.',
-        caption: 'Nine screens on one sheet. The status bar still carries the app’s working title; the owl was three days off.',
+        caption: 'Nine screens on one sheet. The status bar still carries the app’s working title; the owl came later.',
       },
       {
         name: 'page-navigator',
@@ -53,7 +52,6 @@ export const entries: Entry[] = [
   },
   {
     id: 'inks',
-    date: '2026-10-04',
     title: 'Eight kinds of ink',
     note: 'Each pen needed a sample of how it writes. PencilKit draws the line and the app keeps only its shape, so one drawing takes any colour.',
     shots: [
@@ -76,7 +74,7 @@ export const entries: Entry[] = [
         width: 1150,
         height: 1010,
         alt: 'A pen’s options: the pencil in green, eight stroke samples in a grid with one outlined, a palette of sixteen colours with a colour well, and a width strip.',
-        caption: 'Their first home: a grid in the pen’s options. The pen roll replaced it the same afternoon.',
+        caption: 'Their first home: a grid in the pen’s options. The pen roll replaced it.',
         verdict: 'dropped',
       },
     ],
@@ -84,16 +82,15 @@ export const entries: Entry[] = [
   },
   {
     id: 'tray',
-    date: '2026-10-04',
     title: 'Where the pens go',
-    note: 'The app keeps its own pens, each with its ink and its width, and they need somewhere to stand. Three places were tried in a day.',
+    note: 'The app keeps its own pens, each with its ink and its width, and they need somewhere to stand. Three places were tried.',
     shots: [
       {
         name: 'tray-side',
         width: 517,
         height: 756,
         alt: 'A whiteboard page with four pens in a column down its left edge and the system’s tool picker along the bottom.',
-        caption: '12:34. The app’s own pens down the side of a whiteboard, with the system’s tool picker still along the foot.',
+        caption: 'First place: the app’s own pens down the side of a whiteboard, with the system’s tool picker still along the foot.',
         verdict: 'dropped',
       },
       {
@@ -101,7 +98,7 @@ export const entries: Entry[] = [
         width: 834,
         height: 1210,
         alt: 'The same whiteboard with the four pens moved into the top bar, beside undo and redo.',
-        caption: '1:14. Moved up into the top bar, beside undo and redo.',
+        caption: 'Second place: up in the top bar, beside undo and redo.',
         verdict: 'dropped',
       },
       {
@@ -149,7 +146,6 @@ export const entries: Entry[] = [
   },
   {
     id: 'roll',
-    date: '2026-10-04',
     title: 'The pen roll',
     note: 'The kinds of pen are drawn, not named: eight tools standing in a cloth pocket, the one in use pulled up. Names would not have fitted under them at large text sizes, or in German.',
     shots: [
@@ -204,9 +200,8 @@ export const entries: Entry[] = [
   },
   {
     id: 'dish',
-    date: '2026-10-05',
     title: 'A dish for the Pencil',
-    note: 'Saved at a quarter past midnight. A squeeze of the Pencil brings the tools to its tip.',
+    note: 'A squeeze of the Pencil brings the tools to its tip.',
     shots: [
       {
         name: 'ink-dish',
@@ -235,9 +230,9 @@ export const entries: Entry[] = [
   },
   {
     id: 'owl',
-    date: '2026-10-06',
     title: 'A name and an owl',
-    note: 'On the sixth the app became OwlLuna and got its owl: brown, in round glasses, on a crescent moon, with a pad under one wing and a pencil in the other.',
+    note: 'Here the app became OwlLuna and got its owl: brown, in round glasses, on a crescent moon, with a pad under one wing and a pencil in the other.',
+    credit: { lead: 'The owl was designed by', ...site.logoDesigner },
     shots: [
       {
         name: 'owl-drawings',
@@ -265,9 +260,8 @@ export const entries: Entry[] = [
   },
   {
     id: 'tabs',
-    date: '2026-10-07',
     title: 'Tabs',
-    note: 'Open notebooks sit in a row of tabs over the editor. Two details from the day they were worked on.',
+    note: 'Open notebooks sit in a row of tabs over the editor. Two details of how they behave.',
     shots: [
       {
         name: 'tab-drag',
@@ -288,9 +282,8 @@ export const entries: Entry[] = [
   },
   {
     id: 'corners',
-    date: '2026-10-08',
     title: 'Square corners',
-    note: 'Until the eighth, bars, buttons and fields were capsules. Then they were redrawn as flat rectangles with small corners, and stayed that way.',
+    note: 'Up to here, bars, buttons and fields were capsules. Then they were redrawn as flat rectangles with small corners, and stayed that way.',
     shots: [
       {
         name: 'controls-sheet',
@@ -304,7 +297,7 @@ export const entries: Entry[] = [
         width: 1379,
         height: 2000,
         alt: 'The library at night: the sidebar with its shelves, and a grid of notebook covers in cloth and print.',
-        caption: 'The library at 4:39 that afternoon, its bar still a capsule. It followed.',
+        caption: 'The library, its bar still a capsule. It followed.',
       },
       {
         name: 'card-menu',
@@ -318,7 +311,6 @@ export const entries: Entry[] = [
   },
   {
     id: 'launch',
-    date: '2026-10-08',
     title: 'The first two seconds',
     note: 'Three goes at what the app shows while it starts, each storyboarded with a clock in the corner of every frame.',
     shots: [
@@ -342,7 +334,7 @@ export const entries: Entry[] = [
         width: 1468,
         height: 2000,
         alt: 'Two frames of the finished splash: tiles holding the owl writing on a pad, a ruled note page, a crescent moon, index cards under a STUDY stamp and the wordmark, whole and then as they begin to leave.',
-        caption: 'The blocks filled in, past one the next morning. This is what the app opens with.',
+        caption: 'The blocks filled in. This is what the app opens with.',
         verdict: 'kept',
       },
     ],
@@ -350,7 +342,6 @@ export const entries: Entry[] = [
   },
   {
     id: 'row',
-    date: '2026-10-12',
     title: 'The row you are on',
     note: 'How the sidebar shows which shelf is open: four options, each by day and at night, and then the one that went in. Last in the pile, the app in German.',
     shots: [
@@ -434,6 +425,3 @@ const suffix: Record<Size, string> = { full: '', medium: '-m', thumb: '-t' }
 export function source(shot: Shot, size: Size): string {
   return asset(`/prototypes/${shot.name}${suffix[size]}.webp`)
 }
-
-export const firstDay = entries[0].date
-export const lastDay = entries[entries.length - 1].date

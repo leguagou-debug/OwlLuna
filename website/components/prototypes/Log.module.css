@@ -29,10 +29,11 @@
   overflow: hidden;
   rotate: -2deg;
   box-shadow: 2px 2px 0 rgb(27 34 48 / 0.14);
+  color: var(--ink);
   text-align: center;
 }
 
-.month {
+.label {
   padding: 3px 0 2px;
   border-bottom: var(--line) solid var(--ink);
   font-size: 0.66rem;
@@ -41,7 +42,7 @@
   text-transform: uppercase;
 }
 
-.day {
+.figure {
   padding: 5px 0 3px;
   font-family: var(--font-poster);
   font-weight: 900;
@@ -59,6 +60,10 @@
   max-width: 34rem;
   color: var(--text-secondary);
   text-wrap: pretty;
+}
+
+.words a {
+  font-weight: 500;
 }
 
 .board {

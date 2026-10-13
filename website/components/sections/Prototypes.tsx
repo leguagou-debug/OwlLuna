@@ -1,5 +1,4 @@
 import { Pile } from '../prototypes/Pile'
-import { sequence } from '../prototypes/shots'
 import { Button } from '../ui/Button'
 import { SectionHeading } from '../ui/SectionHeading'
 import styles from './Prototypes.module.css'
@@ -12,8 +11,8 @@ export function Prototypes() {
         <div className={styles.head}>
           <SectionHeading id="prototypes-title" eyebrow="Prototypes" title="The drafts, tipped out on the desk.">
             <p>
-              {sequence.length} screenshots saved while the app was being finished: first tries, options side by side,
-              and a few dead ends.
+              Screenshots saved while the app was being finished: first tries, options side by side, and a few dead
+              ends.
             </p>
           </SectionHeading>
           <div className={styles.action}>

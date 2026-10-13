@@ -5,7 +5,7 @@ export const dynamic = 'force-static'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const policyUpdated = new Date(`${site.policyUpdated}T00:00:00Z`)
-  return ['/', '/privacy/', '/support/'].map((path) => ({
+  return ['/', '/prototypes/', '/privacy/', '/support/'].map((path) => ({
     url: `${site.url}${path}`,
     ...(path === '/privacy/' ? { lastModified: policyUpdated } : {}),
   }))

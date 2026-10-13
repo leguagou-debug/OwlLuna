@@ -3,7 +3,6 @@
 import { motion } from 'motion/react'
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { settle } from '@/lib/motion'
-import { formatDate } from '@/lib/site'
 import { Button } from '@/components/ui/Button'
 import { sequence, source } from './shots'
 import styles from './Viewer.module.css'
@@ -75,7 +74,6 @@ export function Viewer({ open, onChange }: Props) {
               <span className={styles.count}>
                 No. {String(shot.number).padStart(2, '0')} of {sequence.length}
               </span>
-              <span>{formatDate(shot.entry.date)}</span>
               <span>{shot.entry.title}</span>
             </p>
             <Button size="compact" onClick={() => onChange(null)}>

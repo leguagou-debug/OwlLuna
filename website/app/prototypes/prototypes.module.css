@@ -25,6 +25,76 @@
   rotate: -3deg;
 }
 
+.fan {
+  display: flex;
+  align-items: center;
+  max-width: 520px;
+  padding: var(--x10) var(--x3) 0 var(--x2);
+}
+
+.fanned {
+  flex: var(--shape) 1 0%;
+  min-width: 0;
+}
+
+.fanned + .fanned {
+  margin-left: -20px;
+}
+
+.fanned:hover,
+.fanned:focus-within {
+  z-index: 1;
+}
+
+.loose {
+  position: relative;
+  display: block;
+  padding: 5px;
+  background: var(--card-white);
+  border: 1px solid rgb(27 34 48 / 0.34);
+  border-radius: var(--radius-thumb);
+  box-shadow: 2px 3px 0 rgb(27 34 48 / 0.16);
+  rotate: var(--turn);
+  transition:
+    rotate 0.3s var(--ease-glide),
+    translate 0.3s var(--ease-glide),
+    box-shadow 0.3s var(--ease-glide);
+}
+
+.loose img {
+  width: 100%;
+  height: auto;
+}
+
+.loose .tape {
+  position: absolute;
+  z-index: 1;
+  top: -9px;
+  left: calc(50% - 27px);
+  width: 54px;
+  height: 17px;
+  rotate: calc(var(--turn) * -2);
+}
+
+@media (hover: hover) {
+  .loose:hover {
+    rotate: 0deg;
+    translate: 0 -6px;
+    box-shadow: 5px 7px 0 rgb(27 34 48 / 0.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loose {
+    transition: none;
+  }
+
+  .loose:hover {
+    rotate: var(--turn);
+    translate: none;
+  }
+}
+
 .contents {
   align-self: start;
   min-width: 0;
@@ -51,7 +121,7 @@
 
 .row {
   display: grid;
-  grid-template-columns: 3.6rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.8rem minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--x3);
   min-height: 40px;
@@ -69,7 +139,7 @@
   outline-offset: -3px;
 }
 
-.when {
+.part {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink-secondary);

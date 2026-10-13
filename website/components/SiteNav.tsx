@@ -12,6 +12,7 @@ import styles from './SiteNav.module.css'
 const links = [
   { href: '/#features', label: 'Features' },
   { href: '/#story', label: 'Story' },
+  { href: '/prototypes/', label: 'Prototypes' },
   { href: '/privacy/', label: 'Privacy' },
   { href: '/support/', label: 'Support' },
 ]

@@ -15,6 +15,9 @@ export function SiteFooter() {
           <p className={styles.line}>
             Built by <a href={site.author.url}>{site.author.name}</a>.
           </p>
+          <p className={styles.line}>
+            Owl logo designed by <a href={site.logoDesigner.url}>{site.logoDesigner.name}</a>.
+          </p>
         </div>
 
         <nav className={styles.column} aria-label="The site">
@@ -22,6 +25,7 @@ export function SiteFooter() {
           <ul>
             <li><Link href="/#features">Features</Link></li>
             <li><Link href="/#story">A note from the developer</Link></li>
+            <li><Link href="/prototypes/">Prototypes</Link></li>
             <li><Link href="/privacy/">Privacy Policy</Link></li>
             <li><Link href="/support/">Support</Link></li>
           </ul>

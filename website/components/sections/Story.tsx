@@ -37,10 +37,9 @@ export function Story() {
                   <TickBox ticked={false} className={`${styles.doodle} ${styles.doodleLast}`} />
                 </p>
                 <p>
-                  Because look at the sums. First you buy the iPad. Then you buy the Pencil, which is a pencil that
-                  needs charging. And then, once you own both, an app asks for a monthly fee before you may write on
-                  the glass you have already paid for. Paper has its faults, but it has never once sent me a renewal
-                  notice.
+                  Because look at the sums. First you buy the iPad. Then you buy the Pencil, which is sold separately.
+                  And then, once you own both, an app asks for a monthly fee before you may write on the glass you
+                  have already paid for. Paper has its faults, but it has never once sent me a renewal notice.
                 </p>
                 <p>So I built the app myself, from scratch. The idea was simple enough to fit on an index card:</p>
 
