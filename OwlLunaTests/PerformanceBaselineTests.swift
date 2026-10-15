@@ -323,6 +323,92 @@ final class PerformanceBaselineTests: XCTestCase {
         let second = CACurrentMediaTime() - start
         print("PERF v2 OCR 3 pages: first=\(Int(first * 1000))ms unchanged re-run=\(String(format: "%.1f", second * 1000))ms (background)")
     }
+
+    private func openEditor(_ id: UUID, root: StorageRoot) async throws -> (EditorSession, PageStackController) {
+        let document = try await NotebookDocument.open(id, root: root)
+        document.saveDelay = .seconds(600)
+        let session = EditorSession(document: document)
+        let controller = PageStackController(session: session)
+        session.canvas = controller
+        let window = try hostWindow()
+        let rendered = expectation(description: "first ink")
+        controller.onFirstInk = { _ in rendered.fulfill() }
+        window.rootViewController = controller
+        controller.view.layoutIfNeeded()
+        await fulfillment(of: [rendered], timeout: 15)
+        await pause(0.5)
+        return (session, controller)
+    }
+
+    /// Main-thread CPU milliseconds spent while `work` runs, less what the idle main thread spends in the same time.
+    private func mainThreadCPU(_ work: () async -> Void) async -> Double {
+        var cpu = threadCPUTime(), wall = CACurrentMediaTime()
+        await pause(1)
+        let idle = (threadCPUTime() - cpu) / (CACurrentMediaTime() - wall)
+        cpu = threadCPUTime()
+        wall = CACurrentMediaTime()
+        await work()
+        return max(threadCPUTime() - cpu - idle * (CACurrentMediaTime() - wall), 0) * 1000
+    }
+
+    func testZoomWindowMovesMainThread() async throws {
+        try requirePerfRun()
+        let root = v2Root()
+        let id = try await V2StressFixture.writeBackgrounds(root: root)
+        let (session, controller) = try await openEditor(id, root: root)
+        for (index, name) in ["ruled page, 500 strokes", "dense PDF page", "photo page"].enumerated() {
+            session.go(to: index, animated: false)
+            await pause(0.5)
+            session.setZoomWindow(true)
+            let panel = try XCTUnwrap(controller.view.subviews.lazy.compactMap { $0 as? ZoomWindowPanel }.first)
+            await pause(1)
+            var sync: [Double] = []
+            let moves = 36
+            let cpu = await mainThreadCPU {
+                for step in 0..<moves {
+                    let start = CACurrentMediaTime()
+                    panel.onAction?(step % 6 < 3 ? .forward : .back)
+                    sync.append((CACurrentMediaTime() - start) * 1000)
+                    await pause(1.0 / 30)
+                }
+                await pause(0.5)
+            }
+            report("zoom window move, \(name): synchronous", sync)
+            print("PERF v2 zoom window move, \(name): main-thread CPU per move=\(String(format: "%.2f", cpu / Double(moves)))ms")
+            session.setZoomWindow(false)
+            await pause(0.3)
+        }
+    }
+
+    func testReplayUpdatesMainThread() async throws {
+        try requirePerfRun()
+        let root = v2Root()
+        let (id, recording) = try await V2StressFixture.writeRecording(root: root)
+        let (session, controller) = try await openEditor(id, root: root)
+        let began = await session.beginReplay(recording)
+        XCTAssertTrue(began)
+        session.recorder.pause()
+        await pause(1)
+        func run(_ label: String, _ times: [TimeInterval], every interval: TimeInterval) async {
+            var sync: [Double] = []
+            let cpu = await mainThreadCPU {
+                for time in times {
+                    let start = CACurrentMediaTime()
+                    session.showReplay(at: time)
+                    sync.append((CACurrentMediaTime() - start) * 1000)
+                    await pause(interval)
+                }
+                await pause(0.5)
+            }
+            report("replay \(label): synchronous", sync)
+            print("PERF v2 replay \(label): main-thread CPU per update=\(String(format: "%.2f", cpu / Double(times.count)))ms")
+        }
+        await run("playing, a stroke every tick", (0..<150).map { Double($0) * 0.1 }, every: 0.05)
+        let scrub = (0...120).map { Double($0) / 3 }
+        await run("scrubbing forward then back", scrub + scrub.reversed(), every: 1.0 / 60)
+        let canvas = try XCTUnwrap(controller.canvas(forPage: 0))
+        XCTAssertEqual(canvas.drawing.strokes.filter { $0.ink.color.cgColor.alpha < 0.5 }.count, 399, "back at the start, all but the first stroke of the recording is faint")
+    }
 }
 
 /// The longest interval between main-thread timer ticks: how long the main thread was unavailable.
@@ -415,6 +501,72 @@ enum V2StressFixture {
         let pages = try PDFImport.pages(at: package.assetURL(file), file: file)
         try await package.create(NotebookManifest(id: id, title: "Textbook", defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages))
         return id
+    }
+
+    /// Three pages whose paper costs something to draw: ruled with ink, a dense PDF page, a large photo.
+    static func writeBackgrounds(root: StorageRoot) async throws -> UUID {
+        let id = UUID()
+        let package = NotebookPackage(root: root, id: id)
+        let bounds = CGRect(origin: .zero, size: PageSize.letter.points)
+        let pdfURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).pdf")
+        var rng = SplitMix64(state: 5)
+        try UIGraphicsPDFRenderer(bounds: bounds).writePDF(to: pdfURL) { context in
+            context.beginPage()
+            for line in 0..<70 {
+                ("\(line) " + String(repeating: "The mitochondria is the powerhouse of the cell. ", count: 3) as NSString)
+                    .draw(at: CGPoint(x: 30, y: 24 + CGFloat(line) * 10.8), withAttributes: [.font: UIFont.systemFont(ofSize: 8)])
+            }
+            for _ in 0..<400 {
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: .random(in: 0...612, using: &rng), y: .random(in: 0...792, using: &rng)))
+                path.addCurve(to: CGPoint(x: .random(in: 0...612, using: &rng), y: .random(in: 0...792, using: &rng)),
+                              controlPoint1: CGPoint(x: .random(in: 0...612, using: &rng), y: .random(in: 0...792, using: &rng)),
+                              controlPoint2: CGPoint(x: .random(in: 0...612, using: &rng), y: .random(in: 0...792, using: &rng)))
+                UIColor(hue: .random(in: 0...1, using: &rng), saturation: 0.6, brightness: 0.7, alpha: 0.5).setStroke()
+                path.stroke()
+            }
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let photo = UIGraphicsImageRenderer(size: CGSize(width: 3024, height: 4032), format: format).image { context in
+            for _ in 0..<600 {
+                UIColor(hue: .random(in: 0...1, using: &rng), saturation: 0.5, brightness: 0.8, alpha: 1).setFill()
+                context.fill(CGRect(x: .random(in: 0...3000, using: &rng), y: .random(in: 0...4000, using: &rng), width: 300, height: 200))
+            }
+        }
+        let photoURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
+        try XCTUnwrap(photo.jpegData(compressionQuality: 0.85)).write(to: photoURL)
+        let pdf = try await package.importAsset(from: pdfURL, ext: "pdf"), image = try await package.importAsset(from: photoURL, ext: "jpg")
+        let ruled = NotebookPage.template(.narrowRuled, color: .white, size: .letter)
+        let pages = [ruled, try PDFImport.pages(at: package.assetURL(pdf), file: pdf)[0],
+                     NotebookPage(background: .image(file: image), paperColor: .white, size: PageSize.letter.points)]
+        let manifest = NotebookManifest(id: id, title: "Backgrounds", defaults: PageDefaults(template: .narrowRuled, paperColor: .white, pageSize: .letter), pages: pages)
+        try await package.create(manifest)
+        _ = try await package.write(SaveSnapshot(manifest: manifest, ink: [ruled.id: PKDrawing(strokes: handwriting(count: 500, pageSize: ruled.size, rng: &rng))]))
+        return id
+    }
+
+    /// A ruled page of 700 strokes: 300 written before a 40-second recording and 400 during it, one every tenth of a second.
+    static func writeRecording(root: StorageRoot) async throws -> (UUID, RecordingEntry) {
+        var rng = SplitMix64(state: 9)
+        let page = NotebookPage.template(.narrowRuled, color: .white, size: .letter)
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let strokes = handwriting(count: 700, pageSize: page.size, rng: &rng).enumerated().map { index, stroke in
+            let date = start.addingTimeInterval(index < 300 ? -600 + Double(index) : Double(index - 300) * 0.1)
+            return PKStroke(ink: stroke.ink, path: PKStrokePath(controlPoints: Array(stroke.path), creationDate: date))
+        }
+        var manifest = NotebookManifest(title: "Lecture", defaults: PageDefaults(template: .narrowRuled, paperColor: .white, pageSize: .letter), pages: [page])
+        let package = NotebookPackage(root: root, id: manifest.id)
+        try await package.create(manifest)
+        try FileManager.default.createDirectory(at: package.assetsDirectory, withIntermediateDirectories: true)
+        try ReplaySeed.silence(seconds: 40).write(to: package.assetURL("lecture.wav"))
+        var entry = RecordingEntry(id: UUID(), file: "lecture.wav", createdAt: start.addingTimeInterval(40), duration: 40)
+        entry.startedAt = start
+        entry.inkedPages = [page.id]
+        manifest.recordings = [entry]
+        _ = try await package.write(SaveSnapshot(manifest: manifest, ink: [page.id: PKDrawing(strokes: strokes)]))
+        return (manifest.id, entry)
     }
 
     static func probe(at origin: CGPoint) -> PKStroke {

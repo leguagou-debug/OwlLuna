@@ -95,9 +95,8 @@ enum InkTimelapse {
         let plan = Plan(drawing: ink)
         guard !plan.spans.isEmpty else { throw Failure.noInk }
 
-        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appending(path: "\(NotebookExporter.fileName(input.title)).mp4")
+        let directory = try ExportFolder.make(.export)
+        let url = directory.appending(path: NotebookExporter.fileName(input.title, extension: "mp4"))
         do {
             try await film(page, ink: ink, plan: plan, assets: input.package.assetsDirectory, links: LinkTitles(pages: input.pages), to: url, progress: progress)
         } catch {

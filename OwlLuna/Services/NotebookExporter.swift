@@ -21,10 +21,10 @@ enum NotebookExporter {
     static func export(_ input: Input, progress: @escaping @Sendable (Double) async -> Void) async throws -> URL {
         let interval = signposter.beginInterval("Export", "\(input.pages.count) pages")
         defer { signposter.endInterval("Export", interval) }
-        let name = fileName(input.title)
-        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appending(path: "\(name).pdf")
+        let directory = try ExportFolder.make(.export)
+        var written = false
+        defer { if !written { try? FileManager.default.removeItem(at: directory) } }
+        let url = directory.appending(path: fileName(input.title, extension: "pdf"))
         try Task.checkCancellation()
 
         let format = UIGraphicsPDFRendererFormat()
@@ -73,36 +73,48 @@ enum NotebookExporter {
                 Task { await progress(fraction) }
             }
         }
-        if Task.isCancelled {
-            try? FileManager.default.removeItem(at: directory)
-            throw CancellationError()
-        }
+        try Task.checkCancellation()
+        written = true
         await progress(1)
         return url
     }
 
-    static func fileName(_ title: String) -> String {
-        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Under the file system's 255 bytes for a name, with room for the " 2" a copy saved beside it is given.
+    static let nameLimit = 240
+
+    /// The title as a file name ending in `number` and `extension`, cut at a whole character to fit `nameLimit`,
+    /// counted decomposed as some file systems store it.
+    static func fileName(_ title: String, number: String = "", extension ext: String) -> String {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
             .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>")).joined(separator: "-")
-        return name.isEmpty ? String(localized: "Untitled") : name
+        let tail = "\(number).\(ext)", room = nameLimit - bytes(tail)
+        var name = "", used = 0
+        for character in cleaned {
+            let size = bytes(String(character))
+            guard used + size <= room else { break }
+            name.append(character)
+            used += size
+        }
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (name.isEmpty ? String(localized: "Untitled") : name) + tail
     }
+
+    private static func bytes(_ text: String) -> Int { text.decomposedStringWithCanonicalMapping.utf8.count }
 
     /// Writes each page as a PNG, twice the page's size in points, numbered in page order.
     static func exportImages(_ input: Input, progress: @escaping @Sendable (Double) async -> Void) async throws -> [URL] {
         let interval = signposter.beginInterval("Export", "\(input.pages.count) images")
         defer { signposter.endInterval("Export", interval) }
-        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let name = fileName(input.title), assets = input.package.assetsDirectory, links = LinkTitles(pages: input.pages)
+        let directory = try ExportFolder.make(.export)
+        var written = false
+        defer { if !written { try? FileManager.default.removeItem(at: directory) } }
+        let assets = input.package.assetsDirectory, links = LinkTitles(pages: input.pages)
         let digits = String(input.pages.count).count, count = Double(max(input.pages.count, 1))
         var urls: [URL] = []
         for (index, page) in input.pages.enumerated() {
-            if Task.isCancelled {
-                try? FileManager.default.removeItem(at: directory)
-                throw CancellationError()
-            }
+            try Task.checkCancellation()
             let number = input.pages.count == 1 ? "" : " " + String(repeating: "0", count: digits - String(index + 1).count) + String(index + 1)
-            let url = directory.appending(path: "\(name)\(number).png")
+            let url = directory.appending(path: fileName(input.title, number: number, extension: "png"))
             let ink = input.inMemoryInk[page.id] ?? savedInk(page, in: input.package)
             let data = autoreleasepool {
                 let page = Whiteboard.whole(page, ink: ink)
@@ -113,6 +125,7 @@ enum NotebookExporter {
             urls.append(url)
             await progress(Double(index + 1) / count)
         }
+        written = true
         return urls
     }
 
@@ -190,7 +203,7 @@ final class ExportJob: Identifiable {
             }
             do {
                 let urls = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
-                if self?.state == .running { self?.state = .finished(urls) }
+                if let self, state == .running { state = .finished(urls) } else { ExportFolder.discard(urls) }
             } catch is CancellationError {
                 self?.state = .cancelled
             } catch {
@@ -202,6 +215,12 @@ final class ExportJob: Identifiable {
     func cancel() {
         task?.cancel()
         state = .cancelled
+    }
+
+    /// Its sheet has closed: a running export stops, and the files go once nothing is sharing or printing them.
+    func close() {
+        if state == .running { cancel() }
+        if case .finished(let urls) = state { ExportFolder.discard(urls) }
     }
 }
 
@@ -263,7 +282,7 @@ struct ExportSheet: View {
         }
         .presentationDetents(job.format == .timelapse ? [.large] : [.medium])
         .presentationBackground(Color.surface)
-        .onDisappear { if job.state == .running { job.cancel() } }
+        .onDisappear { job.close() }
     }
 
     private func readyText(_ count: Int) -> String {
@@ -282,7 +301,8 @@ struct ExportSheet: View {
         info.outputType = .general
         controller.printInfo = info
         if urls.count == 1 { controller.printingItem = first } else { controller.printingItems = urls }
-        controller.present(animated: true)
+        ExportFolder.beginReading(urls)
+        if !controller.present(animated: true, completionHandler: { _, _, _ in ExportFolder.endReading(urls) }) { ExportFolder.endReading(urls) }
     }
 }
 
@@ -314,8 +334,17 @@ struct LoopingVideo: UIViewRepresentable {
     }
 }
 
+/// The files shared stay in their export folder until what was chosen has finished: shared, saved or cancelled.
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let files = items.compactMap { $0 as? URL }.filter(\.isFileURL)
+        ExportFolder.beginReading(files)
+        controller.completionWithItemsHandler = { _, _, _, _ in ExportFolder.endReading(files) }
+        return controller
+    }
+
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

@@ -57,7 +57,12 @@ struct ReplayTimeline: Sendable, Equatable {
     func hasInk(onPage page: UUID) -> Bool { byPage[page] != nil }
 
     /// How many of the recording's strokes have been written by `time`.
-    func written(by time: TimeInterval) -> Int {
+    func written(by time: TimeInterval) -> Int { Self.count(marks, by: time) }
+
+    /// How many of the recording's strokes on a page have been written by `time`.
+    func written(onPage page: UUID, by time: TimeInterval) -> Int { Self.count(byPage[page] ?? [], by: time) }
+
+    private static func count(_ marks: [Mark], by time: TimeInterval) -> Int {
         var low = 0, high = marks.count
         while low < high {
             let middle = (low + high) / 2
@@ -68,8 +73,11 @@ struct ReplayTimeline: Sendable, Equatable {
 
     /// The strokes on a page that are still to come at `time`.
     func pending(onPage page: UUID, at time: TimeInterval) -> Set<Int> {
-        Set((byPage[page] ?? []).lazy.filter { $0.time > time }.map(\.stroke))
+        Set(strokes(onPage: page).dropFirst(written(onPage: page, by: time)))
     }
+
+    /// The recording's strokes on a page, in the order they were written.
+    func strokes(onPage page: UUID) -> [Int] { (byPage[page] ?? []).map(\.stroke) }
 
     /// The page being written on at `time`: the one holding the latest stroke, or the first one before any ink.
     func page(at time: TimeInterval) -> UUID? {
@@ -88,15 +96,46 @@ enum ReplayInk {
 
     static func drawing(_ drawing: PKDrawing, pending: Set<Int>) -> PKDrawing {
         guard !pending.isEmpty else { return drawing }
-        var strokes = drawing.strokes
-        for index in pending where strokes.indices.contains(index) {
-            let stroke = strokes[index]
-            var ink = stroke.ink
-            ink.color = ink.color.withAlphaComponent(ink.color.cgColor.alpha * faint)
-            // A new stroke, not the old one with its ink changed: a canvas keeps what it has drawn for a stroke it knows.
-            strokes[index] = PKStroke(ink: ink, path: stroke.path, transform: stroke.transform, mask: stroke.mask, randomSeed: stroke.randomSeed)
+        var page = Page(drawing, order: Array(pending))
+        return page.drawing(written: 0)
+    }
+
+    /// A page's ink as the replay shows it, kept so that a step swaps only the strokes written or taken back since the last.
+    struct Page {
+        private let ink: [PKStroke]
+        private let order: [Int]
+        private var shown: [PKStroke]
+        private var faint: [Int: PKStroke] = [:]
+        /// How many of `order` are shown written.
+        private(set) var written: Int
+
+        /// `order` is the page's strokes from the recording in the order they were written; all of them start out written.
+        init(_ drawing: PKDrawing, order: [Int]) {
+            ink = drawing.strokes
+            shown = ink
+            self.order = order
+            written = order.count
         }
-        return PKDrawing(strokes: strokes)
+
+        mutating func drawing(written count: Int) -> PKDrawing {
+            let count = min(max(count, 0), order.count)
+            for index in order[min(count, written)..<max(count, written)] where ink.indices.contains(index) {
+                shown[index] = count > written ? ink[index] : faintCopy(of: index)
+            }
+            written = count
+            return PKDrawing(strokes: shown)
+        }
+
+        private mutating func faintCopy(of index: Int) -> PKStroke {
+            if let made = faint[index] { return made }
+            let stroke = ink[index]
+            var ink = stroke.ink
+            ink.color = ink.color.withAlphaComponent(ink.color.cgColor.alpha * ReplayInk.faint)
+            // A new stroke, not the old one with its ink changed: a canvas keeps what it has drawn for a stroke it knows.
+            let made = PKStroke(ink: ink, path: stroke.path, transform: stroke.transform, mask: stroke.mask, randomSeed: stroke.randomSeed)
+            faint[index] = made
+            return made
+        }
     }
 
     /// The stroke under a point on the page, for jumping to when it was written.
@@ -121,7 +160,8 @@ struct ReplayBar: View {
     var toggleTranscript: () -> Void = {}
     let done: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var scrubbing: Double?
+    /// A finger is on the slider. A move without one, from VoiceOver, goes straight to its moment.
+    @State private var dragging = false
 
     private var recorder: NotebookRecorder { session.recorder }
 
@@ -130,7 +170,7 @@ struct ReplayBar: View {
     }
 
     var body: some View {
-        let duration = max(session.replay?.duration ?? 0, 0.1), time = min(scrubbing ?? recorder.currentTime, duration)
+        let duration = max(session.replay?.duration ?? 0, 0.1), time = min(session.scrubbing ?? recorder.currentTime, duration)
         let total = session.replay?.marks.count ?? 0, written = session.replay?.written(by: time) ?? 0
         HStack(spacing: Space.x2) {
             Button { recorder.isPaused ? recorder.resume() : recorder.pause() } label: {
@@ -140,11 +180,10 @@ struct ReplayBar: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Text(clock(time)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Color.ink)
             }
-            Slider(value: Binding(get: { time }, set: { scrubbing = $0 }), in: 0...duration) { editing in
-                if !editing, let scrubbing {
-                    session.seekReplay(to: scrubbing)
-                    self.scrubbing = nil
-                }
+            Slider(value: Binding(get: { time }, set: { dragging ? session.scrubReplay(to: $0) : session.seekReplay(to: $0) }),
+                   in: 0...duration) { editing in
+                dragging = editing
+                if !editing, let scrubbing = session.scrubbing { session.seekReplay(to: scrubbing) }
             }
             .frame(minWidth: 140, idealWidth: 260, maxWidth: 320)
             .accessibilityLabel(Text("Position"))
@@ -171,6 +210,5 @@ struct ReplayBar: View {
         .accessibilityValue(Text(total == 0 ? String(localized: "No ink was written during this recording")
                                             : String(localized: "\(written) of \(total) strokes written")))
         .accessibilityIdentifier("editor.replay.bar")
-        .onChange(of: scrubbing) { _, value in if let value { session.showReplay(at: value) } }
     }
 }

@@ -59,7 +59,9 @@ enum LibraryBackup {
     /// Writes a backup to a temporary file and returns it. Open notebooks should be saved first.
     static func create(root: StorageRoot, journal: UUID? = nil, now: Date = .now) throws -> URL {
         let fileManager = FileManager.default
-        let directory = fileManager.temporaryDirectory.appending(path: "backup-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let directory = try ExportFolder.make(.backup)
+        var written = false
+        defer { if !written { try? fileManager.removeItem(at: directory) } }
         let staging = directory.appending(path: "info", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
         var info: [String: JSONValue] = ["version": .number(Double(currentVersion)), "createdAt": ManifestCodec.encodeDate(now),
@@ -87,6 +89,7 @@ enum LibraryBackup {
             try encode.writeDirectoryContents(archiveFrom: FilePath(folder.deletingLastPathComponent().path(percentEncoded: false)),
                                               path: FilePath(folder.lastPathComponent), keySet: keys, selectUsing: filter)
         }
+        written = true
         return destination
     }
 

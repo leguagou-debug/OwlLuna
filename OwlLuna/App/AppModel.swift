@@ -72,6 +72,7 @@ final class AppModel {
         }
         started = true
         let interval = signposter.beginInterval("Launch")
+        let launched = Date.now
         root.adoptLegacyPackages()
         #if DEBUG
         if root.packageIDs().isEmpty {
@@ -107,7 +108,10 @@ final class AppModel {
             await sync.syncNow()
             await trash.launchSyncTried()
         }
-        Task.detached(priority: .background) { CoverCache.shared.sweepDisk() }
+        Task.detached(priority: .background) {
+            CoverCache.shared.sweepDisk()
+            ExportFolder.sweep(madeBefore: launched)
+        }
         signposter.endInterval("Launch", interval)
     }
 

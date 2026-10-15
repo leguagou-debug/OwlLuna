@@ -23,6 +23,7 @@ struct OwlLunaSettingsView: View {
     @State private var agendaMessage: String?
     @State private var confirmingHistoryClear = false
     @State private var backupWork: BackupWork?
+    @State private var backingUp: Task<Void, Never>?
     @State private var lastBackup: URL?
     @State private var sharedBackup: SharedFile?
     @State private var choosingBackup = false
@@ -79,6 +80,11 @@ struct OwlLunaSettingsView: View {
         .tint(Color.accentColor)
         .presentationSizing(.page)
         .sheet(item: $sharedBackup) { file in ShareSheet(items: [file.url]).presentationCornerRadius(Radius.sheet) }
+        // The backup is kept to share again while Settings is open.
+        .onDisappear {
+            backingUp?.cancel()
+            if let lastBackup { ExportFolder.discard([lastBackup]) }
+        }
         .fileImporter(isPresented: $choosingBackup, allowedContentTypes: [.owlLunaBackup, .legacyBackup, .appleArchive]) { result in
             if case .success(let url) = result { restore(url) }
         }
@@ -289,10 +295,12 @@ struct OwlLunaSettingsView: View {
 
     private func backUp() {
         backupWork = .backingUp
-        Task {
+        backingUp = Task {
             defer { backupWork = nil }
             do {
                 guard let url = try await store.backupToShare() else { return }
+                guard !Task.isCancelled else { return ExportFolder.discard([url]) }
+                if let lastBackup { ExportFolder.discard([lastBackup]) }
                 lastBackup = url
                 sharedBackup = SharedFile(url: url)
             } catch {

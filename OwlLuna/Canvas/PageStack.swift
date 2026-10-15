@@ -352,8 +352,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private(set) var isPresenting = false
     /// The recording being replayed with its ink, and how far it has got.
     private var replay: (timeline: ReplayTimeline, time: TimeInterval)?
-    /// The strokes each live canvas is showing faintly.
-    private var replayPending: [UUID: Set<Int>] = [:]
+    /// The ink each live canvas shows for the replay.
+    private var replayPages: [UUID: ReplayInk.Page] = [:]
     /// The overlay for selecting ink across pages, while that is on, and what has been caught.
     private var inkLasso: InkLassoOverlay?
     private var inkSelection: InkSelection = [:]
@@ -379,6 +379,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var zoomWindow: ZoomWindow?
     private var zoomPanel: ZoomWindowPanel?
     private var zoomCanvas: PageCanvasView?
+    private var zoomPaper: PagePaperView?
     private var zoomTarget: ZoomTargetView?
     private var zoomLevel = 1
     private var zoomDragOrigin: CGPoint?
@@ -430,6 +431,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// The whiteboard that is open on its own, if one is.
     var openBoardID: UUID? { soloID }
     var paperPixelCount: Int { slots.values.reduce(0) { $0 + ($1.paper?.pixelCount ?? 0) } }
+    var zoomWindowRect: CGRect? { zoomWindow?.rect }
     var isPaperDrawn: Bool { slots.values.allSatisfy { $0.paper?.isDrawn ?? false } }
 
     func canvas(forPage index: Int) -> PageCanvasView? {
@@ -1039,7 +1041,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         if canvas.isFirstResponder { anchor.becomeFirstResponder() }
         canvas.removeFromSuperview()
         canvas.pageID = nil
-        replayPending[id] = nil
+        replayPages[id] = nil
         canvas.isLoaded = false
         canvas.overrideUserInterfaceStyle = .light
         slots[id]?.canvas = nil
@@ -1296,6 +1298,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         // An undo or redo under the selection moves strokes about, so what was caught is let go.
         if inkLasso != nil, !isMovingInk, !inkSelection.isEmpty { setInkSelection([:]) }
         guard let ink = document.loadedInk(pageID) else { return }
+        replayPages[pageID] = nil
         if zoomWindow?.pageID == pageID, let zoomCanvas { showZoomInk(ink, in: zoomCanvas) }
         if let slot = slots[pageID], slot.card != nil { drawCard(in: slot) }
         guard let canvas = canvases[pageID] else { return }
@@ -2345,6 +2348,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         zoomTarget?.removeFromSuperview()
         zoomPanel = nil
         zoomCanvas = nil
+        zoomPaper = nil
         zoomTarget = nil
         zoomWindow = nil
         session.zoomPanelLift = 0
@@ -2431,12 +2435,36 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         panel.setEnabled(zoomLevel > 0, for: .closer)
         panel.setEnabled(zoomLevel < ZoomWindow.widths.count - 1, for: .further)
 
-        let assets = document.package.assetsDirectory, titles = linkTitles, rect = window.rect, night = night
-        panel.paper.image = UIGraphicsImageRenderer(size: area.size).image { context in
-            context.cgContext.translateBy(x: -rect.minX * scale, y: -rect.minY * scale)
-            PageRenderer.drawBackground(page, assets: assets, in: context.cgContext, size: size, links: titles, night: night)
-        }
+        showZoomPaper(page, rect: window.rect, scale: scale, in: panel)
         layoutZoomTarget()
+    }
+
+    /// The strip's paper is drawn in pieces off the main thread, like the page's, and the pieces are kept as the window moves.
+    private func showZoomPaper(_ page: NotebookPage, rect: CGRect, scale: CGFloat, in panel: ZoomWindowPanel) {
+        var look = page
+        look.inkHash = nil
+        if zoomPaper?.page != look || zoomPaper?.night != night || zoomPaper?.links != linkTitles || zoomPaper?.unit != scale {
+            // The paper shown before stays under the new until that is drawn, unless it is another page's.
+            if zoomPaper?.page.id != page.id { panel.paper.subviews.forEach { $0.removeFromSuperview() } }
+            let paper = PagePaperView(page: look, assets: document.package.assetsDirectory, night: night, items: true, links: linkTitles)
+            paper.fit(unit: scale, zoom: 1)
+            let previous = panel.paper.subviews
+            paper.onDrawn = { [weak paper] in
+                previous.forEach { $0.removeFromSuperview() }
+                paper?.onDrawn = nil
+            }
+            panel.paper.addSubview(paper)
+            panel.paper.backgroundColor = PageRenderer.paperColor(look.effectivePaperColor, night: look.turnsDark(night))
+            zoomPaper = paper
+        }
+        // On whole pixels, so the pieces are shown as drawn.
+        let pixel = max(traitCollection.displayScale, 1)
+        for case let paper as PagePaperView in panel.paper.subviews where paper.unit > 0 {
+            paper.fit(unit: paper.unit, zoom: scale / paper.unit)
+            paper.center = CGPoint(x: (-rect.minX * scale * pixel).rounded() / pixel, y: (-rect.minY * scale * pixel).rounded() / pixel)
+        }
+        let shown = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale)
+        zoomPaper?.show(near: shown.insetBy(dx: -shown.width / 4, dy: 0), density: pixel)
     }
 
     private func loadZoomInk(_ pageID: UUID, into canvas: PageCanvasView) {
@@ -2557,21 +2585,23 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             updateScrollTouches()
         }
         for (id, canvas) in canvases where canvas.isLoaded {
-            guard let ink = document.loadedInk(id) else { continue }
-            let pending = replay?.timeline.pending(onPage: id, at: time)
-            guard pending != replayPending[id] else { continue }
-            replayPending[id] = pending
+            let written = replay.flatMap { $0.timeline.hasInk(onPage: id) ? $0.timeline.written(onPage: id, by: time) : nil }
+            guard written != replayPages[id]?.written, let ink = document.loadedInk(id) else { continue }
             isApplyingDrawing = true
-            canvas.drawing = ReplayInk.drawing(ink, pending: pending ?? [])
+            canvas.drawing = replayed(ink, on: id)
             isApplyingDrawing = false
         }
+        if replay == nil { replayPages = [:] }
     }
 
     private func replayed(_ ink: PKDrawing, on pageID: UUID?) -> PKDrawing {
-        guard let replay, let pageID else { return ink }
-        let pending = replay.timeline.pending(onPage: pageID, at: replay.time)
-        replayPending[pageID] = pending
-        return ReplayInk.drawing(ink, pending: pending)
+        guard let pageID else { return ink }
+        guard let replay, replay.timeline.hasInk(onPage: pageID) else {
+            replayPages[pageID] = nil
+            return ink
+        }
+        return replayPages[pageID, default: ReplayInk.Page(ink, order: replay.timeline.strokes(onPage: pageID))]
+            .drawing(written: replay.timeline.written(onPage: pageID, by: replay.time))
     }
 
     /// A tap on ink written during the recording jumps the sound to when it was written.

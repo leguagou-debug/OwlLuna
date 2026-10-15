@@ -240,7 +240,8 @@ final class ZoomWindowPanel: UIView {
     }
 
     let canvasArea = UIView()
-    let paper = UIImageView()
+    /// Holds the page's paper, drawn by the page stack and placed where the window is.
+    let paper = UIView()
     private let band = UIView()
     private let bar = UIStackView()
     private let title = UILabel()
@@ -293,7 +294,7 @@ final class ZoomWindowPanel: UIView {
 
         canvasArea.clipsToBounds = true
         canvasArea.backgroundColor = .white
-        paper.contentMode = .topLeft
+        paper.isUserInteractionEnabled = false
         paper.isAccessibilityElement = false
         canvasArea.addSubview(paper)
         band.isUserInteractionEnabled = false

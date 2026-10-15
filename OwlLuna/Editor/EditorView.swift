@@ -85,6 +85,8 @@ final class EditorSession {
     /// The recording being replayed with its ink, and what was said in it if it has been transcribed.
     private(set) var replay: ReplayTimeline?
     private(set) var replayLines: [Transcript.Line] = []
+    /// Where the position slider is held while it is dragged: the page follows it, not the sound, until it is let go.
+    private(set) var scrubbing: TimeInterval?
     /// The zoom window: a magnified strip at the foot of the editor for writing small and neat.
     private(set) var isZoomWindowOpen = false
     @ObservationIgnored private var replayPage: UUID?
@@ -219,7 +221,10 @@ final class EditorSession {
         replay = ReplayTimeline(recording: recording, drawings: drawings)
         replayLines = recorder.transcript(for: recording)?.lines ?? []
         replayPage = nil
-        recorder.onPlaybackTime = { [weak self] in self?.showReplay(at: $0) }
+        recorder.onPlaybackTime = { [weak self] time in
+            guard let self, self.scrubbing == nil else { return }
+            self.showReplay(at: time)
+        }
         enter(.replaying)
         showReplay(at: 0)
         if time > 0 { recorder.seek(to: time) }
@@ -235,14 +240,23 @@ final class EditorSession {
         if index != currentPage { go(to: index) }
     }
 
+    /// The position slider moved under a finger. The sound plays on; `seekReplay` takes it there once the slider is let go.
+    func scrubReplay(to time: TimeInterval) {
+        guard replay != nil else { return }
+        scrubbing = time
+        showReplay(at: time)
+    }
+
     func seekReplay(to time: TimeInterval) {
         guard replay != nil else { return }
+        scrubbing = nil
         recorder.seek(to: time)
     }
 
     private func stopReplay() {
         recorder.onPlaybackTime = nil
         recorder.stopPlayback()
+        scrubbing = nil
         replay = nil
         replayLines = []
         canvas?.showReplay(nil, at: 0)
@@ -519,6 +533,40 @@ struct EditorView: View {
 
     var body: some View {
         EditorContent(session: session, isCovered: isCovered, close: close)
+    }
+}
+
+/// Only this button reads the recording's time, so the timer redraws it and not the editor around it.
+private struct RecordButton: View {
+    let recorder: NotebookRecorder
+    let isCompact: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if recorder.isRecording {
+            let seconds = Int(recorder.elapsed)
+            Button { recorder.stopRecording() } label: {
+                HStack(spacing: Space.x2) {
+                    Image(systemName: "stop.fill")
+                        .symbolEffect(.breathe, options: .repeating, isActive: !reduceMotion)
+                    if !isCompact {
+                        Text(Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond)))
+                            .monospacedDigit()
+                            .contentTransition(reduceMotion ? .opacity : .numericText(value: Double(seconds)))
+                            .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: seconds)
+                    }
+                }
+            }
+            .buttonStyle(.owlLuna(.destructive, compact: true, inBar: true))
+            .padding(.horizontal, Space.x1)
+            .accessibilityLabel(Text("Stop Recording"))
+            .accessibilityValue(Text(Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))))
+            .accessibilityIdentifier("editor.record")
+        } else {
+            Button { recorder.startRecording() } label: { Label("Record Audio", systemImage: "mic") }
+                .disabled(recorder.isReadOnly)
+                .accessibilityIdentifier("editor.record")
+        }
     }
 }
 
@@ -1617,33 +1665,8 @@ fileprivate struct EditorContent: View {
         .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: document.notices)
     }
 
-    @ViewBuilder
     private var recordButton: some View {
-        let recorder = session.recorder
-        if recorder.isRecording {
-            let seconds = Int(recorder.elapsed)
-            Button { recorder.stopRecording() } label: {
-                HStack(spacing: Space.x2) {
-                    Image(systemName: "stop.fill")
-                        .symbolEffect(.breathe, options: .repeating, isActive: !reduceMotion)
-                    if !isCompact {
-                        Text(Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond)))
-                            .monospacedDigit()
-                            .contentTransition(reduceMotion ? .opacity : .numericText(value: Double(seconds)))
-                            .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: seconds)
-                    }
-                }
-            }
-            .buttonStyle(.owlLuna(.destructive, compact: true, inBar: true))
-            .padding(.horizontal, Space.x1)
-            .accessibilityLabel(Text("Stop Recording"))
-            .accessibilityValue(Text(Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))))
-            .accessibilityIdentifier("editor.record")
-        } else {
-            Button { recorder.startRecording() } label: { Label("Record Audio", systemImage: "mic") }
-                .disabled(document.isReadOnly)
-                .accessibilityIdentifier("editor.record")
-        }
+        RecordButton(recorder: session.recorder, isCompact: isCompact)
     }
 
     private var addMenu: some View {

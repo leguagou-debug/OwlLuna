@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class NotebookRecorder: NSObject {
     private(set) var isRecording = false
+    /// Whole seconds recorded, all the record button shows, so it is redrawn once a second.
     private(set) var elapsed: TimeInterval = 0
     private(set) var playingID: UUID?
     private(set) var playbackProgress: Double = 0
@@ -307,7 +308,7 @@ final class NotebookRecorder: NSObject {
     }
 
     private func tick() {
-        if let recorder { elapsed = recorder.currentTime }
+        if let recorder { elapsed = recorder.currentTime.rounded(.down) }
         if let player, player.isPlaying { report(player.currentTime) }
     }
 }
