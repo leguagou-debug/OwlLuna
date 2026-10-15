@@ -494,6 +494,13 @@ final class CoverCache: Sendable {
     private let directory = URL.cachesDirectory.appending(path: "Covers", directoryHint: .isDirectory)
     private let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "covers")
 
+    /// A memory warning empties the memory cache. The disk keeps every cover.
+    init() {
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.memory.withLock { $0 = Memory() }
+        }
+    }
+
     func cached(_ key: String) -> UIImage? {
         memory.withLock { state in
             guard let image = state.images[key] else { return nil }

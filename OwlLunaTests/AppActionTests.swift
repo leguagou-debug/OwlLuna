@@ -1,4 +1,5 @@
 import XCTest
+import PencilKit
 import SwiftData
 @testable import OwlLuna
 
@@ -55,15 +56,96 @@ final class AppActionTests: XCTestCase {
         activity.record(notebook: latest, pages: [UUID(), UUID()], at: now)
         activity.record(notebook: latest, pages: [UUID()], at: try XCTUnwrap(calendar.date(byAdding: .day, value: -100, to: now)))
 
-        let snapshot = WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        var snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
         XCTAssertEqual(snapshot.notebook, .init(id: latest, title: "Cell Biology", page: 5, pageCount: 12, clothHex: ClothColor.moss.hex))
         XCTAssertEqual(snapshot.pagesByDay, [WidgetSnapshot.dayKey(for: now, calendar: calendar): 2], "a day from months ago isn't sent")
-        XCTAssertFalse(snapshot.hasJournal)
+        XCTAssertFalse(snapshot.journalIsWritten(on: now, calendar: calendar), "writing in another notebook doesn't tick today's page")
         XCTAssertEqual(store.notebooks().count, 3)
 
         activity.isEnabled = false
-        XCTAssertTrue(WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar).pagesByDay.isEmpty,
-                      "with writing history off, the widgets get no days")
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertTrue(snapshot.pagesByDay.isEmpty, "with writing history off, the widgets get no days")
+    }
+
+    private func keepJournalSetting() {
+        let saved = UserDefaults.standard.object(forKey: SettingsKey.dailyJournalID)
+        addTeardownBlock { UserDefaults.standard.set(saved, forKey: SettingsKey.dailyJournalID) }
+    }
+
+    private func journalDay() throws -> (Date, Calendar) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/London"))
+        return (try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 9))), calendar)
+    }
+
+    private var line: PKDrawing { PKDrawing(strokes: [stroke(from: CGPoint(x: 80, y: 200), to: CGPoint(x: 300, y: 210))]) }
+
+    func testTodaysPageTicksForInkOnTheJournalsPageWhateverWritingHistoryKeeps() async throws {
+        let store = try makeStore()
+        keepJournalSetting()
+        let (now, calendar) = try journalDay()
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: now))
+        let suite = "widget-tests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        let activity = WritingActivity(root: store.root, defaults: defaults)
+        let biology = try await makeNotebook("Biology", in: store, opened: now)
+        activity.record(notebook: biology, pages: [UUID()], at: now)
+        let journal = try await store.createDailyJournal(now: now, calendar: calendar)
+
+        var snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertFalse(snapshot.pagesByDay.isEmpty)
+        XCTAssertNil(snapshot.journalWrittenDay, "today's page is still blank, whatever was written elsewhere")
+
+        let package = NotebookPackage(root: store.root, id: journal)
+        let manifest = try await package.readManifest().manifest
+        store.index(try await package.write(SaveSnapshot(manifest: manifest, ink: [manifest.pages[0].id: line])).manifest)
+        activity.isEnabled = false
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertTrue(snapshot.pagesByDay.isEmpty)
+        XCTAssertEqual(snapshot.journalWrittenDay, "2026-10-14", "with writing history off, today's page still ticks")
+        XCTAssertTrue(snapshot.journalIsWritten(on: now, calendar: calendar))
+        XCTAssertFalse(snapshot.journalIsWritten(on: tomorrow, calendar: calendar), "the tick comes off at midnight")
+
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: tomorrow, calendar: calendar)
+        XCTAssertNil(snapshot.journalWrittenDay, "yesterday's page doesn't count for today")
+
+        store.setLocked(true, for: [try XCTUnwrap(store.record(journal))])
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertNil(snapshot.journalWrittenDay, "a locked journal tells the widgets nothing")
+    }
+
+    func testAnOpenJournalTicksForInkNotYetSaved() async throws {
+        let store = try makeStore()
+        keepJournalSetting()
+        let (now, calendar) = try journalDay()
+        let activity = WritingActivity(root: store.root)
+        let journal = try await store.createDailyJournal(now: now, calendar: calendar)
+        let document = try await DocumentRegistry.shared.open(journal, root: store.root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in DocumentRegistry.shared.unregister(journal, document: document) }
+        let page = try XCTUnwrap(document.pages.first)
+        _ = await document.ink(page.id)
+
+        var snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertNil(snapshot.journalWrittenDay)
+        document.canvasDidChangeInk(page.id, to: line)
+        XCTAssertNil(document.pages[0].inkHash, "not saved yet")
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertEqual(snapshot.journalWrittenDay, "2026-10-14")
+        document.canvasDidChangeInk(page.id, to: PKDrawing())
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity, now: now, calendar: calendar)
+        XCTAssertNil(snapshot.journalWrittenDay, "rubbed out again")
+        await document.flush()
+    }
+
+    func testASnapshotSavedByAnEarlierBuildStillReads() throws {
+        let directory = temporaryRoot(self).url, id = UUID()
+        let earlier = #"{"notebook":{"id":"\#(id.uuidString)","title":"Cell Biology","page":5,"pageCount":12,"clothHex":4020800},"pagesByDay":{"2026-10-01":2},"hasJournal":true}"#
+        try Data(earlier.utf8).write(to: directory.appending(path: "widget.json"))
+        let snapshot = try XCTUnwrap(WidgetSnapshot.read(from: directory))
+        XCTAssertEqual(snapshot.notebook, .init(id: id, title: "Cell Biology", page: 5, pageCount: 12, clothHex: 0x3D5A40))
+        XCTAssertEqual(snapshot.pagesByDay, ["2026-10-01": 2])
+        XCTAssertNil(snapshot.journalWrittenDay)
     }
 
     func testTheSnapshotRoundTripsAndCountsTheWeekAndTheRun() throws {
@@ -85,6 +167,11 @@ final class AppActionTests: XCTestCase {
         snapshot.pagesByDay["2026-09-29"] = nil
         XCTAssertEqual(snapshot.run(endingAt: thursday, calendar: calendar), 2)
         XCTAssertEqual(WidgetSnapshot().run(endingAt: thursday, calendar: calendar), 0)
+
+        XCTAssertFalse(snapshot.journalIsWritten(on: thursday, calendar: calendar), "pages written today don't tick the journal's page")
+        snapshot.journalWrittenDay = "2026-10-01"
+        XCTAssertTrue(snapshot.journalIsWritten(on: thursday, calendar: calendar))
+        XCTAssertFalse(snapshot.journalIsWritten(on: try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: thursday)), calendar: calendar))
 
         let directory = temporaryRoot(self).url
         try snapshot.write(to: directory)

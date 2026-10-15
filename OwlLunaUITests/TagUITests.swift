@@ -14,19 +14,6 @@ final class TagUITests: XCTestCase {
         add(attachment)
     }
 
-    /// Typed text reaches the simulator as a hardware keyboard's: the on-screen keyboard hides and comes back, and the sheet moves down and up with it.
-    private func waitUntilStill(_ element: XCUIElement, timeout: TimeInterval = 10) {
-        let deadline = Date().addingTimeInterval(timeout)
-        var frame = element.frame
-        var unmoved = 0
-        while unmoved < 3, Date() < deadline {
-            usleep(500_000)
-            let now = element.frame
-            unmoved = now == frame ? unmoved + 1 : 0
-            frame = now
-        }
-    }
-
     func testATagGathersItsNotebooksAndPages() throws {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
@@ -46,7 +33,7 @@ final class TagUITests: XCTestCase {
         XCTAssertFalse(add.isEnabled, "nothing to add yet")
         field.tap()
         field.typeText("#Exam ")
-        waitUntilStill(add)
+        add.waitUntilStill()
         XCTAssertTrue(add.isEnabled, "a name in the field can be added")
         add.tap()
         let chip = app.buttons["tags.chip.Exam"]

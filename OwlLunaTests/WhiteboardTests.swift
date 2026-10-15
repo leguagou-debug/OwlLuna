@@ -255,6 +255,43 @@ final class WhiteboardEditorTests: XCTestCase {
         XCTAssertEqual(session.currentPage, 1)
     }
 
+    func testLeavingABoardGoesBackToThePageItWasOpenedFrom() async throws {
+        let page = { NotebookPage.template(.narrowRuled, color: .white, size: .letter) }
+        let board = NotebookPage.board(template: .dotted, color: .white)
+        let (session, controller, _) = try await open([page(), board, page(), page()])
+        XCTAssertNil(session.pageBehindBoard, "among the pages there is no board to leave")
+
+        session.go(to: 3, animated: false)
+        session.go(to: 1)
+        XCTAssertEqual(controller.openBoardID, board.id)
+        XCTAssertEqual(session.pageBehindBoard, 3)
+        session.leaveBoard()
+        XCTAssertNil(controller.openBoardID)
+        XCTAssertEqual(session.currentPage, 3)
+        XCTAssertEqual(controller.currentPage, 3)
+
+        // With that page deleted, it is the page before the board.
+        session.go(to: 1)
+        session.document.removePages([session.document.pages[3].id])
+        XCTAssertEqual(controller.openBoardID, board.id)
+        XCTAssertEqual(session.pageBehindBoard, 0)
+    }
+
+    func testABoardOpenedWithTheNotebookIsLeftForThePageAfterIt() async throws {
+        let board = NotebookPage.board(template: .dotted, color: .white)
+        let (session, controller, _) = try await open([board, .template(.narrowRuled, color: .white, size: .letter)])
+        XCTAssertEqual(controller.openBoardID, board.id)
+        XCTAssertEqual(session.pageBehindBoard, 1)
+        session.leaveBoard()
+        XCTAssertNil(controller.openBoardID)
+        XCTAssertEqual(session.currentPage, 1)
+
+        session.document.removePages([session.document.pages[1].id])
+        session.go(to: 0)
+        XCTAssertEqual(controller.openBoardID, board.id)
+        XCTAssertNil(session.pageBehindBoard, "a notebook of boards alone has no page to go back to")
+    }
+
     func testTheEditorsModesWorkOnABoard() async throws {
         let letter = NotebookPage.template(.narrowRuled, color: .white, size: .letter)
         let board = NotebookPage.board(template: .grid, color: .white)

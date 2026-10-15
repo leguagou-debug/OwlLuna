@@ -106,8 +106,12 @@ final class EditorModesUITests: XCTestCase {
             app.buttons["Add"].firstMatch.tap()
             app.buttons["Sticker…"].firstMatch.tap()
             let tile = app.buttons["sticker.\(sticker)"]
-            // Marks and tags sit below the fold, under your own stickers, the notes and the doodles.
-            for _ in 0..<4 where !tile.waitForExistence(timeout: 3) { app.scrollViews["sticker.drawer"].swipeUp() }
+            let drawer = app.scrollViews["sticker.drawer"]
+            // The drawer opens half way up, where a swipe doesn't move it: a long drag raises it, the next scrolls down to the marks and tags.
+            for _ in 0..<4 where !tile.waitForExistence(timeout: 3) {
+                drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+                    .press(forDuration: 0.05, thenDragTo: drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)), withVelocity: 600, thenHoldForDuration: 0.2)
+            }
             XCTAssertTrue(tile.waitForExistence(timeout: 10))
             if sticker == "noteYellow" { attach(app, "sticker-drawer") }
             tile.tap()
@@ -491,8 +495,10 @@ final class EditorModesUITests: XCTestCase {
         let editor = app.textViews["presenter.notes.editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.typeText("Start with the question")
+        let notesDone = app.buttons["presenter.notes.done"]
+        notesDone.waitUntilStill()
         attach(app, "presenter-notes-sheet")
-        app.buttons["presenter.notes.done"].tap()
+        notesDone.tap()
         XCTAssertTrue(editor.waitForNonExistence(timeout: 5))
 
         app.buttons["More"].firstMatch.tap()

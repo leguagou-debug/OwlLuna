@@ -27,6 +27,89 @@ final class PageStackLayoutTests: XCTestCase {
     }
 }
 
+@MainActor
+final class FitPageTests: XCTestCase {
+    private func letter() -> NotebookPage { .template(.blank, color: .white, size: .letter) }
+
+    /// A wide, short page, like a panorama photo or a scanned receipt.
+    private func panorama() -> NotebookPage {
+        var page = letter()
+        page.size = CGSize(width: 612, height: 170)
+        return page
+    }
+
+    private func open(_ pages: [NotebookPage]) async throws -> (EditorSession, PageStackController) {
+        let root = temporaryRoot(self)
+        let manifest = NotebookManifest(title: "Fit", defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages)
+        try await NotebookPackage(root: root, id: manifest.id).create(manifest)
+        let document = try await NotebookDocument.open(manifest.id, root: root)
+        let session = EditorSession(document: document)
+        let controller = PageStackController(session: session)
+        session.canvas = controller
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        addTeardownBlock { @MainActor in window.isHidden = true }
+        controller.view.layoutIfNeeded()
+        return (session, controller)
+    }
+
+    /// Scrolls the page under the line that picks the current page and fits it: centred, it sits below that line.
+    private func fitPage(_ index: Int, _ session: EditorSession, _ controller: PageStackController) {
+        session.go(to: index, animated: false)
+        for _ in 0..<40 where controller.currentPage != index { controller.scrollBy(viewportFraction: controller.currentPage > index ? -0.05 : 0.05) }
+        XCTAssertEqual(session.currentPage, index)
+        controller.fit(.page)
+        XCTAssertEqual(session.currentPage, index, "a short page centred by Fit Page stays current")
+        XCTAssertNotEqual(controller.currentPage, index, "though the line that picks the current page is on the page above")
+    }
+
+    private func currentID(_ session: EditorSession) -> UUID? {
+        session.document.pages.indices.contains(session.currentPage) ? session.document.pages[session.currentPage].id : nil
+    }
+
+    func testDeletingAShortPageLeftCurrentByFitPageMovesToAPageThatExists() async throws {
+        let short = panorama()
+        let (session, controller) = try await open([letter(), letter(), short, letter()])
+        let document = session.document
+        fitPage(2, session, controller)
+
+        document.removePages([document.pages[0].id])
+        XCTAssertEqual(currentID(session), short.id, "it stays current when a page before it goes")
+        document.removePages([document.pages[2].id])
+        XCTAssertEqual(session.currentPage, 1)
+        XCTAssertEqual(currentID(session), short.id, "and when the page after it goes, leaving it last")
+
+        document.removePages([short.id])
+        XCTAssertEqual(session.currentPage, 0, "the ribbon and the page menus move to a page that exists")
+        controller.fit(.page)
+        controller.fit(.width)
+        XCTAssertEqual(session.currentPage, 0)
+        XCTAssertEqual(controller.currentPage, 0)
+    }
+
+    func testUndoingTheInsertionOfAShortPageLeftCurrentByFitPageMovesToAPageThatExists() async throws {
+        let (session, controller) = try await open([letter(), letter()])
+        let document = session.document
+        document.undoManager.groupsByEvent = false
+        document.undoManager.beginUndoGrouping()
+        document.insertPages([panorama(), letter()], at: 2)
+        document.undoManager.endUndoGrouping()
+        fitPage(2, session, controller)
+
+        document.undoManager.undo()
+        XCTAssertEqual(document.pages.count, 2)
+        XCTAssertNotNil(currentID(session), "the ribbon and the page menus are on a page that exists")
+        XCTAssertEqual(session.currentPage, controller.currentPage)
+        controller.fit(.page)
+        controller.fit(.width)
+        XCTAssertNotNil(currentID(session))
+        XCTAssertEqual(session.currentPage, controller.currentPage)
+    }
+}
+
 /// Replaces the stroke-masking test: masking at stroke end is gone, and ink past the edge is kept but never shown.
 @MainActor
 final class InkStaysOnItsPageTests: XCTestCase {

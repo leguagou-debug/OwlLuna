@@ -52,7 +52,7 @@ struct OwlLunaEntry: TimelineEntry {
                                  pagesByDay: Dictionary(uniqueKeysWithValues: [0, 1, 3].compactMap { offset in
                                      Calendar.current.date(byAdding: .day, value: -offset, to: .now).map { (WidgetSnapshot.dayKey(for: $0), 2 + offset) }
                                  }),
-                                 hasJournal: true),
+                                 journalWrittenDay: WidgetSnapshot.dayKey(for: .now)),
         cover: nil)
 }
 
@@ -184,6 +184,7 @@ struct ContinueWritingView: View {
             WidgetCover(image: entry.cover, clothHex: notebook.clothHex).frame(height: 72)
             Spacer(minLength: 0)
             Text(notebook.title).font(.system(.subheadline, design: .serif).weight(.semibold)).foregroundStyle(Color.widgetInk).lineLimit(2)
+                .privacySensitive()
             Text("Page \(notebook.page) of \(notebook.pageCount)").widgetMeta()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -195,6 +196,7 @@ struct ContinueWritingView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Continue writing").widgetMeta(.widgetAccent).widgetAccentable()
                 Text(notebook.title).font(.system(.title3, design: .serif).weight(.semibold)).foregroundStyle(Color.widgetInk).lineLimit(2)
+                    .privacySensitive()
                 Text("Page \(notebook.page) of \(notebook.pageCount)").widgetMeta()
                 Spacer(minLength: 4)
                 WeekStrip(days: entry.snapshot.week(containing: entry.date))
@@ -244,7 +246,7 @@ struct TodayPageView: View {
     let entry: OwlLunaEntry
 
     var body: some View {
-        let written = entry.snapshot.pagesByDay[WidgetSnapshot.dayKey(for: entry.date)] ?? 0
+        let written = entry.snapshot.journalIsWritten(on: entry.date)
         Group {
             switch family {
             case .accessoryCircular:
@@ -264,7 +266,7 @@ struct TodayPageView: View {
                     Text(entry.date, format: .dateTime.day()).font(.system(size: 46, weight: .semibold, design: .serif)).foregroundStyle(Color.widgetInk)
                     Text(entry.date, format: .dateTime.month(.wide)).font(.system(.subheadline, design: .serif)).foregroundStyle(Color.widgetInk)
                     Spacer(minLength: 4)
-                    Label(written > 0 ? "Written today" : "Write today's page", systemImage: written > 0 ? "checkmark" : "pencil.line")
+                    Label(written ? "Written today" : "Write today's page", systemImage: written ? "checkmark" : "pencil.line")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.widgetSecondary)
                 }
@@ -275,14 +277,17 @@ struct TodayPageView: View {
     }
 }
 
-/// The notebook's cover as the app drew it, or its cloth colour until one has been written.
+/// The notebook's cover as the app drew it, or its cloth colour until one has been written. A blank board on a locked iPad.
 struct WidgetCover: View {
     let image: UIImage?
     let clothHex: UInt32
+    @Environment(\.redactionReasons) private var redaction
 
     var body: some View {
         Group {
-            if let image {
+            if redaction.contains(.privacy) {
+                RoundedRectangle(cornerRadius: 3).fill(Color.widgetInk.opacity(0.12)).aspectRatio(3 / 4, contentMode: .fit)
+            } else if let image {
                 Image(uiImage: image).resizable().widgetAccentedRenderingMode(.fullColor).aspectRatio(3 / 4, contentMode: .fit)
             } else {
                 RoundedRectangle(cornerRadius: 3)
@@ -291,6 +296,7 @@ struct WidgetCover: View {
                     .aspectRatio(3 / 4, contentMode: .fit)
             }
         }
+        .privacySensitive()
         .accessibilityHidden(true)
     }
 }

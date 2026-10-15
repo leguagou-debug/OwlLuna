@@ -14,7 +14,8 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     var notebook: Notebook?
     /// Pages written on each recent day, keyed "yyyy-MM-dd".
     var pagesByDay: [String: Int] = [:]
-    var hasJournal = false
+    /// The day this was written, keyed the same way, when that day's page in the daily journal had writing on it.
+    var journalWrittenDay: String?
 
     static let appGroup = "group.com.owais.OwlLuna"
     static let coverFile = "widget-cover.png"
@@ -54,6 +55,11 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
                 Day(date: date, pages: pagesByDay[Self.dayKey(for: date, calendar: calendar)] ?? 0, isToday: calendar.isDate(date, inSameDayAs: now))
             }
         }
+    }
+
+    /// Whether the journal's page for `date` has writing on it, whatever Writing History keeps.
+    func journalIsWritten(on date: Date, calendar: Calendar = .current) -> Bool {
+        journalWrittenDay == Self.dayKey(for: date, calendar: calendar)
     }
 
     /// Days in a row with writing, ending today, or yesterday when today is still blank.

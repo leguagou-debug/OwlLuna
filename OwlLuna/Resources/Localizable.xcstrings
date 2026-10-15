@@ -2590,6 +2590,82 @@
         }
       }
     },
+    "%lld notebooks were in Recently Deleted in the backup, and are back there for another 30 days." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch lag im Backup in „Zuletzt gelöscht“ und liegt dort jetzt für weitere 30 Tage."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher lagen im Backup in „Zuletzt gelöscht“ und liegen dort jetzt für weitere 30 Tage."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook was in Recently Deleted in the backup, and is back there for another 30 days."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks were in Recently Deleted in the backup, and are back there for another 30 days."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno estaba en Eliminados recientemente en la copia de seguridad y vuelve a estar allí otros 30 días."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos estaban en Eliminados recientemente en la copia de seguridad y vuelven a estar allí otros 30 días."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet était dans Supprimés récemment dans la sauvegarde : il y retourne pour 30 jours de plus."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets étaient dans Supprimés récemment dans la sauvegarde : ils y retournent pour 30 jours de plus."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld of %lld" : {
       "localizations" : {
         "de" : {
@@ -5612,6 +5688,28 @@
         }
       }
     },
+    "Back to Pages" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zu den Seiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a las páginas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour aux pages"
+          }
+        }
+      }
+    },
     "Back to writing" : {
       "localizations" : {
         "de" : {
@@ -7001,6 +7099,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fermer la fenêtre de zoom"
+          }
+        }
+      }
+    },
+    "Closes the whiteboard and goes back to the page you were on" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließt das Whiteboard und kehrt zur Seite zurück, auf der du warst"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra la pizarra y vuelve a la página en la que estabas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferme le tableau blanc et revient à la page où vous étiez"
+          }
+        }
+      }
+    },
+    "Closes the whiteboard and goes back to the page you were on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließt das Whiteboard und kehrt zur Seite zurück, auf der du warst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra la pizarra y vuelve a la página en la que estabas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferme le tableau blanc et revient à la page où vous étiez."
           }
         }
       }

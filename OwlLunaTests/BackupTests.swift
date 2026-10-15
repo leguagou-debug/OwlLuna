@@ -102,6 +102,43 @@ final class BackupTests: XCTestCase {
         XCTAssertTrue(summary.message.contains("copy"), summary.message)
     }
 
+    func testANotebookTheBackupHadInRecentlyDeletedGetsAnother30DaysThere() async throws {
+        let store = try makeStore()
+        let binned = try await makeNotebook("Old Lab", in: store)
+        let kept = try await makeNotebook("Mechanics", in: store)
+        let binnedAt = Date.now.addingTimeInterval(-100 * 86_400)
+        let stamped = try await NotebookPackage(root: store.root, id: binned.id).updateManifest { manifest in
+            manifest.library.deletedAt = binnedAt
+            manifest.library.setChangedAt(binnedAt, for: .deleted)
+        }
+        store.index(stamped)
+        let backup = try LibraryBackup.create(root: store.root)
+        addTeardownBlock { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) }
+
+        let fresh = try makeStore()
+        let summary = try await fresh.restoreBackup(from: backup)
+        XCTAssertEqual(summary.added, 2)
+        XCTAssertEqual(summary.trashed, 1)
+        XCTAssertTrue(summary.message.contains("Recently Deleted"), summary.message)
+        let restored = try XCTUnwrap(fresh.record(binned.id))
+        XCTAssertTrue(restored.isTrashed, "it goes back to Recently Deleted")
+        XCTAssertGreaterThan(try XCTUnwrap(restored.deletedAt), Date.now.addingTimeInterval(-60), "dated from the restore")
+        XCTAssertNil(fresh.record(kept.id)?.deletedAt)
+        await fresh.purgeExpiredTrash()
+        XCTAssertNotNil(fresh.record(binned.id), "so the next launch doesn't delete it for good")
+
+        let library = try await NotebookPackage(root: fresh.root, id: binned.id).readManifest().manifest.library
+        XCTAssertEqual(try XCTUnwrap(library.changedAt(.deleted)).timeIntervalSince(binnedAt), 0, accuracy: 0.002, "the old stamp stays")
+        var stale = library
+        stale.deletedAt = binnedAt
+        XCTAssertEqual(LibraryState.settled(here: library, there: stale, now: .now)?.deletedAt, library.deletedAt, "a copy with the old date gives way")
+        var restoredElsewhere = library
+        restoredElsewhere.deletedAt = nil
+        restoredElsewhere.setChangedAt(binnedAt.addingTimeInterval(30 * 86_400), for: .deleted)
+        XCTAssertNil(try XCTUnwrap(LibraryState.settled(here: library, there: restoredElsewhere, now: .now)).deletedAt,
+                     "a restore made since on another device still wins")
+    }
+
     func testABackupFromTheOldAppRestoresUnderTheNewName() async throws {
         let store = try makeStore()
         let notes = try await makeNotebook("Mechanics", in: store)

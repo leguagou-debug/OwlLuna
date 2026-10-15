@@ -109,6 +109,8 @@ final class EditorSession {
     @ObservationIgnored var openURL: (URL) -> Void = { UIApplication.shared.open($0) }
     /// Opens another notebook, at a page if the link names one; the last value is the page the link sits on.
     @ObservationIgnored var openNotebook: ((UUID, UUID?, UUID) -> Void)?
+    /// The last page that isn't a whiteboard, for leaving a whiteboard by.
+    @ObservationIgnored private var lastPage: UUID?
 
     init(document: NotebookDocument, initialPageID: UUID? = nil) {
         self.document = document
@@ -122,6 +124,7 @@ final class EditorSession {
             guard let self else { return }
             self.canvas?.showFind(self.finder.matches, current: self.finder.current)
         }
+        notePage(currentPage)
     }
 
     func pageDidChange(_ index: Int) {
@@ -129,6 +132,25 @@ final class EditorSession {
         currentPage = index
         linkReturn = nil
         document.noteCurrentPage(index)
+        notePage(index)
+    }
+
+    private func notePage(_ index: Int) {
+        guard document.pages.indices.contains(index), !document.pages[index].isBoard else { return }
+        lastPage = document.pages[index].id
+    }
+
+    /// Where leaving the open whiteboard goes: the page it was opened from, or the nearest page before or after it.
+    var pageBehindBoard: Int? {
+        guard let board = openBoard.flatMap(document.index(of:)) else { return nil }
+        let pages = document.pages
+        if let index = lastPage.flatMap(document.index(of:)), !pages[index].isBoard { return index }
+        return pages[..<board].lastIndex { !$0.isBoard } ?? pages[board...].firstIndex { !$0.isBoard }
+    }
+
+    func leaveBoard() {
+        guard let index = pageBehindBoard else { return }
+        go(to: index)
     }
 
     func go(to index: Int, animated: Bool = true) {
@@ -557,6 +579,7 @@ fileprivate struct EditorContent: View {
     @ScaledMetric(relativeTo: .body) private var compactFindWidth: CGFloat = 190
     @State private var undoGroupWidth: CGFloat = 96
     @State private var buttonGroupWidth: CGFloat = 232
+    @State private var leaveBoardWidth: CGFloat = 150
 
     private struct NotesTarget: Identifiable {
         let id: UUID
@@ -583,6 +606,7 @@ fileprivate struct EditorContent: View {
 
     /// An open whiteboard has its own button in the bar, where there is room for one.
     private var showsBoardMenu: Bool { session.openBoard != nil && !isNarrow }
+    private var showsLeaveBoard: Bool { showsBoardMenu && session.pageBehindBoard != nil }
 
     /// With two notebooks in the window, keyboard shortcuts go to the one last touched.
     private var isActivePane: Bool { pane == .single || window?.active == nil || window?.active == document.id }
@@ -961,6 +985,15 @@ fileprivate struct EditorContent: View {
             .accessibilityIdentifier(pane == .secondary ? "editor.close.pane" : "editor.back")
         }
         .boardBackground()
+        if showsLeaveBoard {
+            ToolbarItem(placement: .topBarLeading) {
+                leaveBoardButton
+                    .buttonStyle(.owlLuna(.secondary, inBar: true))
+                    .labelStyle(.titleAndIcon)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { leaveBoardWidth = $0 }
+            }
+            .boardBackground()
+        }
         ToolbarItem(placement: .principal) { AnyView(titleMenu.environment(\.panelAnchorHeight, 44)) }
         if isNarrow {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1014,7 +1047,7 @@ fileprivate struct EditorContent: View {
     /// The bar lets a long title run under the buttons, so the title is given what they leave.
     private var titleRoom: CGFloat {
         let buttons = isNarrow ? buttonGroupWidth : undoGroupWidth + buttonGroupWidth + Space.x4 + (showsBoardMenu ? 52 + Space.x4 : 0)
-        return max(paneWidth - buttons - 90, 44)
+        return max(paneWidth - buttons - 90 - (showsLeaveBoard ? leaveBoardWidth + Space.x2 : 0), 44)
     }
 
     private var toolsButton: some View {
@@ -1473,6 +1506,12 @@ fileprivate struct EditorContent: View {
         .accessibilityIdentifier("editor.board.menu")
     }
 
+    private var leaveBoardButton: some View {
+        Button { session.leaveBoard() } label: { Label("Back to Pages", systemImage: "book.pages") }
+            .accessibilityHint(Text("Closes the whiteboard and goes back to the page you were on"))
+            .accessibilityIdentifier("editor.board.leave")
+    }
+
     @ViewBuilder
     private var boardActions: some View {
         Button { session.canvas?.fit(.page) } label: { Label("Show Everything", systemImage: "arrow.up.left.and.arrow.down.right") }
@@ -1670,7 +1709,10 @@ fileprivate struct EditorContent: View {
             MenuBreak()
             if session.openBoard != nil {
                 // In a narrow pane the whiteboard has no button of its own in the bar.
-                if !showsBoardMenu { boardActions }
+                if !showsBoardMenu {
+                    if session.pageBehindBoard != nil { leaveBoardButton }
+                    boardActions
+                }
             } else {
                 Button { session.canvas?.fit(.width) } label: { Label("Fit Width", systemImage: "arrow.left.and.right") }
                 Button { session.canvas?.fit(.page) } label: { Label("Fit Page", systemImage: "arrow.up.and.down") }

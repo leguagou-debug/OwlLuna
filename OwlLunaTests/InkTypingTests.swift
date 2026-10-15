@@ -47,6 +47,40 @@ final class InkTypingTests: XCTestCase {
         XCTAssertNil(InkTyping.extended(PageItem(content: .tape(.mustard), center: .zero, size: CGSize(width: 80, height: 24)), with: "x", .sameLine, pageSize: page))
     }
 
+    func testWritingIsReadWhileThePenRestsAndSetOnlyOnceTheRestIsLongEnough() async {
+        XCTAssertLessThan(InkTyping.lookAhead, InkTyping.pause, "the reading begins before the rest is long enough")
+        let piece = PKDrawing(strokes: BlockLetters.strokes("HI", origin: .zero)), start = CACurrentMediaTime()
+        let texts = await InkTyping.read([piece, piece], handingBackAfter: 1.5) { _ in
+            let began = CACurrentMediaTime()
+            Thread.sleep(forTimeInterval: 0.2)
+            return String(began)
+        }
+        let handedBack = CACurrentMediaTime() - start
+        let began = texts.compactMap { $0.flatMap(Double.init) }
+        XCTAssertEqual(began.count, 2)
+        XCTAssertLessThan((began.max() ?? .infinity) - start, 1, "both pages are read during the rest, not after it")
+        XCTAssertGreaterThanOrEqual(handedBack, 1.5, "the text waits for the rest")
+
+        let slow = CACurrentMediaTime()
+        let late = await InkTyping.read([piece], handingBackAfter: 0.1) { _ in
+            Thread.sleep(forTimeInterval: 0.4)
+            return "late"
+        }
+        XCTAssertEqual(late, ["late"])
+        XCTAssertGreaterThanOrEqual(CACurrentMediaTime() - slow, 0.4, "a reading that outlasts the rest is waited for")
+    }
+
+    /// Vision passes over some short words in a tight frame, so one that reads as nothing is read again with more room.
+    func testShortWordsAreReadHoweverTheyAreFramed() throws {
+        func read(_ word: String) -> String? {
+            InkText.recognize([PKDrawing(strokes: BlockLetters.strokes(word, origin: CGPoint(x: 100, y: 140)))])?.uppercased()
+        }
+        guard read("HELLO") == "HELLO" else { throw XCTSkip("Vision's text recogniser can't read block letters here") }
+        for word in ["OK", "ZINK", "WILL", "MAX"] {
+            XCTAssertEqual(read(word), word)
+        }
+    }
+
     func testTheTextTakesTheColourNearestThePens() {
         func tint(_ color: UInt32) -> TextBox.Tint { InkTyping.tint(for: ToolPreset.uiColor(color)) }
         XCTAssertEqual(tint(0x1B22_30FF), .ink)
@@ -146,7 +180,12 @@ final class InkTypingTests: XCTestCase {
         toolbox.typesHandwriting = true
         let before = canvas.drawing.strokes.count
         await write("HELLO", at: CGPoint(x: 100, y: 140))
-        XCTAssertEqual(document.loadedInk(page)?.strokes.count, before + BlockLetters.strokes("HELLO", origin: .zero).count, "nothing is read while the pen is moving")
+        let lifted = CACurrentMediaTime(), written = before + BlockLetters.strokes("HELLO", origin: .zero).count
+        XCTAssertEqual(document.loadedInk(page)?.strokes.count, written, "nothing is read while the pen is moving")
+        await pause(InkTyping.pause - 0.4)
+        if CACurrentMediaTime() - lifted < InkTyping.pause - 0.1 {
+            XCTAssertEqual(document.loadedInk(page)?.strokes.count, written, "read during the rest, but not set before it is long enough")
+        }
         try await read(leaving: before)
         guard texts().map({ $0.uppercased() }) == ["HELLO"] else { throw XCTSkip("Vision read the block letters as \(texts()) here") }
         XCTAssertEqual(canvas.drawing.strokes.count, before, "the canvas shows the page without the handwriting")

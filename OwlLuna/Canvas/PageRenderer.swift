@@ -2,7 +2,7 @@ import UIKit
 import PencilKit
 import os
 
-/// A small least-recently-used cache that is safe to use from any thread.
+/// A small least-recently-used cache that is safe to use from any thread. A memory warning empties it.
 final class LRUCache<Value: Sendable>: Sendable {
     private struct State {
         var values: [String: Value] = [:]
@@ -11,8 +11,18 @@ final class LRUCache<Value: Sendable>: Sendable {
 
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let capacity: Int
+    nonisolated(unsafe) private var relief: (any NSObjectProtocol)?
 
-    init(capacity: Int) { self.capacity = capacity }
+    init(capacity: Int) {
+        self.capacity = capacity
+        relief = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.removeAll()
+        }
+    }
+
+    deinit {
+        if let relief { NotificationCenter.default.removeObserver(relief) }
+    }
 
     func value(_ key: String, create: () -> Value?) -> Value? {
         if let hit = state.withLock({ state -> Value? in

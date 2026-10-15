@@ -43,6 +43,7 @@ final class LaserTrailView: UIView {
         isUserInteractionEnabled = false
         contentMode = .redraw
         isAccessibilityElement = false
+        isHidden = true
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -70,8 +71,7 @@ final class LaserTrailView: UIView {
     func clear() {
         head = nil
         samples.removeAll()
-        stop()
-        setNeedsDisplay()
+        rest()
     }
 
     override func willMove(toWindow newWindow: UIWindow?) {
@@ -80,6 +80,7 @@ final class LaserTrailView: UIView {
     }
 
     private func start() {
+        isHidden = false
         setNeedsDisplay()
         guard link == nil else { return }
         let link = CADisplayLink(target: self, selector: #selector(tick))
@@ -87,9 +88,12 @@ final class LaserTrailView: UIView {
         self.link = link
     }
 
-    private func stop() {
+    /// With no trail left the view is hidden and lets go of its screen-sized bitmap.
+    private func rest() {
         link?.invalidate()
         link = nil
+        isHidden = true
+        layer.contents = nil
     }
 
     @objc private func tick() {
@@ -99,7 +103,7 @@ final class LaserTrailView: UIView {
         } else {
             samples.removeAll()
         }
-        if samples.isEmpty, head == nil { stop() }
+        if samples.isEmpty, head == nil { return rest() }
         setNeedsDisplay()
     }
 

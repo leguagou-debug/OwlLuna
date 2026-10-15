@@ -74,6 +74,8 @@ struct WhiteboardGuide: View {
     private var top: [Entry] {
         [Entry(symbol: "chevron.backward", title: String(localized: "Library"),
                detail: String(localized: "Saves the notebook and goes back to your shelves.")),
+         Entry(symbol: "book.pages", title: String(localized: "Back to Pages"),
+               detail: String(localized: "Closes the whiteboard and goes back to the page you were on.")),
          Entry(symbol: "arrow.uturn.backward", title: String(localized: "Undo and Redo"),
                detail: String(localized: "Takes back the last thing you did, or does it again.")),
          Entry(symbol: "plus", title: String(localized: "Add"),

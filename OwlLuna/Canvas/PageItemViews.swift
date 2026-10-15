@@ -6,8 +6,10 @@ final class PageItemView: UIView {
     private(set) var item: PageItem
     private let assets: URL
     private var loadedFile: String?
-    /// A picture is shown by its own layer, so a redraw of the view after a resize can't blank it.
+    /// A picture is shown by its own layer and nothing is drawn behind it, so it has no bitmap the size of the item.
     private let picture = CALayer()
+    /// Where a sticker, text box, link or tape is drawn. A picture has none.
+    private var art: ItemArtView?
     private var onDark = false
     private var linkTitle = ""
     private var linkResolved = true
@@ -21,7 +23,6 @@ final class PageItemView: UIView {
         isOpaque = false
         backgroundColor = .clear
         isUserInteractionEnabled = false
-        contentMode = .redraw
         picture.contentsGravity = .resize
         layer.addSublayer(picture)
         isAccessibilityElement = true
@@ -52,11 +53,14 @@ final class PageItemView: UIView {
         CATransaction.setDisableActions(true)
         picture.frame = bounds
         CATransaction.commit()
-        guard item.assetFile == nil else { return }
-        // Something drawn and enlarged at 5× would otherwise back tens of megabytes of pixels.
-        let screen = traitCollection.displayScale
-        let wanted = min(screen, max(1, 2400 / max(bounds.width, bounds.height, 1)))
-        if contentScaleFactor != wanted { contentScaleFactor = wanted }
+        art?.frame = bounds
+        art?.fitScale()
+    }
+
+    /// Pixels per point for drawn art: the screen's, until its bitmap would pass about a screenful of pixels.
+    static func drawingScale(for size: CGSize, screen: CGFloat) -> CGFloat {
+        let budget: CGFloat = 2400 * 2400, side: CGFloat = 8192
+        return min(screen, (budget / max(size.width * size.height, 1)).squareRoot(), side / max(size.width, size.height, 1))
     }
 
     private func reload() {
@@ -67,7 +71,10 @@ final class PageItemView: UIView {
         if item.assetFile == nil {
             picture.contents = nil
             loadedFile = nil
-            setNeedsDisplay()
+            showArt()
+        } else {
+            art?.removeFromSuperview()
+            art = nil
         }
         switch item.content {
         case .sticker:
@@ -108,19 +115,29 @@ final class PageItemView: UIView {
         }
     }
 
-    override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+    private func showArt() {
+        if art == nil {
+            let art = ItemArtView(frame: bounds)
+            art.paint = { [weak self] ctx, rect in self?.drawArt(in: ctx, rect: rect) }
+            addSubview(art)
+            self.art = art
+            art.fitScale()
+        }
+        art?.setNeedsDisplay()
+    }
+
+    private func drawArt(in ctx: CGContext, rect: CGRect) {
         switch item.content {
         case .sticker:
-            item.sticker?.draw(in: ctx, rect: bounds)
+            item.sticker?.draw(in: ctx, rect: rect)
         case .text(let box):
-            let scale = bounds.width / max(item.size.width, 1)
+            let scale = rect.width / max(item.size.width, 1)
             ctx.scaleBy(x: scale, y: scale)
             box.draw(in: ctx, rect: CGRect(origin: .zero, size: item.size), onDark: onDark)
         case .link(let link):
-            PageLinkArt.draw(title: linkTitle, kind: link.kind, resolved: linkResolved, in: ctx, rect: bounds)
+            PageLinkArt.draw(title: linkTitle, kind: link.kind, resolved: linkResolved, in: ctx, rect: rect)
         case .tape(let color):
-            TapeArt.draw(color, lifted: isLifted, in: ctx, rect: bounds)
+            TapeArt.draw(color, lifted: isLifted, in: ctx, rect: rect)
         case .image, .unknown:
             break
         }
@@ -129,6 +146,39 @@ final class PageItemView: UIView {
     override func accessibilityActivate() -> Bool {
         onActivate?(item.id)
         return onActivate != nil
+    }
+}
+
+/// The bitmap an item is drawn into, at no more pixels than `PageItemView.drawingScale` allows.
+private final class ItemArtView: UIView {
+    var paint: (CGContext, CGRect) -> Void = { _, _ in }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        fitScale()
+    }
+
+    func fitScale() {
+        let screen = window?.traitCollection.displayScale ?? traitCollection.displayScale
+        guard screen > 0 else { return }
+        let wanted = PageItemView.drawingScale(for: bounds.size, screen: screen)
+        if contentScaleFactor != wanted { contentScaleFactor = wanted }
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        paint(ctx, bounds)
     }
 }
 

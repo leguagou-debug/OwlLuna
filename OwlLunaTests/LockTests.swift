@@ -119,7 +119,8 @@ final class LockTests: XCTestCase {
         await there.reloadFromDisk()
         XCTAssertEqual(there.record(diary.id)?.isLocked, true, "the other device asks before opening it")
         XCTAssertEqual(SpotlightIndexer.entries(there.notebooks()), [], "and neither Spotlight")
-        XCTAssertNil(WidgetBridge.snapshot(library: there, activity: WritingActivity(root: other)).notebook, "nor the widgets are told of it")
+        let widgets = await WidgetBridge.snapshot(library: there, activity: WritingActivity(root: other))
+        XCTAssertNil(widgets.notebook, "nor the widgets are told of it")
     }
 
     func testACoverChangedFromTheLibraryDatesTheNotebook() async throws {
@@ -249,12 +250,15 @@ final class LockTests: XCTestCase {
         let diary = try await makeNotebook("Diary", in: store, opened: .now)
         let biology = try await makeNotebook("Biology", in: store, opened: Date.now.addingTimeInterval(-3600))
         let activity = WritingActivity(root: store.root)
-        XCTAssertEqual(WidgetBridge.snapshot(library: store, activity: activity).notebook?.title, "Diary")
+        var snapshot = await WidgetBridge.snapshot(library: store, activity: activity)
+        XCTAssertEqual(snapshot.notebook?.title, "Diary")
         store.setLocked(true, for: [diary])
-        XCTAssertEqual(WidgetBridge.snapshot(library: store, activity: activity).notebook?.title, "Biology", "the widget moves on to the last notebook that isn't locked")
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity)
+        XCTAssertEqual(snapshot.notebook?.title, "Biology", "the widget moves on to the last notebook that isn't locked")
         XCTAssertEqual(store.lastOpenedNotebook?.id, diary.id, "Continue Writing still goes to it, and asks first")
         store.setLocked(true, for: [biology])
-        XCTAssertNil(WidgetBridge.snapshot(library: store, activity: activity).notebook)
+        snapshot = await WidgetBridge.snapshot(library: store, activity: activity)
+        XCTAssertNil(snapshot.notebook)
         XCTAssertTrue(diary.accessibilityDescription.contains("locked"))
     }
 }

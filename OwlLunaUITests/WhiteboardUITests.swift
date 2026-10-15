@@ -56,6 +56,7 @@ final class WhiteboardUITests: XCTestCase {
         XCTAssertEqual(menu.label, "Whiteboard")
         XCTAssertLessThanOrEqual(menu.frame.maxY, board.frame.minY, "the button is in the bar, above the board")
         XCTAssertFalse(app.buttons["editor.board.everything"].exists)
+        XCTAssertFalse(app.buttons["editor.board.leave"].exists, "a notebook of one whiteboard has no pages to go back to")
 
         draw(on: board, from: CGVector(dx: 0.3, dy: 0.3), to: CGVector(dx: 0.6, dy: 0.32))
         draw(on: board, from: CGVector(dx: 0.3, dy: 0.4), to: CGVector(dx: 0.6, dy: 0.5))
@@ -121,6 +122,20 @@ final class WhiteboardUITests: XCTestCase {
         XCTAssertTrue(second.label.hasPrefix("Whiteboard"), second.label)
         XCTAssertEqual(app.buttons["editor.ribbon"].label, "Page 2 of 3")
         attach(app, "board-second")
+
+        // Back to Pages leaves the boards for the page the notebook was on, here after them.
+        let leave = app.buttons["editor.board.leave"]
+        XCTAssertTrue(leave.waitForExistence(timeout: 5))
+        XCTAssertEqual(leave.label, "Back to Pages")
+        XCTAssertLessThanOrEqual(leave.frame.maxY, second.frame.minY, "the button is in the bar, above the board")
+        try audit(app, [.contrast, .elementDetection, .hitRegion, .sufficientElementDescription], screen: "whiteboard among pages",
+                  bar: app.otherElements["editor.tools.tray"])
+        leave.tap()
+        XCTAssertTrue(app.element("page.canvas.3").waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["editor.ribbon"].label, "Page 3 of 3")
+        XCTAssertTrue(leave.waitForNonExistence(timeout: 5), "among the pages the button is gone")
+        XCTAssertFalse(menu.exists)
+        attach(app, "board-left")
         app.buttons["editor.back"].tap()
         XCTAssertTrue(app.buttons["notebook.Whiteboard"].waitForExistence(timeout: 15))
     }

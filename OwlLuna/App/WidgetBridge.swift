@@ -7,7 +7,7 @@ enum WidgetBridge {
     private static var lastWritten: WidgetSnapshot?
     private static var lastCoverKey: String?
 
-    static func snapshot(library: LibraryStore, activity: WritingActivity, now: Date = .now, calendar: Calendar = .current) -> WidgetSnapshot {
+    static func snapshot(library: LibraryStore, activity: WritingActivity, now: Date = .now, calendar: Calendar = .current) async -> WidgetSnapshot {
         var snapshot = WidgetSnapshot()
         if let record = library.lastOpenedNotebook(includingLocked: false) {
             snapshot.notebook = .init(id: record.id, title: record.title.isEmpty ? String(localized: "Untitled") : record.title,
@@ -17,8 +17,20 @@ enum WidgetBridge {
             let first = WidgetSnapshot.dayKey(for: start, calendar: calendar)
             for (key, day) in activity.log.days where key >= first && day.pageCount > 0 { snapshot.pagesByDay[key] = day.pageCount }
         }
-        snapshot.hasJournal = library.dailyJournal != nil
+        let today = WidgetSnapshot.dayKey(for: now, calendar: calendar)
+        if await journalHasWriting(on: today, library: library) { snapshot.journalWrittenDay = today }
         return snapshot
+    }
+
+    /// Read from the open journal, ink not yet saved included, or else from its manifest. A locked journal says nothing.
+    private static func journalHasWriting(on day: String, library: LibraryStore) async -> Bool {
+        guard let journal = library.dailyJournal, !journal.isLocked else { return false }
+        if let document = DocumentRegistry.shared.document(for: journal.id) {
+            guard let page = document.pages.last(where: { $0.day == day }) else { return false }
+            return document.loadedInk(page.id).map { !$0.strokes.isEmpty } ?? (page.inkHash != nil)
+        }
+        let pages = try? await NotebookPackage(root: library.root, id: journal.id).readManifest().manifest.pages
+        return pages?.last(where: { $0.day == day })?.inkHash != nil
     }
 
     /// Writes the cover of the notebook the widget names, and takes the last one away when it names none, so a notebook
@@ -41,7 +53,7 @@ enum WidgetBridge {
     /// UI-test libraries never reach the widgets.
     static func update(_ app: AppModel) async {
         guard app.phase == .ready, LaunchOptions.value("-storageRoot") == nil, let directory = WidgetSnapshot.directory else { return }
-        let snapshot = snapshot(library: app.library, activity: app.activity)
+        let snapshot = await snapshot(library: app.library, activity: app.activity)
         let coverChanged = await writeCover(of: app.library.lastOpenedNotebook(includingLocked: false), root: app.root, to: directory)
         guard snapshot != lastWritten || coverChanged else { return }
         do {

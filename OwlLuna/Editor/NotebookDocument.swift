@@ -247,6 +247,14 @@ final class NotebookDocument {
         pinned = ids
     }
 
+    /// Lets go of every page's ink that is saved and has no live canvas, for when memory runs short.
+    func releaseCleanInk() {
+        for (pageID, ink) in inks where !ink.isDirty && !pinned.contains(pageID) {
+            inks[pageID] = nil
+            recentlyUsed.removeAll { $0 == pageID }
+        }
+    }
+
     private func startLoad(_ pageID: UUID, required: Bool) -> Load {
         let token = UUID()
         let package = package

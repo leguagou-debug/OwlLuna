@@ -344,9 +344,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var keepsAnchor = false
     /// Handwriting to Text: the strokes written since the pen last rested, by page, each known by when it was begun.
     private var unreadWriting: [UUID: Set<Date>] = [:]
+    /// The wait for the pen to rest and the reading after it. Writing that goes on cancels it.
     private var typingTimer: Task<Void, Never>?
-    /// Counts up when writing goes on, so a reading that was under way is dropped and done again with the rest.
-    private var typingPass = 0
     private var lastTyped: InkTyping.Last?
     private let laser = LaserTrailView()
     private lazy var laserGesture = UILongPressGestureRecognizer(target: self, action: #selector(pointLaser))
@@ -482,6 +481,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             scrollView.addGestureRecognizer(recognizer)
         }
         strokeHold.onTouchDown = { [weak self] in self?.session.onTouchDown?() }
+        strokeHold.fingersDraw = { [weak self] in self?.effectivePolicy == .anyInput }
         for pan in [lassoPan, textPan] {
             pan.maximumNumberOfTouches = 1
             pan.allowedTouchTypes = Self.scrollTouchTypes + [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
@@ -771,7 +771,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     func fit(_ fit: PageFit) {
         guard !pages.isEmpty, fitScale > 0 else { return }
-        let index = pendingPage ?? currentPage, frame = layout.frames[index], area = readableArea
+        let index = pendingPage.flatMap { layout.frames.indices.contains($0) ? $0 : nil } ?? currentPage, frame = layout.frames[index], area = readableArea
         if layout.solo == index {
             // A whiteboard has no width to fit: it goes to its actual size about the same middle, or shows all that is on it.
             let shown = boardFrame(index), middle = fit == .page ? CGPoint(x: shown.midX, y: shown.midY) : boardMiddle()
@@ -1049,6 +1049,12 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         if pool.count < 3 { pool.append(canvas) }
     }
 
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        pool.removeAll()
+        document.releaseCleanInk()
+    }
+
     /// Canvases are a viewport-sized window onto their page: PencilKit only backs what can be seen, even at 5×.
     private func place(_ canvas: PageCanvasView, in slot: PageSlotView) {
         let s = bakedScale
@@ -1114,31 +1120,27 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private func readWritingAfterARest() {
         typingTimer?.cancel()
         typingTimer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(InkTyping.pause))
+            try? await Task.sleep(for: .seconds(InkTyping.lookAhead))
             guard !Task.isCancelled else { return }
-            self?.typeUnreadWriting()
+            self?.typeUnreadWriting(after: InkTyping.pause - InkTyping.lookAhead)
         }
     }
 
-    /// Reads the handwriting written since the pen last rested. If writing goes on meanwhile, the reading is dropped
-    /// and what was written waits for the next rest.
-    private func typeUnreadWriting() {
+    /// Reads the handwriting written since the pen last rested, and sets it as type `rest` seconds on. If writing
+    /// goes on meanwhile, the reading is dropped and what was written waits for the next rest.
+    private func typeUnreadWriting(after rest: TimeInterval = 0) {
         typingTimer?.cancel()
         typingTimer = nil
-        typingPass += 1
-        let pass = typingPass
+        var pieces: [(pageID: UUID, stamps: Set<Date>, ink: PKDrawing)] = []
         for (pageID, stamps) in unreadWriting {
             let written = document.loadedInk(pageID)?.strokes.filter { stamps.contains($0.path.creationDate) } ?? []
-            guard !written.isEmpty else {
-                unreadWriting[pageID] = nil
-                continue
-            }
-            let piece = PKDrawing(strokes: written)
-            Task { [weak self] in
-                let text = await Task.detached(priority: .userInitiated) { InkText.recognize([piece]) }.value
-                guard let self, pass == typingPass else { return }
-                setType(text, inPlaceOf: stamps, onPage: pageID)
-            }
+            if written.isEmpty { unreadWriting[pageID] = nil } else { pieces.append((pageID, stamps, PKDrawing(strokes: written))) }
+        }
+        guard !pieces.isEmpty else { return }
+        typingTimer = Task { [weak self] in
+            let texts = await InkTyping.read(pieces.map(\.ink), handingBackAfter: rest) { InkText.recognize([$0]) }
+            guard !Task.isCancelled, let self else { return }
+            for (piece, text) in zip(pieces, texts) { setType(text, inPlaceOf: piece.stamps, onPage: piece.pageID) }
         }
     }
 
@@ -1269,10 +1271,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// Writing anywhere puts a selected picture down.
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         if session.selection != nil { select(nil) }
-        if !unreadWriting.isEmpty {
-            typingTimer?.cancel()
-            typingPass += 1
-        }
+        if !unreadWriting.isEmpty { typingTimer?.cancel() }
         guard canvasView === zoomCanvas else { return }
         zoomAdvance?.cancel()
         session.onTouchDown?()
@@ -1677,8 +1676,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private func relayout(_ updated: [NotebookPage], changed: Set<UUID>) {
         let anchorID = pages.indices.contains(currentPage) ? pages[currentPage].id : nil
         let anchorOffset = anchorID.flatMap { id in index(of: id).map { scrollView.contentOffset.y - layout.frames[$0].minY * effectiveScale } }
+        let pendingID = pendingPage.flatMap { pages.indices.contains($0) ? pages[$0].id : nil }
         let wasSolo = layout.solo
         pages = updated
+        // A page held current follows itself to its new place, and is let go if it was deleted.
+        pendingPage = pendingID.flatMap(index(of:))
         if let wasSolo, soloID.flatMap(index(of:)) == nil {
             // The open whiteboard was deleted: the page that took its place is shown.
             arrange(solo: nil)
@@ -1704,6 +1706,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         }
         updateInsets()
         updateWindow(force: true)
+        if let pendingPage { session.pageDidChange(pendingPage) }
     }
 
     // MARK: Whiteboards
@@ -2722,6 +2725,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// Every canvas takes the tool in hand, the ones waiting to be reused as well.
     @objc private func toolChanged() {
         for canvas in allCanvases + pool { syncTool(canvas) }
+        if toolbox.typesHandwriting { InkText.warmUp() }
         // Handwriting still waiting when the pen is put down, or the helper turned off, is read there and then.
         if !unreadWriting.isEmpty, !(toolbox.typesHandwriting && PencilGestures.writes(toolbox.tool)) { typeUnreadWriting() }
     }

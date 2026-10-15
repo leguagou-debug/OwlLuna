@@ -1,15 +1,30 @@
 import UIKit
+import PencilKit
 
 /// Handwriting set as type while it is written (the tray's Handwriting to Text): how long the pen has to rest, and
-/// whether what was written next carries on the text made just before. Pure geometry, so it can be tested without a canvas.
+/// whether what was written next carries on the text made just before. Kept off the canvas, so it can be tested without one.
 enum InkTyping {
-    /// How long the pen rests before what was written is read. `-inkTypingPause` lets a UI test, which is slow
+    /// How long the pen rests before what was written is set as type. `-inkTypingPause` lets a UI test, which is slow
     /// between strokes, finish a word first.
     static var pause: TimeInterval {
         #if DEBUG
         if let scripted = LaunchOptions.value("-inkTypingPause").flatMap(TimeInterval.init) { return scripted }
         #endif
-        return 1.2
+        return 1.0
+    }
+
+    /// How far into the rest the reading begins, so it is done by the time the rest is long enough.
+    static var lookAhead: TimeInterval { min(0.4, pause) }
+
+    /// What `read` makes of each piece, handed back no sooner than `rest` seconds after the reading began.
+    static func read(_ pieces: [PKDrawing], handingBackAfter rest: TimeInterval, with read: @escaping @Sendable (PKDrawing) -> String?) async -> [String?] {
+        let due = ContinuousClock.now + .seconds(rest)
+        var texts: [String?] = []
+        for piece in pieces {
+            texts.append(await Task.detached(priority: .userInitiated) { read(piece) }.value)
+        }
+        try? await Task.sleep(until: due, clock: .continuous)
+        return texts
     }
 
     enum Join: Equatable { case sameLine, nextLine }

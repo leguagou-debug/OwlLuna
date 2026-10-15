@@ -18,6 +18,8 @@ enum LibraryBackup {
     struct Summary: Sendable, Equatable {
         /// Notebooks the library didn't have.
         var added = 0
+        /// Of those, the ones the backup had in Recently Deleted. They go back there for another 30 days.
+        var trashed = 0
         /// Notebooks the library has in a different state, brought back beside it under a new name.
         var copies = 0
         /// Notebooks the library already has exactly as they are in the backup.
@@ -111,7 +113,7 @@ enum LibraryBackup {
 
     /// Adds what the backup holds to the library and never replaces anything: a notebook the library has in a different
     /// state comes back beside it as a copy. The caller refreshes the index afterwards.
-    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true) async throws -> Summary {
+    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now) async throws -> Summary {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory.appending(path: "restore-\(UUID().uuidString)", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -135,6 +137,11 @@ enum LibraryBackup {
             let exists = fileManager.fileExists(atPath: root.package(id).path(percentEncoded: false))
             if !exists {
                 try fileManager.moveItem(at: backup.package(id), to: root.package(id))
+                if incoming.library.deletedAt != nil {
+                    // Its 30 days start again. The old stamp stays, so a restore or delete made since on another device still wins.
+                    _ = try await NotebookPackage(root: root, id: id).updateManifest { $0.library.deletedAt = now }
+                    summary.trashed += 1
+                }
                 summary.added += 1
                 continue
             }
@@ -208,6 +215,7 @@ extension LibraryBackup.Summary {
     var message: String {
         var parts: [String] = []
         if added > 0 { parts.append(String(localized: "Restored \(added) notebooks.")) }
+        if trashed > 0 { parts.append(String(localized: "\(trashed) notebooks were in Recently Deleted in the backup, and are back there for another 30 days.")) }
         if copies > 0 { parts.append(String(localized: "\(copies) notebooks differ from the ones in your library, so they came back beside them as copies.")) }
         if unchanged > 0 { parts.append(String(localized: "\(unchanged) notebooks were already here.")) }
         if folders > 0 { parts.append(String(localized: "\(folders) folders were added.")) }

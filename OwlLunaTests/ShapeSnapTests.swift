@@ -128,4 +128,76 @@ final class ShapeSnapTests: XCTestCase {
         }
         XCTAssertNil(ShapeSnap.snapped(pencilStroke((0...40).map { CGPoint(x: 200 + 150 * cos(CGFloat($0) / 40 * .pi), y: 300 - 150 * sin(CGFloat($0) / 40 * .pi)) })))
     }
+
+    private let start = CGPoint(x: 100, y: 300)
+
+    /// Half a second of drawing from `time`, coming to rest at `time + 0.5`.
+    private func drag(_ touch: AnyHashable, _ rests: inout TouchRests, from time: TimeInterval) {
+        for step in 1...10 { rests.moved(touch, to: CGPoint(x: start.x + 30 * CGFloat(step), y: start.y), time: time + 0.05 * Double(step)) }
+    }
+
+    func testTheRestIsTakenFromTheEndOfTheStrokeOnce() throws {
+        var rests = TouchRests()
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 0)
+        drag("pencil", &rests, from: 0)
+        rests.ended("pencil", time: 1.1)
+        XCTAssertTrue(rests.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 1.15, within: 2)), 0.6, accuracy: 0.001)
+        XCTAssertNil(rests.take(at: 1.2, within: 2), "a rest is taken once")
+
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 2)
+        drag("pencil", &rests, from: 2)
+        rests.ended("pencil", time: 2.52)
+        XCTAssertNil(rests.take(at: 5, within: 2), "and is forgotten after a while")
+    }
+
+    func testAPalmThatLandsFirstDoesNotHideThePencilsRest() throws {
+        var rests = TouchRests()
+        rests.began("palm", isPencil: false, fingersDraw: false, at: CGPoint(x: 600, y: 700), time: 0)
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 1)
+        drag("pencil", &rests, from: 1)
+        rests.ended("pencil", time: 2.1)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 2.15, within: 2)), 0.6, accuracy: 0.001, "the Pencil's hold is measured though a palm was down first")
+
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 3)
+        drag("pencil", &rests, from: 3)
+        rests.ended("pencil", time: 3.55)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 3.6, within: 2)), 0.05, accuracy: 0.001, "and so is every stroke after it while the palm rests")
+        XCTAssertFalse(rests.isEmpty, "the palm is still down, so the strokes go on being watched")
+
+        rests.ended("palm", time: 4)
+        XCTAssertNil(rests.take(at: 4.05, within: 2), "the palm lifting is no stroke")
+        XCTAssertTrue(rests.isEmpty)
+    }
+
+    func testAThumbLiftingMidStrokeLendsTheStrokeNoRest() throws {
+        for fingersDraw in [false, true] {
+            var rests = TouchRests()
+            rests.began("thumb", isPencil: false, fingersDraw: fingersDraw, at: CGPoint(x: 20, y: 500), time: 0)
+            rests.began("pencil", isPencil: true, fingersDraw: fingersDraw, at: start, time: 1)
+            rests.ended("thumb", time: 1.2)
+            drag("pencil", &rests, from: 1)
+            rests.ended("pencil", time: 1.55)
+            XCTAssertEqual(try XCTUnwrap(rests.take(at: 1.6, within: 2)), 0.05, accuracy: 0.001, "a quick stroke stays quick: the thumb's long rest isn't its")
+        }
+    }
+
+    func testAFingerFeedsTheHoldOnlyWhenFingersDraw() throws {
+        var rests = TouchRests()
+        rests.began("finger", isPencil: false, fingersDraw: false, at: start, time: 0)
+        drag("finger", &rests, from: 0)
+        rests.ended("finger", time: 1.3)
+        XCTAssertNil(rests.take(at: 1.35, within: 2), "with Apple Pencil Only a finger never holds")
+
+        rests.began("finger", isPencil: false, fingersDraw: true, at: start, time: 2)
+        drag("finger", &rests, from: 2)
+        rests.ended("finger", time: 3.3)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 3.35, within: 2)), 0.8, accuracy: 0.001, "a finger that draws holds like the Pencil")
+
+        rests.began("pencil", isPencil: true, fingersDraw: true, at: start, time: 4)
+        drag("pencil", &rests, from: 4)
+        rests.ended("pencil", time: 5.1)
+        rests.began("palm", isPencil: false, fingersDraw: true, at: CGPoint(x: 600, y: 700), time: 5.12)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 5.15, within: 2)), 0.6, accuracy: 0.001, "a palm landing as the Pencil lifts leaves its rest alone")
+    }
 }

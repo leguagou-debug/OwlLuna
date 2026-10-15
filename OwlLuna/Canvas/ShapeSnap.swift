@@ -298,56 +298,98 @@ enum ShapeSnap {
     }
 }
 
-/// Watches the touch that draws, without ever recognising: all it reports is how long the touch rested before lifting.
-final class StrokeHoldRecognizer: UIGestureRecognizer {
+/// How long each touch on the pages rested before it lifted, and which rest the stroke ended with: the Pencil's, or a
+/// finger's when fingers draw and no Pencil was down beside it, so a resting palm or thumb never counts.
+struct TouchRests {
     static let slop: CGFloat = 6
 
-    private var tracked: UITouch?
-    private var anchor = CGPoint.zero
-    private var restingSince: TimeInterval = 0
-    private var lastHold: (duration: TimeInterval, endedAt: TimeInterval)?
+    private struct Touch {
+        var anchor: CGPoint
+        var restingSince: TimeInterval
+        let isPencil: Bool
+        var counts: Bool
+    }
+
+    private var down: [AnyHashable: Touch] = [:]
+    private var last: (duration: TimeInterval, endedAt: TimeInterval, isPencil: Bool)?
+
+    /// Every touch has lifted.
+    var isEmpty: Bool { down.isEmpty }
+
+    mutating func began(_ touch: AnyHashable, isPencil: Bool, fingersDraw: Bool, at point: CGPoint, time: TimeInterval) {
+        let pencilIsDown = down.values.contains(where: \.isPencil)
+        if isPencil {
+            for key in down.keys { down[key]?.counts = false }
+            last = nil
+        } else if fingersDraw, last?.isPencil == false {
+            last = nil
+        }
+        down[touch] = Touch(anchor: point, restingSince: time, isPencil: isPencil, counts: isPencil || (fingersDraw && !pencilIsDown))
+    }
+
+    mutating func moved(_ touch: AnyHashable, to point: CGPoint, time: TimeInterval) {
+        guard let anchor = down[touch]?.anchor, hypot(point.x - anchor.x, point.y - anchor.y) > Self.slop else { return }
+        down[touch]?.anchor = point
+        down[touch]?.restingSince = time
+    }
+
+    mutating func ended(_ touch: AnyHashable, time: TimeInterval) {
+        guard let ended = down.removeValue(forKey: touch), ended.counts else { return }
+        last = (time - ended.restingSince, time, ended.isPencil)
+    }
+
+    mutating func cancelled(_ touch: AnyHashable) {
+        down[touch] = nil
+    }
+
+    /// Forgets the touches that are down, but not the rest waiting to be taken.
+    mutating func lift() { down.removeAll() }
+
+    /// The rest the last stroke ended with, if it ended less than `window` before `now`, once.
+    mutating func take(at now: TimeInterval, within window: TimeInterval) -> TimeInterval? {
+        defer { last = nil }
+        guard let last, now - last.endedAt < window else { return nil }
+        return last.duration
+    }
+}
+
+/// Watches the touches on the pages, without ever recognising: all it reports is how long the stroke rested before lifting.
+final class StrokeHoldRecognizer: UIGestureRecognizer {
+    private var rests = TouchRests()
     /// Called when a touch lands on the pages, before anything is made of it.
     var onTouchDown: (() -> Void)?
+    /// Whether a finger draws as well as the Pencil, asked as each touch lands.
+    var fingersDraw: () -> Bool = { false }
 
     /// The rest at the end of the stroke that has just been lifted, once.
     func takeHold(within window: TimeInterval = 2) -> TimeInterval? {
-        defer { lastHold = nil }
-        guard let lastHold, ProcessInfo.processInfo.systemUptime - lastHold.endedAt < window else { return nil }
-        return lastHold.duration
+        rests.take(at: ProcessInfo.processInfo.systemUptime, within: window)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         onTouchDown?()
-        guard tracked == nil, let touch = touches.first else { return }
-        tracked = touch
-        anchor = touch.location(in: view)
-        restingSince = touch.timestamp
-        lastHold = nil
+        let fingersDraw = fingersDraw()
+        for touch in touches {
+            rests.began(ObjectIdentifier(touch), isPencil: touch.type == .pencil, fingersDraw: fingersDraw, at: touch.location(in: view), time: touch.timestamp)
+        }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let tracked, touches.contains(tracked) else { return }
-        let point = tracked.location(in: view)
-        guard hypot(point.x - anchor.x, point.y - anchor.y) > Self.slop else { return }
-        anchor = point
-        restingSince = tracked.timestamp
+        for touch in touches { rests.moved(ObjectIdentifier(touch), to: touch.location(in: view), time: touch.timestamp) }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let tracked, touches.contains(tracked) else { return }
-        lastHold = (tracked.timestamp - restingSince, tracked.timestamp)
-        self.tracked = nil
-        state = .failed
+        for touch in touches { rests.ended(ObjectIdentifier(touch), time: touch.timestamp) }
+        if rests.isEmpty { state = .failed }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let tracked, touches.contains(tracked) else { return }
-        self.tracked = nil
-        state = .failed
+        for touch in touches { rests.cancelled(ObjectIdentifier(touch)) }
+        if rests.isEmpty { state = .failed }
     }
 
     override func reset() {
-        tracked = nil
+        rests.lift()
     }
 
     override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
