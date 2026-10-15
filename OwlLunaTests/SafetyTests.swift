@@ -505,6 +505,115 @@ final class LibraryStoreSafetyTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.deleting.path(percentEncoded: false)))
     }
 
+    private func makePDF() throws -> URL {
+        let url = temporaryRoot(self).url.appending(path: "Lecture.pdf")
+        try UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792)).writePDF(to: url) { $0.beginPage() }
+        return url
+    }
+
+    private func arriving(_ root: StorageRoot) -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: root.arriving.path(percentEncoded: false))) ?? []
+    }
+
+    func testAnImportIsPutTogetherAsideAndMovedInWithItsManifest() async throws {
+        let (store, root, _) = try makeStore()
+        let id = try await store.importPDF(from: try makePDF(), folder: nil)
+        let package = NotebookPackage(root: root, id: id)
+        let manifest = try await package.readManifest().manifest
+        XCTAssertEqual(manifest.title, "Lecture")
+        let file = try XCTUnwrap(manifest.pages.first?.background.assetFile)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: package.assetURL(file).path(percentEncoded: false)))
+        XCTAssertNotNil(store.record(id))
+        XCTAssertEqual(arriving(root), [], "nothing is left where it was put together")
+
+        let notAPDF = temporaryRoot(self).url.appending(path: "Notes.pdf")
+        try Data("not a pdf".utf8).write(to: notAPDF)
+        do {
+            _ = try await store.importPDF(from: notAPDF, folder: nil)
+            XCTFail("a file that isn't a PDF makes no notebook")
+        } catch {
+            XCTAssertEqual(root.packageIDs(), [id])
+            XCTAssertEqual(arriving(root), [])
+        }
+    }
+
+    func testAnImportCutShortBeforeItsManifestLeavesNothingTheLibraryFinds() async throws {
+        let (store, root, _) = try makeStore()
+        let pdf = try makePDF()
+        let afterQuit = StorageRoot(url: temporaryRoot(self).url.appending(path: "after-quit", directoryHint: .isDirectory))
+        struct Ended: Error {}
+        do {
+            try await store.assemble(UUID()) { package in
+                _ = try await package.importAsset(from: pdf, ext: "pdf")
+                // The app is ended here, with the PDF copied in and no manifest yet: this is what the next launch finds.
+                try FileManager.default.copyItem(at: root.url, to: afterQuit.url)
+                throw Ended()
+            }
+            XCTFail("the import was ended part-way")
+        } catch is Ended {}
+        XCTAssertEqual(afterQuit.packageIDs(), [], "nothing is where the index looks")
+        XCTAssertEqual(LibraryIndex.manifestStamps(root: afterQuit), [:])
+        XCTAssertEqual(arriving(afterQuit).count, 1, "the half-made notebook waits in Arriving")
+        XCTAssertEqual(arriving(root), [], "an import that fails clears up after itself")
+
+        LibraryStore.sweepDeleted(root: afterQuit)
+        LibrarySync.sweepArriving(root: afterQuit, untouchedSince: .now)
+        LibraryStore.sweepUnfinished(root: afterQuit, untouchedSince: .now)
+        XCTAssertEqual(arriving(afterQuit), [], "the next launch clears it away")
+        XCTAssertEqual(afterQuit.packageIDs(), [])
+    }
+
+    func testAPackageAnOlderBuildLeftWithoutAManifestIsClearedAtLaunch() async throws {
+        let (store, root, _) = try makeStore()
+        let notebook = try await makeNotebook(store)
+        func package(holding files: [String]) throws -> UUID {
+            let id = UUID()
+            for directory in ["ink", "assets", "thumbs", "text"] {
+                try FileManager.default.createDirectory(at: root.package(id).appending(path: directory), withIntermediateDirectories: true)
+            }
+            for file in files { try Data("x".utf8).write(to: root.package(id).appending(path: file)) }
+            return id
+        }
+        let importCutShort = try package(holding: ["assets/\(UUID().uuidString).pdf"])
+        let createCutShort = try package(holding: [])
+        let inkOnly = try package(holding: ["ink/\(UUID().uuidString).pkdrawing"])
+        let damaged = try package(holding: ["manifest.json.corrupt"])
+        let previous = try package(holding: ["manifest.prev.json"])
+        let cloud = CloudFolder(url: temporaryRoot(self).url)
+        let before = try await LibrarySync.run(root: root, cloud: cloud)
+        XCTAssertTrue(Set(before.waiting).isSuperset(of: [importCutShort, createCutShort]), "sync waits on them for ever")
+
+        LibraryStore.sweepUnfinished(root: root, untouchedSince: .now)
+        XCTAssertEqual(Set(root.packageIDs()), [notebook.id, inkOnly, damaged, previous], "ink or any manifest keeps a package")
+        XCTAssertEqual((try? FileManager.default.contentsOfDirectory(atPath: root.deleting.path(percentEncoded: false))) ?? [], [])
+        let after = try await LibrarySync.run(root: root, cloud: cloud)
+        XCTAssertTrue(Set(after.waiting).isDisjoint(with: [importCutShort, createCutShort]))
+    }
+
+    func testTheLaunchSweepLeavesWhatIsStillOnItsWay() async throws {
+        let root = temporaryRoot(self)
+        let fileManager = FileManager.default
+        func emptyPackage() throws -> UUID {
+            let id = UUID()
+            try fileManager.createDirectory(at: root.package(id).appending(path: "assets"), withIntermediateDirectories: true)
+            return id
+        }
+        let leftOver = try emptyPackage(), downloading = try emptyPackage()
+        try Data().write(to: root.package(downloading).appending(path: ".manifest.json.icloud"))
+        try fileManager.createDirectory(at: root.arriving.appending(path: "\(leftOver.uuidString)-\(UUID().uuidString)"), withIntermediateDirectories: true)
+        try await Task.sleep(for: .milliseconds(50))
+        let launched = Date.now
+        try await Task.sleep(for: .milliseconds(50))
+        let begunSinceLaunch = try emptyPackage()
+        let arrivingNow = "\(UUID().uuidString)-\(UUID().uuidString)"
+        try fileManager.createDirectory(at: root.arriving.appending(path: arrivingNow), withIntermediateDirectories: true)
+
+        LibrarySync.sweepArriving(root: root, untouchedSince: launched)
+        LibraryStore.sweepUnfinished(root: root, untouchedSince: launched)
+        XCTAssertEqual(Set(root.packageIDs()), [downloading, begunSinceLaunch], "a manifest iCloud is still bringing down, or work begun since launch, stays")
+        XCTAssertEqual(arriving(root), [arrivingNow])
+    }
+
     func testFolderWritesKeepKeysThisVersionDoesNotKnow() async throws {
         let (store, root, context) = try makeStore()
         let id = UUID()

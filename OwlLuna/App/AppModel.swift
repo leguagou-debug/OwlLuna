@@ -91,7 +91,8 @@ final class AppModel {
         let root = root
         let sweep = Task.detached(priority: .utility) {
             LibraryStore.sweepDeleted(root: root)
-            LibrarySync.sweepArriving(root: root)
+            LibrarySync.sweepArriving(root: root, untouchedSince: launched)
+            LibraryStore.sweepUnfinished(root: root, untouchedSince: launched)
         }
         // An index made by an older build reads every manifest once, for what that build didn't keep.
         let indexSchema = UserDefaults.standard.integer(forKey: SettingsKey.indexSchema)

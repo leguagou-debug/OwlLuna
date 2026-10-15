@@ -139,6 +139,46 @@ final class BackupTests: XCTestCase {
                      "a restore made since on another device still wins")
     }
 
+    func testARestoreEndedPartWayNeverLeavesANotebookUnderTheWrongID() async throws {
+        let store = try makeStore()
+        let notes = try await makeNotebook("Mechanics", in: store)
+        let binned = try await makeNotebook("Old Lab", in: store)
+        _ = try await NotebookPackage(root: store.root, id: binned.id).updateManifest { $0.library.deletedAt = Date.now.addingTimeInterval(-100 * 86_400) }
+        let backup = try LibraryBackup.create(root: store.root)
+        addTeardownBlock { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) }
+        _ = try await NotebookPackage(root: store.root, id: notes.id).updateManifest { manifest in
+            manifest.modifiedAt = manifest.modifiedAt.addingTimeInterval(120)
+            manifest.pages.append(manifest.defaults.newPage())
+        }
+        try FileManager.default.removeItem(at: store.root.package(binned.id))
+
+        let root = store.root, quits = temporaryRoot(self).url
+        let summary = try await LibraryBackup.restore(from: backup, into: root, beforeRewrite: { package in
+            // The app is ended here, with a notebook out of the backup and its manifest not yet rewritten: this is what the next launch finds.
+            XCTAssertFalse(package.url.path(percentEncoded: false).hasPrefix(root.library.path(percentEncoded: false)))
+            try FileManager.default.copyItem(at: root.url, to: quits.appending(path: UUID().uuidString, directoryHint: .isDirectory))
+        })
+        XCTAssertEqual(summary.copies, 1)
+        XCTAssertEqual(summary.trashed, 1)
+        XCTAssertEqual(root.packageIDs().count, 3)
+
+        let snapshots = try FileManager.default.contentsOfDirectory(at: quits, includingPropertiesForKeys: nil)
+        XCTAssertEqual(snapshots.count, 2, "one for the copy and one for the notebook going back to Recently Deleted")
+        for snapshot in snapshots.map({ StorageRoot(url: $0) }) {
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: snapshot.arriving.path(percentEncoded: false)).count, 1,
+                           "the notebook waits in Arriving")
+            LibrarySync.sweepArriving(root: snapshot, untouchedSince: .now)
+            LibraryStore.sweepUnfinished(root: snapshot, untouchedSince: .now)
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: snapshot.arriving.path(percentEncoded: false)), [])
+            XCTAssertTrue(snapshot.packageIDs().contains(notes.id))
+            for id in snapshot.packageIDs() {
+                let manifest = try await NotebookPackage(root: snapshot, id: id).readManifest().manifest
+                XCTAssertEqual(manifest.id, id, "no notebook in the library carries another one's ID")
+                XCTAssertGreaterThan(manifest.library.deletedAt ?? .now, Date.now.addingTimeInterval(-30 * 86_400), "or 30 days that are already over")
+            }
+        }
+    }
+
     func testABackupFromTheOldAppRestoresUnderTheNewName() async throws {
         let store = try makeStore()
         let notes = try await makeNotebook("Mechanics", in: store)

@@ -1228,10 +1228,58 @@ final class SyncTests: XCTestCase {
         try FileManager.default.copyItem(at: cloud.package(physics.id), to: stray)
 
         LibrarySync.sweepArriving(root: b)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: b.arriving.path(percentEncoded: false)))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: b.arriving.path(percentEncoded: false)), [])
         let report = try await sync(b)
         XCTAssertEqual(report.pulled, [physics.id], "and the next pull has somewhere to assemble")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: b.arriving.path(percentEncoded: false)), [])
+    }
+
+    func testTheLaunchSweepLeavesAPullThatIsUnderWay() async throws {
+        let physics = try await makeNotebook("Physics", on: a)
+        try await sync(a)
+        try await sync(b)
+        try await edit(physics.id, on: a, strokes: 3, after: 60)
+        try await sync(a)
+        let fileManager = FileManager.default
+        let leftOver = b.arriving.appending(path: "\(UUID().uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try fileManager.createDirectory(at: leftOver, withIntermediateDirectories: true)
+        try await Task.sleep(for: .milliseconds(50))
+        let launched = Date.now
+        try await Task.sleep(for: .milliseconds(50))
+
+        // Another writer holds the synced notebook, so b's pull stops with its copy half-assembled in Arriving.
+        let held = Shared(false), released = Shared(false)
+        addTeardownBlock { released.value = true }
+        let synced = cloud.package(physics.id)
+        Thread.detachNewThread {
+            NSFileCoordinator().coordinate(writingItemAt: synced, options: .forMerging, error: nil) { _ in
+                held.value = true
+                while !released.value { Thread.sleep(forTimeInterval: 0.005) }
+            }
+        }
+        func waitUntil(_ condition: () -> Bool) async throws {
+            let deadline = Date.now.addingTimeInterval(10)
+            while !condition(), Date.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        }
+        try await waitUntil { held.value }
+        let device: StorageRoot = b, remote: CloudFolder = cloud
+        let pulling = Task.detached { try await LibrarySync.run(root: device, cloud: remote) }
+        func arriving() -> [String] { (try? fileManager.contentsOfDirectory(atPath: device.arriving.path(percentEncoded: false))) ?? [] }
+        try await waitUntil { arriving().count == 2 }
+        let underWay = arriving().filter { $0 != leftOver.lastPathComponent }
+        XCTAssertEqual(underWay.count, 1, "the pull has begun")
+
+        LibraryStore.sweepDeleted(root: device)
+        LibrarySync.sweepArriving(root: device, untouchedSince: launched)
+        LibraryStore.sweepUnfinished(root: device, untouchedSince: launched)
+        XCTAssertEqual(arriving(), underWay, "only what a quit left before launch goes")
+        XCTAssertEqual(device.packageIDs(), [physics.id])
+        released.value = true
+        let report = try await pulling.value
+        XCTAssertEqual(report.pulled, [physics.id])
+        let pulledStrokes = await strokes(physics, on: device)
+        XCTAssertEqual(pulledStrokes, 3)
+        XCTAssertEqual(arriving(), [])
     }
 
     func testADateIsTheSameHoweverOftenItIsRewritten() throws {

@@ -116,7 +116,8 @@ enum LibraryBackup {
 
     /// Adds what the backup holds to the library and never replaces anything: a notebook the library has in a different
     /// state comes back beside it as a copy. The caller refreshes the index afterwards.
-    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now) async throws -> Summary {
+    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now,
+                        beforeRewrite: @Sendable (NotebookPackage) async throws -> Void = { _ in }) async throws -> Summary {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory.appending(path: "restore-\(UUID().uuidString)", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -137,13 +138,19 @@ enum LibraryBackup {
                 summary.unreadable += 1
                 continue
             }
+            let source = backup.package(id)
             let exists = fileManager.fileExists(atPath: root.package(id).path(percentEncoded: false))
             if !exists {
-                try fileManager.moveItem(at: backup.package(id), to: root.package(id))
                 if incoming.library.deletedAt != nil {
                     // Its 30 days start again. The old stamp stays, so a restore or delete made since on another device still wins.
-                    _ = try await NotebookPackage(root: root, id: id).updateManifest { $0.library.deletedAt = now }
+                    try await LibraryStore.assemble(id, in: root) { package in
+                        try FileManager.default.moveItem(at: source, to: package.url)
+                        try await beforeRewrite(package)
+                        return try await package.updateManifest { $0.library.deletedAt = now }
+                    }
                     summary.trashed += 1
+                } else {
+                    try fileManager.moveItem(at: source, to: root.package(id))
                 }
                 summary.added += 1
                 continue
@@ -154,12 +161,15 @@ enum LibraryBackup {
                 continue
             }
             let copy = UUID()
-            try fileManager.moveItem(at: backup.package(id), to: root.package(copy))
             let title = String(localized: "\(incoming.title) (from backup)")
-            _ = try await NotebookPackage(root: root, id: copy).updateManifest { manifest in
-                manifest.id = copy
-                manifest.title = title
-                manifest.library.deletedAt = nil
+            try await LibraryStore.assemble(copy, in: root) { package in
+                try FileManager.default.moveItem(at: source, to: package.url)
+                try await beforeRewrite(package)
+                return try await package.updateManifest { manifest in
+                    manifest.id = copy
+                    manifest.title = title
+                    manifest.library.deletedAt = nil
+                }
             }
             renamed[id] = copy
             summary.copies += 1

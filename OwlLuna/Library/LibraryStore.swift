@@ -70,9 +70,34 @@ final class LibraryStore {
         var manifest = NotebookManifest(id: id, title: title, cover: cover, defaults: defaults, pages: [first])
         manifest.library.folderID = folder?.id
         manifest.library.lastOpenedAt = .now
-        try await NotebookPackage(root: root, id: manifest.id).create(manifest)
+        try await assemble(id) { package in
+            try await package.create(manifest)
+            return manifest
+        }
         index(manifest)
         return manifest.id
+    }
+
+    /// Puts a new notebook together in `Arriving/` and renames it into the library once its manifest is written.
+    @discardableResult
+    func assemble(_ id: UUID, _ build: (NotebookPackage) async throws -> NotebookManifest) async throws -> NotebookManifest {
+        try await Self.assemble(id, in: root, build)
+    }
+
+    /// The same for any library, on whichever actor calls it.
+    @discardableResult
+    nonisolated(nonsending) static func assemble(_ id: UUID, in root: StorageRoot,
+                                                 _ build: (NotebookPackage) async throws -> NotebookManifest) async throws -> NotebookManifest {
+        let fileManager = FileManager.default
+        let staging = StorageRoot(url: root.arriving.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory))
+        defer { try? fileManager.removeItem(at: staging.url) }
+        try fileManager.createDirectory(at: staging.library, withIntermediateDirectories: true)
+        let package = NotebookPackage(root: staging, id: id)
+        let manifest = try await build(package)
+        guard fileManager.fileExists(atPath: package.manifestURL.path(percentEncoded: false)) else { throw PackageError.missing }
+        try fileManager.createDirectory(at: root.library, withIntermediateDirectories: true)
+        try fileManager.moveItem(at: package.url, to: root.package(id))
+        return manifest
     }
 
     /// A notebook with the default paper from Settings, dated rather than named, created without the sheet.
@@ -100,8 +125,7 @@ final class LibraryStore {
     func importPDF(from url: URL, folder: FolderRecord?) async throws -> UUID {
         let folderID = folder?.id
         let id = UUID()
-        let package = NotebookPackage(root: root, id: id)
-        do {
+        let manifest = try await assemble(id) { package in
             let file = try await package.importAsset(from: url, ext: "pdf")
             let assetURL = package.assetURL(file)
             let pages = try await Task.detached(priority: .userInitiated) { try PDFImport.pages(at: assetURL, file: file) }.value
@@ -111,13 +135,11 @@ final class LibraryStore {
                                             defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages)
             manifest.library.folderID = folderID
             try await package.create(manifest)
-            index(manifest)
-            indexHandwriting(package: package, pages: pages)
-            return id
-        } catch {
-            try? FileManager.default.removeItem(at: package.url)
-            throw error
+            return manifest
         }
+        index(manifest)
+        indexHandwriting(package: NotebookPackage(root: root, id: id), pages: manifest.pages)
+        return id
     }
 
     /// A new notebook whose pages are sheets scanned with the camera.
@@ -125,8 +147,7 @@ final class LibraryStore {
     func importScan(_ images: [UIImage], folder: FolderRecord?) async throws -> UUID {
         let folderID = folder?.id
         let id = UUID()
-        let package = NotebookPackage(root: root, id: id)
-        do {
+        let manifest = try await assemble(id) { package in
             let pages = try await DocumentScan.pages(from: images, in: package)
             var cover = CoverSpec.defaultCloth(for: id)
             cover.style = .firstPage
@@ -134,13 +155,11 @@ final class LibraryStore {
                                             defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages)
             manifest.library.folderID = folderID
             try await package.create(manifest)
-            index(manifest)
-            indexHandwriting(package: package, pages: pages)
-            return id
-        } catch {
-            try? FileManager.default.removeItem(at: package.url)
-            throw error
+            return manifest
         }
+        index(manifest)
+        indexHandwriting(package: NotebookPackage(root: root, id: id), pages: manifest.pages)
+        return id
     }
 
     @discardableResult
@@ -148,11 +167,11 @@ final class LibraryStore {
         let sourceID = record.id, searchText = searchText(for: record.id)
         if let open = DocumentRegistry.shared.document(for: sourceID) { await open.flush() }
         let newID = UUID()
-        let source = root.package(sourceID), destination = root.package(newID)
-        try await Task.detached(priority: .userInitiated) { try FileManager.default.copyItem(at: source, to: destination) }.value
-        let package = NotebookPackage(root: root, id: newID)
-        do {
-            let copy = try await package.updateManifest { manifest in
+        let source = root.package(sourceID)
+        let copy = try await assemble(newID) { package in
+            let destination = package.url
+            try await Task.detached(priority: .userInitiated) { try FileManager.default.copyItem(at: source, to: destination) }.value
+            return try await package.updateManifest { manifest in
                 manifest.id = newID
                 manifest.title = String(localized: "\(manifest.title) Copy")
                 manifest.createdAt = .now
@@ -160,13 +179,10 @@ final class LibraryStore {
                 manifest.library.isFavorite = false
                 manifest.library.lastOpenedAt = nil
             }
-            index(copy)
-            updateSearchText(searchText, for: newID)
-            return newID
-        } catch {
-            try? FileManager.default.removeItem(at: destination)
-            throw error
         }
+        index(copy)
+        updateSearchText(searchText, for: newID)
+        return newID
     }
 
     // MARK: Changing
@@ -258,6 +274,38 @@ final class LibraryStore {
     /// Finishes deletes interrupted by the app quitting.
     nonisolated static func sweepDeleted(root: StorageRoot) {
         try? FileManager.default.removeItem(at: root.deleting)
+    }
+
+    /// Clears away packages untouched since `cutoff` that a quit left with neither a manifest nor ink, which nothing lists or opens.
+    nonisolated static func sweepUnfinished(root: StorageRoot, untouchedSince cutoff: Date) {
+        let fileManager = FileManager.default
+        for id in root.packageIDs() where isUnfinished(root.package(id), untouchedSince: cutoff) {
+            let tombstone = root.deleting.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
+            do {
+                try fileManager.createDirectory(at: root.deleting, withIntermediateDirectories: true)
+                try fileManager.moveItem(at: root.package(id), to: tombstone)
+            } catch {
+                continue
+            }
+            try? fileManager.removeItem(at: tombstone)
+        }
+    }
+
+    /// Anything that may be a manifest (damaged, previous or still downloading), or ink to rebuild one from, keeps a package.
+    private nonisolated static func isUnfinished(_ package: URL, untouchedSince cutoff: Date) -> Bool {
+        let fileManager = FileManager.default
+        guard let values = try? package.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .attributeModificationDateKey]),
+              values.isDirectory == true, values.isSymbolicLink != true, let touched = values.attributeModificationDate, touched < cutoff,
+              let names = try? fileManager.contentsOfDirectory(atPath: package.path(percentEncoded: false)),
+              !names.contains(where: { $0.hasPrefix("manifest") || $0.hasSuffix(".icloud") }) else { return false }
+        for name in names {
+            var isDirectory: ObjCBool = false
+            let url = package.appending(path: name)
+            guard fileManager.fileExists(atPath: url.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue else { continue }
+            guard let inside = try? fileManager.contentsOfDirectory(atPath: url.path(percentEncoded: false)),
+                  !inside.contains(where: { $0.hasSuffix(".icloud") }), name != "ink" || inside.isEmpty else { return false }
+        }
+        return true
     }
 
     /// The index may be behind the files (a sync that stopped part-way), so each notebook's own manifest has the last
@@ -544,7 +592,10 @@ final class LibraryStore {
         var manifest = NotebookManifest(id: id, title: NotebookStarter.journal.title, createdAt: now,
                                         cover: NotebookStarter.journal.spec(for: id), defaults: defaults, pages: [page])
         manifest.library.lastOpenedAt = now
-        try await NotebookPackage(root: root, id: id).create(manifest)
+        try await assemble(id) { package in
+            try await package.create(manifest)
+            return manifest
+        }
         index(manifest)
         UserDefaults.standard.set(id.uuidString, forKey: SettingsKey.dailyJournalID)
         return id

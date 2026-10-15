@@ -307,9 +307,13 @@ enum LibrarySync {
         }
     }
 
-    /// Finishes a pull interrupted by the app quitting, which left its half-assembled notebook beside the library.
-    static func sweepArriving(root: StorageRoot) {
-        try? FileManager.default.removeItem(at: root.arriving)
+    /// Clears away pulls and new notebooks a quit left half-assembled beside the library. One touched since `cutoff` is still under way.
+    static func sweepArriving(root: StorageRoot, untouchedSince cutoff: Date = .now) {
+        let fileManager = FileManager.default
+        for url in (try? fileManager.contentsOfDirectory(at: root.arriving, includingPropertiesForKeys: [.attributeModificationDateKey])) ?? [] {
+            let touched = (try? url.resourceValues(forKeys: [.attributeModificationDateKey]))?.attributeModificationDate ?? .distantPast
+            if touched < cutoff { try? fileManager.removeItem(at: url) }
+        }
     }
 
     /// Clears away uploads a quit cut short. One begun within the hour may be another device's, still under way.
