@@ -29,18 +29,13 @@ final class BackupTests: XCTestCase {
         return receipt.manifest
     }
 
-    private func waitForFolders(_ store: LibraryStore, count: Int) async throws {
-        let deadline = Date().addingTimeInterval(5)
-        while FolderFile.read(store.root).folders.count != count, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
-    }
-
     func testABackupBringsTheWholeLibraryBack() async throws {
         let store = try makeStore()
         let science = try XCTUnwrap(store.createFolder(name: "Science", cloth: .jade))
         let physics = try XCTUnwrap(store.createFolder(name: "Physics", cloth: .moss, parent: science))
         let notes = try await makeNotebook("Mechanics", in: store, folder: physics)
         let loose = try await makeNotebook("Recipes", in: store)
-        try await waitForFolders(store, count: 2)
+        await store.finishWritingShelves()
         try FileManager.default.createDirectory(at: store.root.stickers, withIntermediateDirectories: true)
         try Data([9, 9]).write(to: store.root.stickers.appending(path: "mine.png"))
 

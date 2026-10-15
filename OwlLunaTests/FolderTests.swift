@@ -94,8 +94,7 @@ final class FolderTests: XCTestCase {
         await waitForFolder(of: notes, toBe: science.id)
         XCTAssertEqual(notes.folder?.id, science.id, "and so do its notebooks")
 
-        let deadline = Date().addingTimeInterval(5)
-        while FolderFile.read(store.root).folders.map(\.name) != ["Science", "Art", "Labs"], Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        await store.finishWritingShelves()
         let file = FolderFile.read(store.root)
         XCTAssertEqual(file.folders.map(\.name), ["Science", "Art", "Labs"])
         XCTAssertEqual(file.folders.map(\.parentID), [nil, science.id, art.id])

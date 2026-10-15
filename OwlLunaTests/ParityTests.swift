@@ -81,10 +81,7 @@ final class ParityTests: XCTestCase {
         XCTAssertEqual([b, c, a].map(\.sortIndex), [0, 1, 2])
         store.sortFoldersByName([b, c, a])
         XCTAssertEqual([a, b, c].map(\.sortIndex), [0, 1, 2])
-        let deadline = Date().addingTimeInterval(5)
-        while FolderFile.read(store.root).folders.map(\.name) != ["Art", "Biology", "Chemistry"], Date() < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        await store.finishWritingShelves()
         XCTAssertEqual(FolderFile.read(store.root).folders.map(\.name), ["Art", "Biology", "Chemistry"])
     }
 

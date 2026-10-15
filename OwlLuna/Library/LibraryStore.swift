@@ -640,11 +640,16 @@ final class LibraryStore {
 }
 
 extension LibraryStore {
+    /// Waits for folder and smart shelf changes still being written to disk.
+    func finishWritingShelves() async {
+        await folderWrite?.value
+        await smartShelfWrite?.value
+    }
+
     /// Saves what is open, then writes the whole library into one file.
     func makeBackup() async throws -> URL {
         for document in DocumentRegistry.shared.openDocuments { await document.flush() }
-        await folderWrite?.value
-        await smartShelfWrite?.value
+        await finishWritingShelves()
         let root = root, journal = dailyJournal?.id, holdsLocked = hasLockedNotebooks
         let url = try await Task.detached(priority: .userInitiated) { try LibraryBackup.create(root: root, journal: journal) }.value
         if holdsLocked || hasLockedNotebooks { backupsHoldingLocked.insert(url) }
@@ -676,8 +681,7 @@ extension LibraryStore {
 
     /// Adds a backup's notebooks, folders and stickers to the library, then brings the index up to date.
     func restoreBackup(from url: URL) async throws -> LibraryBackup.Summary {
-        await folderWrite?.value
-        await smartShelfWrite?.value
+        await finishWritingShelves()
         let root = root, keepsHistory = UserDefaults.standard.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true
         let summary = try await Task.detached(priority: .userInitiated) {
             try await LibraryBackup.restore(from: url, into: root, keepsHistory: keepsHistory)
