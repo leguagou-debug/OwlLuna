@@ -34,7 +34,17 @@ struct StorageRoot: Sendable, Hashable {
     }()
 
     func packageIDs() -> [UUID] {
-        let contents = (try? FileManager.default.contentsOfDirectory(at: library, includingPropertiesForKeys: nil)) ?? []
+        (try? listPackageIDs()) ?? []
+    }
+
+    /// The same, for a sync: a library that can't be listed throws, and is never taken for one with no notebooks.
+    func listPackageIDs() throws -> [UUID] {
+        let contents: [URL]
+        do {
+            contents = try FileManager.default.contentsOfDirectory(at: library, includingPropertiesForKeys: nil)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return []
+        }
         return contents.compactMap { url in
             url.pathExtension == Self.packageExtension ? UUID(uuidString: url.deletingPathExtension().lastPathComponent) : nil
         }

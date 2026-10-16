@@ -65,6 +65,9 @@ final class SyncCenter {
     @ObservationIgnored private var wantsAnotherPass = false
     @ObservationIgnored private var running: Task<SyncReport, Error>?
     @ObservationIgnored private var reviewing = 0
+    /// Pulls for an editor waiting or under way, and whether one is under way.
+    @ObservationIgnored private var pulls = 0
+    @ObservationIgnored private var isPulling = false
     @ObservationIgnored private var uploadCheck: Task<Void, Never>?
     @ObservationIgnored private var stopped: String?
     /// Conflicted copies the library hasn't shown yet, kept across launches so a quit doesn't lose them.
@@ -76,6 +79,8 @@ final class SyncCenter {
         didSet { defaults.set(setAsideJournals.map(\.uuidString), forKey: SettingsKey.syncSetAsideJournals) }
     }
     @ObservationIgnored private var putAway = SyncNews()
+    /// Notebooks a pass held back that were asked to be kept, which the next pass brings back.
+    @ObservationIgnored private var keeping: Set<UUID> = []
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "sync")
     /// Reads what iCloud has still to upload. A test stands in for iCloud here.
     @ObservationIgnored var readUploads: @Sendable (CloudFolder) -> CloudUploads = { $0.isUbiquitous ? CloudUploads.read($0) : CloudUploads() }
@@ -88,6 +93,8 @@ final class SyncCenter {
     /// editor can't be taken, and is left for next time.
     @ObservationIgnored var take: @MainActor (UUID) -> Bool = { _ in true }
     @ObservationIgnored var release: @MainActor (UUID) -> Void = { _ in }
+    /// A pass settles the folders inside this, which the library uses to keep its own folder writes out of the way.
+    @ObservationIgnored var holdFolders: @MainActor (@escaping @Sendable () throws -> FolderPass?) async throws -> FolderPass? = { try $0() }
 
     init(root: StorageRoot, defaults: UserDefaults = .standard) {
         self.root = root
@@ -286,16 +293,78 @@ final class SyncCenter {
     /// One pass, or nil when sync may no longer run. That is asked before every pass, since the account may have
     /// changed or sync been turned off during the one before, and a ubiquitous pass asks the account again as it goes.
     private func pass() async throws -> SyncReport? {
+        // A pull for an editor goes first: it is quick, and gives up after a few seconds.
+        while pulls > 0 { try? await Task.sleep(for: .milliseconds(20)) }
         guard canSync, let cloud else { return nil }
-        let root = root, account = account, take = take, release = release
+        let root = root, account = account, keeping = keeping, take = take, release = release, holdFolders = holdFolders
         let signedIn: @Sendable () -> String? = { SyncCenter.marker(for: FileManager.default.ubiquityIdentityToken) }
         let task = Task.detached(priority: .utility) {
-            try await LibrarySync.run(root: root, cloud: cloud, account: account, take: { await take($0) }, release: { await release($0) },
-                                      signedIn: cloud.isUbiquitous ? signedIn : nil)
+            try await LibrarySync.run(root: root, cloud: cloud, account: account, keeping: keeping, take: { await take($0) }, release: { await release($0) },
+                                      holdingFolders: { try await holdFolders($0) }, signedIn: cloud.isUbiquitous ? signedIn : nil)
         }
         running = task
         defer { running = nil }
-        return try await task.value
+        do {
+            let report = try await task.value
+            self.keeping.subtract(keeping)
+            return report
+        } catch let stopped as StoppedPass {
+            // What was agreed was saved, kept notebooks and all.
+            self.keeping.subtract(keeping)
+            throw stopped
+        }
+    }
+
+    /// The notebooks the last pass wouldn't take as deleted are wanted after all: the next pass brings them back
+    /// wherever they're gone.
+    func keepHeld() async {
+        keeping.formUnion(news.held)
+        refreshNews()
+        await syncNow()
+    }
+
+    /// How long a window waits at launch for the notebook it reopens to be brought up to date.
+    static let reopenLimit: Duration = .seconds(4)
+
+    /// Brings in the synced copy's newer version of notebooks an editor is about to open, or has open (`take` then lets
+    /// go of it), without waiting for a whole pass. Gives up after `limit`, and returns at once with sync off. It waits
+    /// for a pass under way, and a pass for it, so the two never settle a notebook at once.
+    @discardableResult
+    func pullNewer(_ ids: [UUID], within limit: Duration, take: (@MainActor (UUID) -> Bool)? = nil) async -> [UUID: LibrarySync.Newer] {
+        guard isEnabled, !ids.isEmpty else { return [:] }
+        let deadline = ContinuousClock.now + limit
+        pulls += 1
+        defer { pulls -= 1 }
+        while isEnabled, availability == .checking || reviewing > 0 || running != nil || isPulling, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        guard canSync, let cloud, running == nil, !isPulling else { return [:] }
+        isPulling = true
+        defer { isPulling = false }
+        let root = root, take = take ?? self.take, release = release
+        var outcome: [UUID: LibrarySync.Newer] = [:]
+        for id in ids {
+            let left = deadline - ContinuousClock.now
+            guard left > .zero, canSync else { break }
+            let newer = try? await Task.detached(priority: .userInitiated) {
+                try await LibrarySync.pullNewer(id, root: root, cloud: cloud, timeout: left, take: { await take($0) }, release: { await release($0) })
+            }.value
+            outcome[id] = newer ?? LibrarySync.Newer.none
+        }
+        let pulled = ids.filter { outcome[$0] == .pulled }
+        if !pulled.isEmpty { await onLibraryChanged?(SyncReport(pulled: pulled)) }
+        return outcome
+    }
+
+    /// Notebooks open in an editor that another device has written in since: one with nothing unsaved takes that version
+    /// and its editor opens it again, and one with writing of its own is told that a newer version is waiting.
+    func catchUp(open registry: DocumentRegistry, within limit: Duration = .seconds(10)) async {
+        let ids = registry.openNotebooks
+        guard isEnabled, !ids.isEmpty else { return }
+        // Saved first, so what is on the device says whether it was written in here.
+        for id in ids { await registry.document(for: id)?.flush() }
+        let outcome = await pullNewer(ids, within: limit) { registry.takeOpen($0) }
+        for (id, newer) in outcome where newer == .waiting { registry.document(for: id)?.noteNewerVersion() }
     }
 
     /// Notebooks, flashcards and stickers arriving from another device show up as changes to the container's files.
@@ -350,11 +419,13 @@ final class SyncCenter {
 
     /// What is shown now, less what was put away and hasn't changed since.
     private func refreshNews() {
-        let failed = lastReport?.failed ?? []
+        let failed = lastReport?.failed ?? [], held = (lastReport?.held ?? []).filter { !keeping.contains($0) }
         putAway.failed.removeAll { !failed.contains($0) }
+        if Set(putAway.held) != Set(held) { putAway.held = [] }
         if putAway.uploadProblem != uploads.problem { putAway.uploadProblem = nil }
         if putAway.stopped != stopped { putAway.stopped = nil }
-        let fresh = SyncNews(failed: failed.filter { !putAway.failed.contains($0) }, conflictCopies: newCopies, journals: setAsideJournals,
+        let fresh = SyncNews(failed: failed.filter { !putAway.failed.contains($0) }, held: putAway.held.isEmpty ? held : [],
+                             conflictCopies: newCopies, journals: setAsideJournals,
                              uploadProblem: uploads.problem == putAway.uploadProblem ? nil : uploads.problem,
                              stopped: stopped == putAway.stopped ? nil : stopped)
         if fresh != news { news = fresh }
@@ -363,6 +434,7 @@ final class SyncCenter {
     /// The library's notice was closed: what it said stays away until it changes.
     func putAwayNews() {
         putAway.failed += news.failed
+        if !news.held.isEmpty { putAway.held = news.held }
         putAway.uploadProblem = uploads.problem
         putAway.stopped = stopped
         newCopies = []
@@ -431,6 +503,7 @@ extension SyncReport {
         if open.count > 0 { parts.append(String(localized: "\(open.count) notebooks waiting until they're closed")) }
         if arriving.count > 0 { parts.append(String(localized: "\(arriving.count) notebooks still downloading from iCloud")) }
         if failed.count > 0 { parts.append(String(localized: "\(failed.count) notebooks didn't sync")) }
+        if held.count > 0 { parts.append(String(localized: "\(held.count) deletions held back")) }
         return parts
     }
 
@@ -539,6 +612,8 @@ extension CloudUploads.Problem {
 /// What the library shows about sync until it is put away.
 struct SyncNews: Equatable {
     var failed: [SyncFailure] = []
+    /// Notebooks gone from one side that sync didn't take as deleted, since too many went at once.
+    var held: [UUID] = []
     /// Conflicted copies made since the notice was last put away.
     var conflictCopies: [UUID] = []
     /// This device's journals that gave way to one begun earlier on another device.
@@ -547,10 +622,10 @@ struct SyncNews: Equatable {
     /// Why the last pass stopped part-way.
     var stopped: String?
 
-    var isEmpty: Bool { failed.isEmpty && conflictCopies.isEmpty && journals.isEmpty && uploadProblem == nil && stopped == nil }
+    var isEmpty: Bool { failed.isEmpty && held.isEmpty && conflictCopies.isEmpty && journals.isEmpty && uploadProblem == nil && stopped == nil }
     /// Something went wrong, as opposed to a conflicted copy, which is only worth knowing about.
-    var isTrouble: Bool { !failed.isEmpty || uploadProblem != nil || stopped != nil }
-    var count: Int { failed.count + conflictCopies.count + journals.count + (uploadProblem == nil ? 0 : 1) + (stopped == nil ? 0 : 1) }
+    var isTrouble: Bool { !failed.isEmpty || !held.isEmpty || uploadProblem != nil || stopped != nil }
+    var count: Int { failed.count + (held.isEmpty ? 0 : 1) + conflictCopies.count + journals.count + (uploadProblem == nil ? 0 : 1) + (stopped == nil ? 0 : 1) }
 
     func keeping(copies kept: (UUID) -> Bool) -> SyncNews {
         var news = self

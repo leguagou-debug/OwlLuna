@@ -182,9 +182,20 @@ extension LibraryState {
         }
     }
 
+    /// A stamp for a change made at `date` that still comes after `last`, even when `last` came from a device whose
+    /// clock runs fast.
+    static func stamp(after last: Date?, at date: Date) -> Date {
+        max(date, (last ?? .distantPast).addingTimeInterval(0.001))
+    }
+
+    /// Stamps a change made here, after every stamp this device has seen for it.
+    mutating func stampChange(_ filing: Filing, at date: Date) {
+        setChangedAt(Self.stamp(after: changedAt(filing), at: date), for: filing)
+    }
+
     /// Stamps whatever a change just made differs from how the notebook was filed before it.
     mutating func stamp(changesSince before: LibraryState, at date: Date) {
-        for filing in Filing.allCases where !files(filing, like: before) { setChangedAt(date, for: filing) }
+        for filing in Filing.allCases where !files(filing, like: before) { stampChange(filing, at: date) }
     }
 }
 

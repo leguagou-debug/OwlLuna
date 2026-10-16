@@ -31,7 +31,7 @@ extension LibraryStore {
         let change: @Sendable (inout NotebookManifest) -> Void = { manifest in
             if Tags.contains(manifest.library.tags, old) {
                 manifest.library.tags = Tags.renaming(manifest.library.tags, old, to: spelled)
-                manifest.library.setChangedAt(now, for: .tags)
+                manifest.library.stampChange(.tags, at: now)
             }
             for index in manifest.pages.indices where Tags.contains(manifest.pages[index].tags, old) {
                 manifest.pages[index].tags = Tags.renaming(manifest.pages[index].tags, old, to: spelled)

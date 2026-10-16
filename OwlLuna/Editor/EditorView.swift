@@ -1975,7 +1975,7 @@ struct NoticeBanner: View {
     var body: some View {
         let dismissable = notice.kind != .saveFailed
         HStack(spacing: Space.x3) {
-            Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : "info.circle")
+            Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down" : "info.circle")
                 .foregroundStyle(notice.kind == .saveFailed ? Color.tomato : Color.accentColor)
             Text(notice.message).font(.subheadline).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

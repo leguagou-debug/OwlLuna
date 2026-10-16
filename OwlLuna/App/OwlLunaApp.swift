@@ -90,6 +90,7 @@ struct OwlLunaRoot: View {
             if phase == .active {
                 app.sync.schedule(after: .seconds(1))
                 app.takeControlAction()
+                Task { await app.sync.catchUp(open: .shared) }
             }
             if phase != .active {
                 app.flushOpenDocuments()

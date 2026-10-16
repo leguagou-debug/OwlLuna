@@ -8,7 +8,7 @@ Thanks for helping make a great free notes app.
 2. Fork the repo and create a branch from `main`.
 3. Keep pull requests focused on one change.
 4. Make sure the app builds without warnings and the tests pass (⌘U).
-5. Include screenshots or a short screen recording for UI changes (iPad and iPhone if layout is affected).
+5. Include iPad screenshots or a short screen recording for UI changes, in portrait and landscape, light and dark.
 
 ## Code style
 
@@ -24,4 +24,4 @@ OwlLuna collects no data. Please don't add analytics, tracking, ads, or network 
 
 ## Reporting bugs
 
-Include your device, iOS version, steps to reproduce, and what you expected versus what happened. For drawing bugs, say whether you were using Apple Pencil or a finger.
+Include your device, iPadOS version, steps to reproduce, and what you expected versus what happened. For drawing bugs, say whether you were using Apple Pencil or a finger.

@@ -512,18 +512,30 @@ enum LibraryIndex {
         let container = context.container
         let scanned = await Task.detached(priority: .userInitiated) { await scan(root: root, ids: stale, comparingWith: container) }.value
 
-        let folderFile = await Task.detached(priority: .userInitiated) { FolderFile.read(root) }.value
+        let folderFile = await Task.detached(priority: .userInitiated) { Result { try FolderFile.load(root) ?? FolderFile() } }.value
         var folders = Dictionary(((try? context.fetch(FetchDescriptor<FolderRecord>())) ?? []).map { ($0.id, $0) },
                                  uniquingKeysWith: { first, _ in first })
         var arrived: Set<UUID> = []
-        for entry in folderFile.folders {
-            let record = folders[entry.id] ?? FolderRecord(id: entry.id)
-            if folders[entry.id] == nil { context.insert(record); folders[entry.id] = record; arrived.insert(entry.id) }
-            record.apply(entry)
-        }
-        for (id, record) in folders where !folderFile.folders.contains(where: { $0.id == id }) {
-            context.delete(record)
-            folders[id] = nil
+        switch folderFile {
+        case .success(let file):
+            for entry in file.folders {
+                let record = folders[entry.id] ?? FolderRecord(id: entry.id)
+                if folders[entry.id] == nil { context.insert(record); folders[entry.id] = record; arrived.insert(entry.id) }
+                record.apply(entry)
+            }
+            for (id, record) in folders where !file.folders.contains(where: { $0.id == id }) {
+                context.delete(record)
+                folders[id] = nil
+            }
+        case .failure(let error):
+            // A list that is there and can't be read keeps the folders the index has. A damaged one is written again from them.
+            log.error("folders can't be read: \(error.localizedDescription)")
+            if error is FolderFile.Damaged, !folders.isEmpty {
+                let entries = folders.values.sorted { $0.sortIndex < $1.sortIndex }.map {
+                    FolderEntry(id: $0.id, name: $0.name, clothRaw: $0.clothRaw, createdAt: $0.createdAt, sortIndex: $0.sortIndex, parentID: $0.parentID)
+                }
+                await Task.detached(priority: .userInitiated) { try? FolderFile(folders: entries).write(root) }.value
+            }
         }
 
         for (id, item) in scanned {

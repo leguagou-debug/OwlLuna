@@ -37,6 +37,8 @@ enum AppAction: Equatable, Sendable {
 extension Notification.Name {
     /// Asks the editor showing a notebook (object: its ID) to save and close.
     static let owlLunaCloseEditor = Notification.Name("OwlLunaCloseEditor")
+    /// Tells the editor showing a notebook (object: its ID) that a sync set its document aside for a newer version, to open again.
+    static let owlLunaReopenNotebook = Notification.Name("OwlLunaReopenNotebook")
 }
 
 extension LibraryStore {

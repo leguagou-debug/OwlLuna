@@ -100,6 +100,14 @@ private struct SyncNoticeCard: View {
                           message: Text(failure.reason.message))
                 .accessibilityIdentifier("library.sync.failed")
         }
+        if !news.held.isEmpty {
+            SyncNoticeRow(systemImage: "trash.slash", trouble: true, title: Text("\(news.held.count) notebooks weren't deleted"),
+                          message: Text("They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere.")) {
+                Button("Keep") { closing { Task { await sync.keepHeld() } } }
+                    .buttonStyle(.owlLuna(.secondary, compact: true))
+            }
+            .accessibilityIdentifier("library.sync.held")
+        }
         ForEach(news.conflictCopies.compactMap { store.record($0) }, id: \.id) { copy in
             SyncNoticeRow(systemImage: "doc.on.doc", trouble: false, title: Text(copy.title),
                           message: Text("Changed on two devices before they could sync. The older version was kept as this copy.")) {

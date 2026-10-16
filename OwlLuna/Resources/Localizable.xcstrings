@@ -450,6 +450,82 @@
         }
       }
     },
+    "%lld notebooks weren't deleted" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch wurde nicht gelöscht"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher wurden nicht gelöscht"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook wasn't deleted"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks weren't deleted"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno no se eliminó"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos no se eliminaron"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet n’a pas été supprimé"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets n’ont pas été supprimés"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld notebooks still uploading to iCloud" : {
       "localizations" : {
         "de" : {
@@ -2193,6 +2269,82 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld suppressions répercutées"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld deletions held back" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Löschung zurückgehalten"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Löschungen zurückgehalten"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld deletion held back"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld deletions held back"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld eliminación retenida"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld eliminaciones retenidas"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld suppression suspendue"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld suppressions suspendues"
                 }
               }
             }
@@ -4942,6 +5094,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il y a un mois"
+          }
+        }
+      }
+    },
+    "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In iCloud wartet eine neuere Version. Wenn du dieses Notizbuch schließt, werden beide behalten, die ältere als Konfliktkopie."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una versión más reciente esperando en iCloud. Cuando cierres este cuaderno, se guardarán las dos, la anterior como copia en conflicto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une version plus récente attend dans iCloud. Quand vous fermerez ce carnet, les deux seront conservées, l’ancienne sous forme de copie en conflit."
           }
         }
       }
@@ -12618,6 +12792,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Journal"
+          }
+        }
+      }
+    },
+    "Keep" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver"
           }
         }
       }
@@ -24678,6 +24874,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ces notes sont trop longues pour que le modèle de cet iPad les lise d'un coup."
+          }
+        }
+      }
+    },
+    "They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie sind auf diesem iPad oder einem anderen Gerät alle auf einmal verschwunden, was nach einem Fehler aussieht. Deshalb hat die Synchronisierung sie gelassen, wie sie sind. „Behalten“ holt sie überall zurück."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desaparecieron todos a la vez de este iPad o de otro dispositivo, lo que parece un error, así que la sincronización los dejó como estaban. «Conservar» los recupera en todas partes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ils ont tous disparu en même temps de cet iPad ou d’un autre appareil, ce qui ressemble à une erreur. La synchronisation les a donc laissés tels quels. « Conserver » les rétablit partout."
           }
         }
       }

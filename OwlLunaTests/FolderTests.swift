@@ -166,4 +166,48 @@ final class FolderTests: XCTestCase {
         XCTAssertEqual(folders.map(\.name), ["Science", "Physics"])
         XCTAssertEqual(folders.map(\.parentID), [nil, science], "the refresh reads each folder's parent from folders.json")
     }
+
+    func testAFolderListFromBeforeChangesWereDatedStillReads() async throws {
+        let store = try makeStore()
+        let id = UUID()
+        let raw = """
+        {"folders": [{"id": "\(id.uuidString)", "name": "Bio", "cloth": "moss", "createdAt": "2026-01-01T00:00:00.000Z", "sortIndex": 0}]}
+        """
+        try FileManager.default.createDirectory(at: store.root.library, withIntermediateDirectories: true)
+        try Data(raw.utf8).write(to: store.root.foldersFile)
+        let old = try XCTUnwrap(try FolderFile.load(store.root)?.folders.first)
+        XCTAssertEqual([old.name, old.clothRaw], ["Bio", "moss"])
+        XCTAssertTrue(FolderEntry.Field.allCases.allSatisfy { old.changedAt($0) == nil }, "a list from before dates has none, and needs none")
+
+        await LibraryIndex.refresh(root: store.root, context: store.context)
+        let folder = try XCTUnwrap(try store.context.fetch(FetchDescriptor<FolderRecord>()).first)
+        store.renameFolder(folder, to: "Biology")
+        await store.finishWritingShelves()
+        let renamed = try XCTUnwrap(FolderFile.read(store.root).folders.first)
+        XCTAssertEqual(renamed.name, "Biology")
+        XCTAssertNotNil(renamed.changedAt(.name), "a change made here is dated")
+        XCTAssertNil(renamed.changedAt(.cloth), "and only what changed")
+    }
+
+    func testAFolderOnTwoDevicesIsSettledOneFieldAtATime() throws {
+        let earlier = Date(timeIntervalSinceReferenceDate: 800_000_000), later = earlier.addingTimeInterval(60)
+        let base = FolderEntry(id: UUID(), name: "Science", clothRaw: "jade", createdAt: earlier, sortIndex: 0)
+        var here = base, there = base
+        here.name = "Physics"
+        here.setChangedAt(later, for: .name)
+        there.clothRaw = "rose"
+        there.setChangedAt(later, for: .cloth)
+        there.sortIndex = 4
+        let settled = FolderEntry.settled(newer: there, older: here)
+        XCTAssertEqual(settled.name, "Physics", "a dated change in the older list stands over the newer list's undated name")
+        XCTAssertEqual(settled.clothRaw, "rose")
+        XCTAssertEqual(settled.sortIndex, 4, "with neither dated, the newer list's goes")
+        XCTAssertEqual(try XCTUnwrap(settled.changedAt(.name)).timeIntervalSince(later), 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(settled.changedAt(.cloth)).timeIntervalSince(later), 0, accuracy: 0.001)
+
+        var renamedAgain = there
+        renamedAgain.name = "Chemistry"
+        renamedAgain.setChangedAt(later.addingTimeInterval(60), for: .name)
+        XCTAssertEqual(FolderEntry.settled(newer: here, older: renamedAgain).name, "Chemistry", "the later change wins, whichever list it is in")
+    }
 }

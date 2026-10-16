@@ -44,6 +44,7 @@ final class AppModel {
         }
         sync.take = { DocumentRegistry.shared.take($0) }
         sync.release = { DocumentRegistry.shared.release($0) }
+        sync.holdFolders = { [library] in try await library.holdingFolders($0) }
         // What a sync brought in (a lock, a deletion) reaches Spotlight and the widgets as a change made here would.
         sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] report in
             await library.reloadFromDisk(after: report)
@@ -113,6 +114,8 @@ final class AppModel {
             await sync.resolve()
             await sync.syncNow()
             await trash.launchSyncTried()
+            // A notebook reopened before its newer version could be brought in catches up now.
+            await sync.catchUp(open: .shared)
         }
         Task.detached(priority: .background) {
             CoverCache.shared.sweepDisk()

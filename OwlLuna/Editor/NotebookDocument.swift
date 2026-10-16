@@ -52,7 +52,7 @@ enum UndoBudget {
 }
 
 struct DocumentNotice: Identifiable, Hashable, Sendable {
-    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed }
+    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion }
     let id = UUID()
     let kind: Kind
     let message: String
@@ -75,6 +75,8 @@ final class NotebookDocument {
     private(set) var notices: [DocumentNotice] = []
     private(set) var damagedPages: Set<UUID> = []
     let isReadOnly: Bool
+    /// A sync swapped newer files in under it: it writes nothing more, and its editor opens the notebook again.
+    private(set) var isSetAside = false
 
     @ObservationIgnored let undoManager = DocumentUndoManager()
     @ObservationIgnored private var heaviestEditedPage = 0
@@ -564,6 +566,20 @@ final class NotebookDocument {
         notices.removeAll { $0.id == notice.id }
     }
 
+    /// Another device wrote in the notebook since, and so did this one: closing it keeps both.
+    func noteNewerVersion() {
+        guard !notices.contains(where: { $0.kind == .newerVersion }) else { return }
+        notices.append(DocumentNotice(kind: .newerVersion, message: String(localized: "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy.")))
+    }
+
+    /// Nothing is unsaved, under way or being recorded, so a newer version can take its place.
+    var canBeSetAside: Bool { !hasUnsavedChanges && pendingWork.isEmpty && activeSave == nil && recorder?.isRecording != true }
+
+    func setAside() {
+        isSetAside = true
+        pendingSave?.cancel()
+    }
+
     private func structureChanged() {
         manifestVersion += 1
         manifest.modifiedAt = .now
@@ -591,7 +607,7 @@ final class NotebookDocument {
     /// Debounced: each edit pushes the save back by `delay`, but never past `maxSaveLatency` after the first
     /// unsaved edit. With `coalesce`, an earlier pending save is never postponed.
     func scheduleSave(after delay: Duration? = nil, coalesce: Bool = false) {
-        guard !isReadOnly else { return }
+        guard !isReadOnly, !isSetAside else { return }
         if case .failed = saveState { return }
         let now = ContinuousClock.now
         let since = pendingSince ?? now
@@ -618,7 +634,7 @@ final class NotebookDocument {
             _ = await activeSave.value
             if !hasUnsavedChanges { return true }
         }
-        guard !isReadOnly, hasUnsavedChanges else {
+        guard !isReadOnly, !isSetAside, hasUnsavedChanges else {
             if !isReadOnly { saveState = .saved }
             return true
         }
@@ -718,7 +734,7 @@ final class NotebookDocument {
 
     /// Removes files of pages that are gone for good. Call after a successful flush when the editor closes.
     func collectGarbage() async {
-        guard !hasUnsavedChanges, !isReadOnly else { return }
+        guard !hasUnsavedChanges, !isReadOnly, !isSetAside else { return }
         await package.collectGarbage(keeping: manifest)
     }
 }

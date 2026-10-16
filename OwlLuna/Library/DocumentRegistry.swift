@@ -38,6 +38,21 @@ final class DocumentRegistry {
 
     func release(_ id: UUID) { inHand.remove(id) }
 
+    /// Takes an open notebook with nothing unsaved in hand, so a sync can swap in a newer version: its document is set
+    /// aside and its editor opens the notebook again once it is let go. False while there is anything to save.
+    func takeOpen(_ id: UUID) -> Bool {
+        guard let document = entries[id]?.document else { return take(id) }
+        guard document.canBeSetAside, opening[id] == nil, changing[id] == nil, closing[id] == nil else { return false }
+        document.setAside()
+        entries[id] = nil
+        inHand.insert(id)
+        NotificationCenter.default.post(name: .owlLunaReopenNotebook, object: id)
+        return true
+    }
+
+    /// The notebooks open in an editor, or in a tab behind the bar.
+    var openNotebooks: [UUID] { entries.compactMap { $0.value.document == nil ? nil : $0.key } }
+
     /// The library says so before it rewrites a closed notebook's manifest, and again once that is done.
     func willChange(_ id: UUID) { changing[id, default: 0] += 1 }
 

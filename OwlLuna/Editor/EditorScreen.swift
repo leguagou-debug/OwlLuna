@@ -444,6 +444,8 @@ struct EditorScreen: View {
     @State private var unsavedReason: String?
     @State private var lock = NotebookLock.shared
     @State private var askedToUnlock = false
+    /// The page on show when a sync set the document aside, which the newer version opens at.
+    @State private var reopenAt: UUID?
 
     /// A locked notebook is covered until it is unlocked, and whenever the app isn't in front, so it never shows in the app switcher.
     private func isCovered(_ document: NotebookDocument) -> Bool {
@@ -455,8 +457,8 @@ struct EditorScreen: View {
             Color.desk.ignoresSafeArea()
             if let document {
                 let covered = isCovered(document)
-                EditorView(document: document, initialPageID: initialPageID, isCovered: covered, close: close)
-                    .id(document.id)
+                EditorView(document: document, initialPageID: reopenAt ?? initialPageID, isCovered: covered, close: close)
+                    .id(ObjectIdentifier(document))
                     .disabled(covered)
                     .accessibilityHidden(covered)
                 if covered {
@@ -496,6 +498,13 @@ struct EditorScreen: View {
             guard let document else { return onClose() }
             document.recorder?.shutdown()
             close()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .owlLunaReopenNotebook)) { note in
+            guard (note.object as? UUID) == notebookID, let document, document.isSetAside, !isClosing else { return }
+            let page = document.manifest.library.currentPage
+            reopenAt = document.pages.indices.contains(page) ? document.pages[page].id : nil
+            self.document = nil
+            Task { await open() }
         }
         .notice("Your latest changes aren't saved yet", isPresented: Binding(get: { unsavedReason != nil }, set: { if !$0 { unsavedReason = nil } }),
                 message: Text("OwlLuna couldn't write to this device: \(unsavedReason ?? ""). If you close now, it keeps trying in the background, but changes that haven't been saved are lost if the app quits first.")) {
@@ -569,6 +578,8 @@ struct EditorScreen: View {
     /// Saves and closes a document without an editor to ask with: a tab behind the bar, or a window that went away.
     /// One that can't be saved is kept, and retried, until it can.
     static func putAway(_ document: NotebookDocument, store: LibraryStore) async {
+        // One a sync set aside has nothing to save, and the files are the newer version's now.
+        guard !document.isSetAside else { return }
         document.recorder?.shutdown()
         await document.finishPendingWork()
         if await document.flush() {

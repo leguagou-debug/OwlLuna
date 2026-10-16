@@ -285,6 +285,9 @@ struct LibraryRootView: View {
             return
         }
         let remembered = WindowMemory.remembered(in: sceneID) ?? (UUID(uuidString: restoredNotebook), UUID(uuidString: restoredBeside), [])
+        // A newer version from another device is brought in first, for a few seconds at most, so the window doesn't start from an older copy.
+        await app.sync.pullNewer([remembered.notebook, remembered.beside].compactMap { $0 }, within: SyncCenter.reopenLimit)
+        guard open == nil else { return }
         window.restore(remembered.tabs.filter { store.record($0).map { !$0.isTrashed } ?? false }.map { OpenNotebook(id: $0) })
         guard let id = remembered.notebook, let record = store.record(id), !record.isTrashed else { return rememberWindow() }
         // What a link or a shortcut asked for is shown in place of the notebook the window had.

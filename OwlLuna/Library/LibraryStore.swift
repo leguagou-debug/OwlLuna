@@ -399,6 +399,10 @@ final class LibraryStore {
         (try? context.fetch(FetchDescriptor<FolderRecord>(sortBy: [SortDescriptor(\.sortIndex)]))) ?? []
     }
 
+    private func folderEntries() -> [FolderEntry] {
+        allFolders().map { FolderEntry(id: $0.id, name: $0.name, clothRaw: $0.clothRaw, createdAt: $0.createdAt, sortIndex: $0.sortIndex, parentID: $0.parentID) }
+    }
+
     func folderTree() -> FolderTree { FolderTree(folders: allFolders()) }
 
     /// Numbers every folder in sidebar order, parents before their children, so a plain sort by index gives that order.
@@ -407,39 +411,41 @@ final class LibraryStore {
         for (index, id) in tree.ordered.enumerated() where byID[id]?.sortIndex != index { byID[id]?.sortIndex = index }
     }
 
-    private func saveFolders() {
+    private func saveFolders(since before: [FolderEntry]) {
         let folders = allFolders()
         renumberFolders(folders, tree: FolderTree(folders: folders))
         saveIndex()
-        writeFolders()
+        writeFolders(since: before)
     }
 
     @discardableResult
     func createFolder(name: String, cloth: ClothColor, parent: FolderRecord? = nil) -> FolderRecord? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let folders = allFolders()
+        let folders = allFolders(), before = folderEntries()
         guard !trimmed.isEmpty, FolderTree(folders: folders).canAddFolder(inside: parent?.id) else { return nil }
         let entry = FolderEntry(id: UUID(), name: trimmed, clothRaw: cloth.rawValue, createdAt: .now,
                                 sortIndex: (folders.map(\.sortIndex).max() ?? -1) + 1, parentID: parent?.id)
         let record = FolderRecord(id: entry.id)
         record.apply(entry)
         context.insert(record)
-        saveFolders()
+        saveFolders(since: before)
         return record
     }
 
     func renameFolder(_ folder: FolderRecord, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let before = folderEntries()
         folder.name = trimmed
         saveIndex()
-        writeFolders()
+        writeFolders(since: before)
     }
 
     func setCloth(_ cloth: ClothColor, for folder: FolderRecord) {
+        let before = folderEntries()
         folder.clothRaw = cloth.rawValue
         saveIndex()
-        writeFolders()
+        writeFolders(since: before)
     }
 
     /// Puts a folder inside another, or back at the top level, after the folders already there.
@@ -447,14 +453,16 @@ final class LibraryStore {
     func moveFolder(_ folder: FolderRecord, into parent: FolderRecord?) -> Bool {
         let folders = allFolders()
         guard folder.parentID != parent?.id, FolderTree(folders: folders).canMove(folder.id, into: parent?.id) else { return false }
+        let before = folderEntries()
         folder.parentID = parent?.id
         folder.sortIndex = (folders.map(\.sortIndex).max() ?? -1) + 1
-        saveFolders()
+        saveFolders(since: before)
         return true
     }
 
     /// Reorders the sidebar's rows. A folder keeps its parent: it takes the place among its own siblings that the drop gives it.
     func moveFolders(_ rows: [FolderRecord], from source: IndexSet, to destination: Int) {
+        let before = folderEntries()
         var ordered = rows
         ordered.move(fromOffsets: source, toOffset: destination)
         let moved = Set(source.map { rows[$0].id })
@@ -464,46 +472,63 @@ final class LibraryStore {
             for (index, sibling) in siblings.enumerated() { sibling.sortIndex = index }
             tree = FolderTree(folders: allFolders())
         }
-        saveFolders()
+        saveFolders(since: before)
     }
 
     /// Sorts every level by name.
     func sortFoldersByName(_ folders: [FolderRecord]) {
+        let before = folderEntries()
         let tree = FolderTree(folders: folders)
         for group in Set(folders.map { tree.parent(of: $0.id) }) {
             let siblings = folders.filter { tree.parent(of: $0.id) == group }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             for (index, sibling) in siblings.enumerated() { sibling.sortIndex = index }
         }
-        saveFolders()
+        saveFolders(since: before)
     }
 
     /// Deleting a folder keeps what was in it: its notebooks and its folders move up to the folder it sat in.
     func deleteFolder(_ folder: FolderRecord) {
-        let folders = allFolders()
+        let folders = allFolders(), before = folderEntries()
         let parent = folders.first { $0.id == folder.parentID }
         move(folder.notebooks ?? [], to: parent)
         for child in folders where child.parentID == folder.id { child.parentID = parent?.id }
         context.delete(folder)
-        saveFolders()
+        saveFolders(since: before)
     }
 
-    /// Writes are chained so they land in order, and each merges into the file so keys this version
-    /// doesn't know about survive.
-    private func writeFolders() {
-        let folders = ((try? context.fetch(FetchDescriptor<FolderRecord>(sortBy: [SortDescriptor(\.sortIndex)]))) ?? []).map {
-            FolderEntry(id: $0.id, name: $0.name, clothRaw: $0.clothRaw, createdAt: $0.createdAt, sortIndex: $0.sortIndex, parentID: $0.parentID)
-        }
+    /// Writes are chained so they land in order, with a sync's folder pass among them. Each takes only what changed
+    /// since `before`, stamped, into the file as it is, so keys this version doesn't know about and folders a sync
+    /// brought in survive. A file that is missing or damaged is written afresh from the index.
+    private func writeFolders(since before: [FolderEntry]) {
+        let after = folderEntries(), now = Date.now
         let root = root, previous = folderWrite
         folderWrite = Task { [weak self] in
             await previous?.value
             let failure = await Task.detached(priority: .utility) { () -> String? in
-                var file = FolderFile.read(root)
-                file.merge(folders)
-                do { try file.write(root) } catch { return error.localizedDescription }
+                do {
+                    let loaded: FolderFile?
+                    do { loaded = try FolderFile.load(root) } catch is FolderFile.Damaged { loaded = nil }
+                    var file = loaded ?? FolderFile(folders: after)
+                    file.apply(from: before, to: after, at: now)
+                    try file.write(root)
+                } catch {
+                    return error.localizedDescription
+                }
                 return nil
             }.value
             if let failure { self?.lastError = String(localized: "Folders couldn't be saved: \(failure)") }
         }
+    }
+
+    /// Runs `work` in turn with the folder writes, so neither reads the file while the other is changing it.
+    func holdingFolders<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value) async throws -> Value {
+        let previous = folderWrite
+        let turn = Task.detached(priority: .utility) { () -> Result<Value, any Error> in
+            await previous?.value
+            return Result { try work() }
+        }
+        folderWrite = Task { _ = await turn.value }
+        return try await turn.value.get()
     }
 
     // MARK: Smart shelves
@@ -621,7 +646,7 @@ final class LibraryStore {
                                         cover: NotebookStarter.journal.spec(for: id), defaults: paper, pages: [page])
         manifest.library.lastOpenedAt = now
         manifest.library.isJournal = true
-        manifest.library.setChangedAt(now, for: .journal)
+        manifest.library.stampChange(.journal, at: now)
         try await assemble(id) { package in
             try await package.create(manifest)
             return manifest

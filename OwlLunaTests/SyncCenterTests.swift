@@ -293,6 +293,134 @@ final class SyncCenterTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: other.library.path(percentEncoded: false)))
     }
 
+    // MARK: A notebook reopened, or open, after another device wrote in it
+
+    func testAReopenedNotebookWaitsForItsNewerVersionSoNoConflictedCopyIsMade() async throws {
+        let (first, second) = try await twoNotebooksWrittenInElsewhere()
+        let center = SyncCenter(root: root, defaults: defaults), registry = DocumentRegistry.shared, root = root!
+        center.take = { registry.take($0) }
+        center.release = { registry.release($0) }
+        // The window asks as the app becomes ready, before iCloud has been found.
+        let window = Task {
+            await center.pullNewer([first], within: SyncCenter.reopenLimit)
+            return try await registry.open(first, root: root, scene: nil) { _ in }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertNil(registry.document(for: first), "nothing is reopened while iCloud is still being looked for")
+        XCTAssertFalse(registry.isOpening(first))
+        await center.use(cloud, account: nil)
+        // The launch pass is asked for at once, and waits for the window's notebook.
+        let launch = Task { await center.syncNow() }
+        let document = try await window.value
+        await launch.value
+        addTeardownBlock { @MainActor in registry.unregister(first, document: document) }
+        XCTAssertTrue(document.title.hasSuffix(", written in"), "the window opens the version written on the other device")
+        XCTAssertEqual(center.lastReport?.pulled, [second])
+
+        document.rename("Written here")
+        await document.flush()
+        registry.unregister(first, document: document)
+        await center.syncNow()
+        XCTAssertEqual(center.lastReport?.pushed, [first], "written in and closed, it goes to the other device as it is")
+        XCTAssertEqual(center.lastReport?.conflictCopies, [])
+    }
+
+    func testAReopenedNotebookWaitsAFewSecondsAtMostAndNotAtAllWithSyncOff() async throws {
+        let (first, _) = try await twoNotebooksWrittenInElsewhere()
+        // iCloud is never found.
+        let center = SyncCenter(root: root, defaults: defaults)
+        let began = ContinuousClock.now
+        let outcome = await center.pullNewer([first], within: .milliseconds(500))
+        let waited = ContinuousClock.now - began
+        XCTAssertTrue(outcome.isEmpty)
+        XCTAssertGreaterThanOrEqual(waited, .milliseconds(500))
+        XCTAssertLessThan(waited, .seconds(3), "it gives up, and the window opens what is on the device")
+        let untouched = try await isWrittenIn(first)
+        XCTAssertFalse(untouched)
+
+        defaults.set(false, forKey: SettingsKey.syncsWithICloud)
+        let off = SyncCenter(root: root, defaults: defaults)
+        let start = ContinuousClock.now
+        await off.pullNewer([first], within: SyncCenter.reopenLimit)
+        XCTAssertLessThan(ContinuousClock.now - start, .milliseconds(200), "with sync off there is nothing to wait for")
+        await off.use(cloud, account: nil)
+        await off.pullNewer([first], within: SyncCenter.reopenLimit)
+        let stillUntouched = try await isWrittenIn(first)
+        XCTAssertFalse(stillUntouched)
+    }
+
+    func testACleanOpenNotebookTakesTheNewerVersionAndIsOpenedAgain() async throws {
+        let (first, _) = try await twoNotebooksWrittenInElsewhere()
+        let center = SyncCenter(root: root, defaults: defaults), registry = DocumentRegistry.shared, root = root!
+        center.take = { registry.take($0) }
+        center.release = { registry.release($0) }
+        let old = try await registry.open(first, root: root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in registry.unregister(first, document: old) }
+        // As the editor does on opening: where the notebook was left off reading isn't writing in it.
+        old.noteOpened()
+        let reopen = expectation(forNotification: .owlLunaReopenNotebook, object: nil) { ($0.object as? UUID) == first }
+        await center.use(cloud, account: nil)
+        await center.catchUp(open: registry)
+        await fulfillment(of: [reopen], timeout: 1)
+        XCTAssertTrue(old.isSetAside)
+        XCTAssertNil(registry.document(for: first), "the editor lets go of the copy it had")
+        let pulled = try await isWrittenIn(first)
+        XCTAssertTrue(pulled)
+        let fresh = try await registry.open(first, root: root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in registry.unregister(first, document: fresh) }
+        XCTAssertFalse(fresh === old)
+        XCTAssertTrue(fresh.title.hasSuffix(", written in"), "and opens the newer version in its place")
+        XCTAssertTrue(old.notices.isEmpty)
+
+        old.rename("Too late")
+        await old.flush()
+        let kept = try await isWrittenIn(first)
+        XCTAssertTrue(kept, "the copy set aside writes nothing over the newer files")
+        registry.unregister(first, document: fresh)
+        await center.syncNow()
+        XCTAssertEqual(center.lastReport?.pulled.contains(first), false)
+        XCTAssertEqual(center.lastReport?.conflictCopies, [])
+    }
+
+    func testAnOpenNotebookWrittenInHereIsToldANewerVersionIsWaiting() async throws {
+        let (first, _) = try await twoNotebooksWrittenInElsewhere()
+        let center = SyncCenter(root: root, defaults: defaults), registry = DocumentRegistry.shared, root = root!
+        center.take = { registry.take($0) }
+        center.release = { registry.release($0) }
+        let document = try await registry.open(first, root: root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in registry.unregister(first, document: document) }
+        document.rename("Written here")
+        await center.use(cloud, account: nil)
+        await center.catchUp(open: registry)
+        XCTAssertFalse(document.isSetAside)
+        XCTAssertTrue(registry.document(for: first) === document, "the editor keeps what it has")
+        XCTAssertEqual(document.notices.map(\.kind), [.newerVersion])
+        let here = try await NotebookPackage(root: root, id: first).readManifest().manifest.title
+        XCTAssertEqual(here, "Written here", "nothing is written over it")
+        await center.catchUp(open: registry)
+        XCTAssertEqual(document.notices.count, 1, "it is said once")
+
+        registry.unregister(first, document: document)
+        await center.syncNow()
+        XCTAssertEqual(center.lastReport?.conflictCopies.count, 1, "once it is closed, both versions are kept")
+    }
+
+    func testAnOpenNotebookIsLetGoOfOnlyWithNothingToSave() async throws {
+        let id = try await makeNotebook("Physics", on: root), registry = DocumentRegistry.shared
+        let document = try await registry.open(id, root: root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in
+            registry.release(id)
+            registry.unregister(id, document: document)
+        }
+        document.rename("Physics II")
+        XCTAssertFalse(registry.takeOpen(id), "a change not yet saved keeps it open")
+        XCTAssertFalse(document.isSetAside)
+        await document.flush()
+        XCTAssertTrue(registry.takeOpen(id))
+        XCTAssertTrue(document.isSetAside)
+        XCTAssertNil(registry.document(for: id))
+    }
+
     // MARK: Recently Deleted and the launch sync
 
     private var container: ModelContainer?
@@ -711,5 +839,35 @@ final class SyncCenterTests: XCTestCase {
         center.putAwayNews()
         XCTAssertTrue(center.news.isEmpty)
         XCTAssertTrue(SyncCenter(root: root, defaults: defaults).news.isEmpty)
+    }
+
+    func testNotebooksHeldBackFromDeletingAreTroubleUntilKept() async throws {
+        var ids: [UUID] = []
+        for title in ["One", "Two", "Three", "Four"] { ids.append(try await makeNotebook(title, on: root)) }
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        for id in ids { try FileManager.default.removeItem(at: root.package(id)) }
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(Set(center.news.held), Set(ids))
+        XCTAssertTrue(center.news.isTrouble)
+        XCTAssertEqual(center.news.count, 1, "said in one row")
+        XCTAssertFalse(center.isUpToDate)
+        XCTAssertEqual(center.status, "4 deletions held back")
+        XCTAssertTrue(ids.allSatisfy { synced($0, in: cloud) })
+
+        await center.keepHeld()
+        XCTAssertEqual(Set(root.packageIDs()), Set(ids), "kept, they come back")
+        XCTAssertTrue(center.news.isEmpty)
+        XCTAssertTrue(center.isUpToDate)
+
+        for id in ids { try FileManager.default.removeItem(at: root.package(id)) }
+        await center.syncNow()
+        XCTAssertEqual(Set(center.news.held), Set(ids))
+        center.putAwayNews()
+        await center.syncNow()
+        XCTAssertTrue(center.news.isEmpty, "once put away, the same ones aren't shown again")
+        XCTAssertTrue(ids.allSatisfy { synced($0, in: cloud) }, "and they are still held")
     }
 }

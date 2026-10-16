@@ -363,7 +363,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/OwlLunaWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/OwlLunaWidgets-Info.plist";
@@ -389,7 +389,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/OwlLunaWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/OwlLunaWidgets-Info.plist";
@@ -537,7 +537,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Config/OwlLuna-iCloud.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";
 				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				ENABLE_PREVIEWS = YES;
@@ -577,7 +577,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Config/OwlLuna-iCloud.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"OwlLuna/Preview Content\"";
 				DEVELOPMENT_TEAM = 7QU5DP6N9B;
 				ENABLE_PREVIEWS = YES;
