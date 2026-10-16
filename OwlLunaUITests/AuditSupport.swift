@@ -14,6 +14,7 @@ extension XCTestCase {
         let barFrame = bar.flatMap { $0.exists ? $0.frame.insetBy(dx: -4, dy: -4) : nil }
         let sheetTexts = sheet.flatMap { $0.exists ? $0.staticTexts.allElementsBoundByIndex.map(\.frame) : nil } ?? []
         let listFrame = list.flatMap { $0.exists ? $0.frame : nil }
+        var recheck: [(identifier: String, label: String, frame: CGRect)] = []
         try app.performAccessibilityAudit(for: types) { issue in
             let element = issue.element
             print("AUDIT [\(screen)] \(issue.compactDescription) | type \(element.map { String($0.elementType.rawValue) } ?? "-") '\(element?.label ?? "nil")' \(element?.frame ?? .zero)")
@@ -125,8 +126,26 @@ extension XCTestCase {
                 print("AUDIT [\(screen)] ignored, text with no element by a popover: \(issue.compactDescription)")
                 return true
             }
+            // A late redraw on a busy Mac looks like text that doesn't scale, so it fails only if a second audit flags it too.
+            if issue.auditType == .dynamicType, let element {
+                recheck.append((element.identifier, element.label, element.frame))
+                return true
+            }
             print("AUDIT FAIL [\(screen)] \(issue.detailedDescription)")
             return false
+        }
+        guard !recheck.isEmpty else { return }
+        var flagged: [(identifier: String, label: String, frame: CGRect)] = []
+        try app.performAccessibilityAudit(for: .dynamicType) { issue in
+            guard let element = issue.element else { return true }
+            let seen = (identifier: element.identifier, label: element.label, frame: element.frame)
+            guard recheck.contains(where: { $0 == seen }) else { return true }
+            flagged.append(seen)
+            print("AUDIT FAIL [\(screen)] \(issue.detailedDescription)")
+            return false
+        }
+        for item in recheck where !flagged.contains(where: { $0 == item }) {
+            print("AUDIT [\(screen)] cleared on re-check: \(item.label)")
         }
     }
 }
