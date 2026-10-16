@@ -386,9 +386,13 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var zoomAdvance: DispatchWorkItem?
     private var zoomReachedBand = false
     private var selectionView: ItemSelectionView?
+    private var cropView: ItemCropView?
     private var linkTitles = LinkTitles()
     private var textView: UITextView?
     private var typing: ItemSelection?
+    /// What has been typed and the ticks that followed its lines; the box's style is read from the page.
+    private var typed: TextBox?
+    private var typingMarkers: TextMarkersView?
     private var keyboardOverlap: CGFloat = 0
     private var mirrored: String?
     private var fingersDraw = false
@@ -612,7 +616,10 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             UIKeyCommand(title: String(localized: "Next Page"), action: #selector(nextPage), input: UIKeyCommand.inputRightArrow),
             UIKeyCommand(title: String(localized: "Previous Page"), action: #selector(previousPage), input: UIKeyCommand.inputLeftArrow),
         ]
-        let selected = session.selection == nil ? [] : [
+        let selected = session.selection == nil ? [] : cropView != nil ? [
+            UIKeyCommand(title: String(localized: "Cancel"), action: #selector(cancelCrop), input: UIKeyCommand.inputEscape),
+            UIKeyCommand(title: String(localized: "Done"), action: #selector(keepCrop), input: "\r"),
+        ] : [
             UIKeyCommand(title: String(localized: "Delete"), action: #selector(deleteSelectedItem), input: UIKeyCommand.inputDelete),
             UIKeyCommand(action: #selector(deleteSelectedItem), input: "\u{8}"),
             UIKeyCommand(title: String(localized: "Done"), action: #selector(clearSelection), input: UIKeyCommand.inputEscape),
@@ -884,7 +891,10 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     @objc private nonisolated func settingsChanged() {
-        Task { @MainActor [weak self] in self?.updateNight() }
+        Task { @MainActor [weak self] in
+            self?.updateNight()
+            self?.zoomPanel?.isLeftHanded = UserDefaults.standard.bool(forKey: SettingsKey.leftHanded)
+        }
     }
 
     /// Light paper goes dark with the app, and comes back with it: its pages are made again.
@@ -1005,6 +1015,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         canvases[page.id] = canvas
         slot.raiseTape()
         if let selectionView, selectionView.superview === slot { slot.bringSubviewToFront(selectionView) }
+        if let cropView, cropView.superview === slot { slot.bringSubviewToFront(cropView) }
         if let textView, textView.superview === slot { slot.bringSubviewToFront(textView) }
         if let findView = slot.findView { slot.bringSubviewToFront(findView) }
         if let ink = document.loadedInk(page.id) {
@@ -1342,6 +1353,12 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             guard let self, let slot else { return }
             self.activate(ItemSelection(pageID: slot.page.id, itemID: itemID))
         }
+        for view in slot.itemViews.values where view.item.text?.list == .check {
+            view.onTick = { [weak self, weak slot] itemID, line in
+                guard let self, let slot else { return }
+                self.toggleCheck(ItemSelection(pageID: slot.page.id, itemID: itemID), line: line)
+            }
+        }
         if let typing, typing.pageID == slot.page.id { slot.itemViews[typing.itemID]?.isHidden = true }
     }
 
@@ -1386,6 +1403,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     func select(_ selection: ItemSelection?) {
         if textView != nil, selection != typing { endTextEditing() }
+        if cropView != nil, selection != session.selection { endCrop(keeping: true) }
         if session.selection != selection { session.selection = selection }
         showSelection()
     }
@@ -1394,6 +1412,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private func showSelection() {
         guard !isLocked, !document.isReadOnly, let (slot, item) = selectedItem() else {
             discardTextEditor()
+            endCrop(keeping: true)
             selectionView?.removeFromSuperview()
             selectionView = nil
             if session.selection != nil { session.selection = nil }
@@ -1409,10 +1428,50 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         view.scale = bakedScale
         if !view.isChanging { view.show(item) }
         view.onChange = { [weak self] item, final in self?.selectedItemChanged(item, final: final) }
-        view.onTap = { [weak self] in self?.editText() }
+        view.onTap = { [weak self] point in self?.tappedSelection(at: point) }
         selectionView = view
+        if let cropView, cropView.item != item || cropView.superview !== slot { endCrop(keeping: false) }
+        view.isHidden = cropView != nil
+        if let cropView {
+            cropView.scale = bakedScale
+            slot.bringSubviewToFront(cropView)
+        }
         layoutTextEditor()
     }
+
+    // MARK: Cropping a picture
+
+    func beginCrop() {
+        guard cropView == nil, textView == nil, !isLocked, !document.isReadOnly, let (slot, item) = selectedItem(), item.assetFile != nil else { return }
+        let view = ItemCropView(item: item, picture: slot.itemViews[item.id]?.shownPicture, assets: document.package.assetsDirectory, scale: bakedScale)
+        view.onChange = { [weak self] crop in self?.session.crop = crop }
+        slot.addSubview(view)
+        slot.itemViews[item.id]?.isHidden = true
+        selectionView?.isHidden = true
+        cropView = view
+        session.crop = view.crop
+        UIAccessibility.post(notification: .layoutChanged, argument: view.accessibilityElements?.first)
+    }
+
+    /// Keeping the crop is one undo step, and is only made while the picture is as it was when cropping began.
+    func endCrop(keeping: Bool) {
+        guard let cropView else { return }
+        let slot = cropView.superview as? PageSlotView, item = cropView.item, crop = cropView.crop
+        self.cropView = nil
+        cropView.removeFromSuperview()
+        if session.crop != nil { session.crop = nil }
+        slot?.itemViews[item.id]?.isHidden = false
+        selectionView?.isHidden = false
+        guard keeping, !document.isReadOnly, let slot, slot.page.items.contains(item), crop != (item.crop ?? PageItem.wholePicture) else { return }
+        document.updateItems(onPage: slot.page.id, actionName: String(localized: "Crop")) { items in
+            if let index = items.firstIndex(where: { $0.id == item.id }) { items[index] = items[index].cropped(to: crop) }
+        }
+    }
+
+    func resetCrop() { cropView?.reset() }
+
+    @objc private func cancelCrop() { endCrop(keeping: false) }
+    @objc private func keepCrop() { endCrop(keeping: true) }
 
     private func selectedItemChanged(_ item: PageItem, final: Bool) {
         guard let selection = session.selection, let slot = slots[selection.pageID] else { return }
@@ -1469,20 +1528,52 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// A finger tap opens a link or picks up a picture when fingers don't draw; any tap elsewhere puts the selected one down.
     /// While presenting nothing is drawn, so a tap on a link always opens it.
     @objc private func tappedPage(_ gesture: UITapGestureRecognizer) {
-        guard !isOnSelection(gesture), !isFinding else { return }
+        guard !isOnSelection(gesture), !isFinding, cropView == nil else { return }
         if replay != nil { return seekReplay(to: gesture.location(in: scrollView)) }
         if inkLasso != nil { return setInkSelection([:]) }
         if textOverlay != nil { return }
         let hit = isPresenting || !fingersDraw ? item(at: gesture.location(in: scrollView)) : nil
         if let hit, item(hit)?.tape != nil { return }
         if let hit, let link = item(hit)?.link { return session.follow(link, from: hit.pageID) }
+        if let hit, let line = checklistLine(hit, at: gesture.location(in: scrollView)) { return toggleCheck(hit, line: line) }
         guard !isPresenting, !document.isReadOnly else { return }
         if hit != nil || session.selection != nil { select(hit) }
     }
 
+    /// The line of a checklist whose box is under a point in the scroll view.
+    private func checklistLine(_ selection: ItemSelection, at point: CGPoint) -> Int? {
+        guard !isLocked, !document.isReadOnly, bakedScale > 0, let slot = slots[selection.pageID], let item = item(selection),
+              let box = item.text, box.list == .check else { return nil }
+        let local = contentView.convert(point, from: scrollView)
+        let dx = (local.x - slot.frame.minX) / bakedScale - item.center.x, dy = (local.y - slot.frame.minY) / bakedScale - item.center.y
+        let x = dx * cos(-item.rotation) - dy * sin(-item.rotation), y = dx * sin(-item.rotation) + dy * cos(-item.rotation)
+        return box.checkbox(at: CGPoint(x: x + item.size.width / 2, y: y + item.size.height / 2), width: item.size.width)
+    }
+
+    /// Ticks a line of a checklist, or takes its tick off, as one undo step.
+    private func toggleCheck(_ selection: ItemSelection, line: Int) {
+        guard !isLocked, !document.isReadOnly, let box = item(selection)?.text else { return }
+        let ticking = !box.checked.contains(line)
+        document.updateItems(onPage: selection.pageID, actionName: ticking ? String(localized: "Tick") : String(localized: "Untick")) { items in
+            guard let index = items.firstIndex(where: { $0.id == selection.itemID }), var box = items[index].text else { return }
+            box.toggleCheck(line: line)
+            items[index].content = .text(box)
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// A tap on the box that is picked up ticks a line of its checklist, or starts typing in it.
+    private func tappedSelection(at point: CGPoint) {
+        if let selection = session.selection, let item = item(selection), item.text?.list == .check,
+           let line = item.text?.checkbox(at: point, width: item.size.width) {
+            return toggleCheck(selection, line: line)
+        }
+        editText()
+    }
+
     /// Touch and hold picks one up with a finger or the Pencil, and drops the dot the hold would have drawn.
     @objc private func heldPage(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, !isLocked, !document.isReadOnly, !isOnSelection(gesture),
+        guard gesture.state == .began, !isLocked, !document.isReadOnly, !isOnSelection(gesture), cropView == nil,
               let hit = item(at: gesture.location(in: scrollView)) else { return }
         if let canvas = canvases[hit.pageID], canvas.drawingGestureRecognizer.isEnabled {
             canvas.drawingGestureRecognizer.isEnabled = false
@@ -1510,6 +1601,10 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         slot.addSubview(view)
         textView = view
         typing = selection
+        typed = box
+        let markers = TextMarkersView()
+        slot.insertSubview(markers, belowSubview: view)
+        typingMarkers = markers
         slot.itemViews[item.id]?.isHidden = true
         selectionView?.isEditing = true
         session.isEditingText = true
@@ -1522,6 +1617,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private func liveTextItem() -> (slot: PageSlotView, item: PageItem)? {
         guard let textView, let (slot, item) = selectedItem(), var box = item.text else { return nil }
         box.string = textView.text
+        box.checked = typed?.checked ?? box.checked
         var live = item
         live.content = .text(box)
         return (slot, live.fittedToText())
@@ -1529,19 +1625,42 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     private func layoutTextEditor() {
         guard let textView, let (slot, item) = liveTextItem(), let box = item.text else { return }
-        let font = box.font(scale: bakedScale), color = box.tint.color(onDark: slot.page.isDark(night: night))
-        if textView.font != font { textView.font = font }
-        if textView.textColor != color { textView.textColor = color }
-        if textView.textAlignment != box.alignment.textAlignment { textView.textAlignment = box.alignment.textAlignment }
+        let onDark = slot.page.isDark(night: night)
+        styleTextEditor(textView, box: box, onDark: onDark)
         textView.transform = .identity
         textView.bounds = CGRect(x: 0, y: 0, width: item.size.width * bakedScale, height: item.size.height * bakedScale)
         textView.center = CGPoint(x: item.center.x * bakedScale, y: item.center.y * bakedScale)
         textView.transform = CGAffineTransform(rotationAngle: item.rotation)
         selectionView?.show(item)
         slot.bringSubviewToFront(textView)
+        if let typingMarkers {
+            typingMarkers.transform = .identity
+            typingMarkers.bounds = textView.bounds
+            typingMarkers.center = textView.center
+            typingMarkers.transform = textView.transform
+            typingMarkers.show(box.list == nil ? nil : box, onDark: onDark, scale: bakedScale)
+            slot.insertSubview(typingMarkers, belowSubview: textView)
+        }
+    }
+
+    /// Sets the words being typed as they are drawn on the page. Not while a word is still being composed, which a
+    /// change of style would end.
+    private func styleTextEditor(_ textView: UITextView, box: TextBox, onDark: Bool) {
+        guard textView.markedTextRange == nil else { return }
+        let styled = box.editingText(scale: bakedScale, onDark: onDark), storage = textView.textStorage
+        guard storage.string == styled.string, !storage.isEqual(to: styled) || storage.length == 0 else { return }
+        storage.beginEditing()
+        styled.enumerateAttributes(in: NSRange(location: 0, length: styled.length)) { attributes, range, _ in
+            storage.setAttributes(attributes, range: range)
+        }
+        storage.endEditing()
+        let caret = textView.selectedRange.location, text = storage.string as NSString
+        textView.typingAttributes = caret > 0 && caret <= text.length && text.character(at: caret - 1) != 10
+            ? storage.attributes(at: caret - 1, effectiveRange: nil) : box.typingAttributes(scale: bakedScale, onDark: onDark)
     }
 
     func textViewDidChange(_ textView: UITextView) {
+        typed?.carryChecks(to: textView.text)
         layoutTextEditor()
         revealTextEditor()
     }
@@ -1555,7 +1674,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// Saves what was typed as one undo step. A box left empty is taken off the page.
     private func endTextEditing() {
         guard let textView, let typing else { return }
-        let string = textView.text ?? ""
+        let string = textView.text ?? "", checked = typed?.checked
         discardTextEditor()
         if !isModalShowing { anchor.becomeFirstResponder() }
         if string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1568,6 +1687,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             document.updateItems(onPage: typing.pageID, actionName: String(localized: "Edit Text")) { items in
                 guard let index = items.firstIndex(where: { $0.id == typing.itemID }), var box = items[index].text else { return }
                 box.string = string
+                box.checked = checked ?? box.checked
                 items[index].content = .text(box)
                 items[index] = items[index].fittedToText()
             }
@@ -1579,8 +1699,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         self.textView = nil
         textView.delegate = nil
         textView.removeFromSuperview()
+        typingMarkers?.removeFromSuperview()
+        typingMarkers = nil
         if let typing { slots[typing.pageID]?.itemViews[typing.itemID]?.isHidden = false }
         typing = nil
+        typed = nil
         selectionView?.isEditing = false
         if session.isEditingText { session.isEditingText = false }
         updateInsets()
@@ -2316,6 +2439,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         let index = pendingPage ?? currentPage
         if !layout.isLaidOut(index, in: pages) { bring(index) }
         let panel = ZoomWindowPanel()
+        panel.isLeftHanded = UserDefaults.standard.bool(forKey: SettingsKey.leftHanded)
         panel.onAction = { [weak self] in self?.zoomAction($0) }
         view.insertSubview(panel, belowSubview: laser)
         zoomPanel = panel

@@ -49,6 +49,54 @@ extension TextBox.Alignment {
     }
 }
 
+extension TextBox.Face {
+    var displayName: String {
+        switch self {
+        case .system: String(localized: "System")
+        case .serif: String(localized: "Serif")
+        case .mono: String(localized: "Mono")
+        case .fraunces: "Fraunces"
+        }
+    }
+}
+
+extension TextBox.List {
+    var displayName: String {
+        switch self {
+        case .bullet: String(localized: "Bullets")
+        case .number: String(localized: "Numbers")
+        case .check: String(localized: "Checklist")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .bullet: "list.bullet"
+        case .number: "list.number"
+        case .check: "checklist"
+        }
+    }
+}
+
+extension TextBox.Highlight {
+    /// The highlighter's tint of the same name.
+    private var tint: UInt32 {
+        switch self {
+        case .yellow: ToolPreset.tints[0]
+        case .green: ToolPreset.tints[1]
+        case .pink: ToolPreset.tints[2]
+        case .blue: ToolPreset.tints[3]
+        }
+    }
+
+    var displayName: String { ToolPreset.colorName(tint) }
+
+    /// Fainter on Charcoal and Chalkboard, so the light text over it stays readable there.
+    func color(onDark: Bool) -> UIColor {
+        ToolPreset.uiColor(tint).withAlphaComponent(onDark ? 0.4 : 0.55)
+    }
+}
+
 /// Laying out and drawing typed text, the same way in the editor, thumbnails and exported PDFs. Thread-safe.
 extension TextBox {
     static let sizes: [(name: String, points: CGFloat)] = [
@@ -56,37 +104,206 @@ extension TextBox {
     ]
 
     func font(scale: CGFloat = 1) -> UIFont {
-        .systemFont(ofSize: fontSize * scale, weight: isBold ? .bold : .regular)
+        let size = fontSize * scale, weight: UIFont.Weight = isBold ? .bold : .regular
+        let upright: UIFont = switch face {
+        case .system: .systemFont(ofSize: size, weight: weight)
+        case .serif: Self.system(.serif, size: size, weight: weight)
+        case .mono: Self.system(.monospaced, size: size, weight: weight)
+        case .fraunces: OwlLunaFonts.text(size: size, bold: isBold) as UIFont
+        }
+        return isItalic ? Self.italic(upright, ownCut: face != .fraunces) : upright
     }
 
-    private func attributed(_ string: String, color: UIColor) -> NSAttributedString {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = alignment.textAlignment
-        paragraph.lineBreakMode = .byWordWrapping
-        return NSAttributedString(string: string, attributes: [.font: font(), .foregroundColor: color, .paragraphStyle: paragraph])
+    private static func system(_ design: UIFontDescriptor.SystemDesign, size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = UIFont.systemFont(ofSize: size, weight: weight)
+        return font.fontDescriptor.withDesign(design).map { UIFont(descriptor: $0, size: size) } ?? font
+    }
+
+    /// The face's own italic, or the upright leant over where it has none.
+    private static func italic(_ font: UIFont, ownCut: Bool) -> UIFont {
+        let descriptor = font.fontDescriptor
+        if ownCut, let italic = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) {
+            let cut = UIFont(descriptor: italic, size: font.pointSize)
+            if cut.fontDescriptor.symbolicTraits.contains(.traitItalic) { return cut }
+        }
+        return UIFont(descriptor: descriptor.withMatrix(CGAffineTransform(a: 1, b: 0, c: 0.2, d: 1, tx: 0, ty: 0)), size: font.pointSize)
+    }
+
+    /// The text as it is measured and drawn, and where a checklist's boxes go in it.
+    private struct Typeset {
+        var text: NSAttributedString
+        /// The tab that starts each item of a checklist, by line.
+        var checks: [(line: Int, location: Int)] = []
+        var font: UIFont
+        /// Between a marker and the words.
+        var gap: CGFloat = 0
+    }
+
+    /// A list's lines start with their marker and a tab across to the indent the rest of the line keeps to; a checklist's
+    /// boxes are drawn in the room its tab leaves. With `markersOnly` the words are there but clear, for drawing under the
+    /// editor's own; `editing` leaves the markers out and stands every line at the indent, as the editor holds the words.
+    private func typeset(_ string: String, color: UIColor, highlight: UIColor? = nil, scale: CGFloat = 1, markersOnly: Bool = false,
+                         editing: Bool = false) -> Typeset {
+        let font = font(scale: scale)
+        var words: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: markersOnly ? UIColor.clear : color]
+        if !markersOnly, isUnderlined { words[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if !markersOnly, let highlight { words[.backgroundColor] = highlight }
+        guard let list else {
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = alignment.textAlignment
+            paragraph.lineBreakMode = .byWordWrapping
+            words[.paragraphStyle] = paragraph
+            let text = NSMutableAttributedString(string: string, attributes: words)
+            if words.count > 3 { Self.plainNewlines(in: text) }
+            return Typeset(text: text, font: font)
+        }
+        let lines = (string as NSString).components(separatedBy: "\n"), numbers = Self.numbers(of: lines)
+        let side = Self.checkSide(font), gap = font.pointSize * 0.4
+        let markers = lines.indices.map { index -> String? in
+            guard let number = numbers[index] else { return nil }
+            return switch list {
+            case .bullet: "•"
+            case .number: "\(number)."
+            case .check: ""
+            }
+        }
+        let widest = list == .check ? side : markers.compactMap { $0 }.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        let indent = max(widest + gap, font.pointSize * 1.5)
+        let tabs = list == .check ? [NSTextTab(textAlignment: .natural, location: indent)]
+            : [NSTextTab(textAlignment: .right, location: indent - gap), NSTextTab(textAlignment: .natural, location: indent)]
+        func paragraph(first: CGFloat) -> NSParagraphStyle {
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .natural
+            paragraph.lineBreakMode = .byWordWrapping
+            paragraph.firstLineHeadIndent = first
+            paragraph.headIndent = indent
+            paragraph.tabStops = tabs
+            paragraph.defaultTabInterval = indent
+            return paragraph
+        }
+        let item = paragraph(first: editing ? indent : 0), plain = paragraph(first: indent)
+        let text = NSMutableAttributedString()
+        var checks: [(line: Int, location: Int)] = []
+        for (index, line) in lines.enumerated() {
+            var look = words
+            look[.paragraphStyle] = markers[index] == nil ? plain : item
+            if list == .check, checked.contains(index), !markersOnly { look[.foregroundColor] = color.withAlphaComponent(0.5) }
+            if let marker = markers[index], !editing {
+                if list == .check { checks.append((index, text.length)) }
+                text.append(NSAttributedString(string: list == .check ? "\t" : "\t\(marker)\t",
+                                               attributes: [.font: font, .foregroundColor: color, .paragraphStyle: item]))
+            }
+            text.append(NSAttributedString(string: index < lines.count - 1 ? line + "\n" : line, attributes: look))
+        }
+        Self.plainNewlines(in: text)
+        return Typeset(text: text, checks: checks, font: font, gap: gap)
+    }
+
+    /// The returns between lines are neither underlined nor washed.
+    private static func plainNewlines(in text: NSMutableAttributedString) {
+        let string = text.string as NSString
+        var range = string.range(of: "\n")
+        while range.location != NSNotFound {
+            text.removeAttribute(.underlineStyle, range: range)
+            text.removeAttribute(.backgroundColor, range: range)
+            range = string.range(of: "\n", range: NSRange(location: NSMaxRange(range), length: string.length - NSMaxRange(range)))
+        }
+    }
+
+    private static func checkSide(_ font: UIFont) -> CGFloat { font.capHeight * 1.12 }
+
+    /// Each box of a checklist by line, and the room beside its first line where a tap ticks it, from the box's top
+    /// left, at the scale it was set at.
+    private func checkboxes(_ set: Typeset, width: CGFloat) -> [(line: Int, box: CGRect, room: CGRect)] {
+        guard !set.checks.isEmpty else { return [] }
+        let storage = NSTextStorage(attributedString: set.text), manager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        let side = Self.checkSide(set.font)
+        return set.checks.map { check in
+            let glyph = manager.glyphIndexForCharacter(at: check.location)
+            let line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let baseline = line.minY + manager.location(forGlyphAt: glyph).y
+            let tab = manager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+            let x = tab.minX < 0.5 ? tab.maxX - set.gap - side : tab.minX + set.gap
+            let box = CGRect(x: x, y: baseline - set.font.capHeight / 2 - side / 2, width: side, height: side)
+            return (check.line, box, CGRect(x: tab.minX, y: line.minY, width: tab.width, height: line.height))
+        }
+    }
+
+    private static func drawCheckbox(_ box: CGRect, ticked: Bool, color: UIColor, in ctx: CGContext) {
+        let line = max(box.width * 0.1, 0.75), side = box.width
+        ctx.saveGState()
+        ctx.setStrokeColor(color.cgColor)
+        ctx.setLineWidth(line)
+        ctx.addPath(CGPath(roundedRect: box.insetBy(dx: line / 2, dy: line / 2), cornerWidth: side * 0.14, cornerHeight: side * 0.14, transform: nil))
+        ctx.strokePath()
+        if ticked {
+            ctx.setLineWidth(line * 1.6)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            ctx.addLines(between: [CGPoint(x: box.minX + side * 0.24, y: box.minY + side * 0.52), CGPoint(x: box.minX + side * 0.43, y: box.minY + side * 0.72),
+                                   CGPoint(x: box.minX + side * 0.78, y: box.minY + side * 0.28)])
+            ctx.strokePath()
+        }
+        ctx.restoreGState()
     }
 
     /// An empty box, or one ending in a return, is as tall as the line the caret sits on.
     func height(width: CGFloat) -> CGFloat {
         let measured = string.isEmpty || string.hasSuffix("\n") ? string + " " : string
-        let bounds = attributed(measured, color: .black).boundingRect(with: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude),
-                                                                      options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        let bounds = typeset(measured, color: .black).text.boundingRect(with: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude),
+                                                                        options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
         return max(bounds.height, font().lineHeight).rounded(.up)
     }
 
     /// The width its longest line wants, for a box that hasn't been given one.
     func naturalWidth(limit: CGFloat) -> CGFloat {
-        let bounds = attributed(string, color: .black).boundingRect(with: CGSize(width: limit, height: .greatestFiniteMagnitude),
-                                                                    options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        let bounds = typeset(string, color: .black).text.boundingRect(with: CGSize(width: limit, height: .greatestFiniteMagnitude),
+                                                                      options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
         return min(bounds.width.rounded(.up) + 2, limit)
     }
 
-    /// Draws in page points, in a y-down context.
-    func draw(in ctx: CGContext, rect: CGRect, onDark: Bool) {
+    /// Draws in page points, in a y-down context; at a `scale`, in points that many times larger. With `markersOnly`
+    /// only a list's bullets, numbers and boxes are drawn, where the editor's words leave room for them.
+    func draw(in ctx: CGContext, rect: CGRect, onDark: Bool, scale: CGFloat = 1, markersOnly: Bool = false) {
         guard !string.isEmpty else { return }
+        let color = tint.color(onDark: onDark)
+        let set = typeset(string, color: color, highlight: highlight?.color(onDark: onDark), scale: scale, markersOnly: markersOnly)
         UIGraphicsPushContext(ctx)
-        attributed(string, color: tint.color(onDark: onDark)).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        set.text.draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
         UIGraphicsPopContext()
+        for check in checkboxes(set, width: rect.width) {
+            Self.drawCheckbox(check.box.offsetBy(dx: rect.minX, dy: rect.minY), ticked: checked.contains(check.line), color: color, in: ctx)
+        }
+    }
+
+    /// The words as the editor's text view holds them, set as they are drawn.
+    func editingText(scale: CGFloat, onDark: Bool) -> NSAttributedString {
+        typeset(string, color: tint.color(onDark: onDark), highlight: highlight?.color(onDark: onDark), scale: scale, editing: true).text
+    }
+
+    /// What a new line typed into the editor's text view starts with.
+    func typingAttributes(scale: CGFloat, onDark: Bool) -> [NSAttributedString.Key: Any] {
+        var fresh = self
+        fresh.checked = []
+        return fresh.typeset("x", color: tint.color(onDark: onDark), highlight: highlight?.color(onDark: onDark), scale: scale, editing: true)
+            .text.attributes(at: 0, effectiveRange: nil)
+    }
+
+    /// The line of a checklist whose box is at a point, in page points from the box's top left.
+    func checkbox(at point: CGPoint, width: CGFloat) -> Int? {
+        checkboxes(typeset(string, color: .black), width: width)
+            .filter { $0.room.insetBy(dx: -6, dy: -2).contains(point) }
+            .min { hypot($0.box.midX - point.x, $0.box.midY - point.y) < hypot($1.box.midX - point.x, $1.box.midY - point.y) }?.line
+    }
+
+    /// Where each box of a checklist is, by line, from the box's top left; at a `scale`, `width` and the boxes are in
+    /// points that many times larger.
+    func checkboxes(width: CGFloat, scale: CGFloat = 1) -> [(line: Int, rect: CGRect)] {
+        checkboxes(typeset(string, color: .black, scale: scale), width: width).map { ($0.line, $0.box) }
     }
 }
 

@@ -74,8 +74,8 @@ struct PaperNight: DynamicProperty {
 
     var wrappedValue: Bool { isAllowed && scheme == .dark }
 
-    static func isOn(_ traits: UITraitCollection) -> Bool {
-        traits.userInterfaceStyle == .dark && UserDefaults.standard.object(forKey: SettingsKey.darkPaper) as? Bool ?? true
+    static func isOn(_ traits: UITraitCollection, defaults: UserDefaults = .standard) -> Bool {
+        traits.userInterfaceStyle == .dark && defaults.object(forKey: SettingsKey.darkPaper) as? Bool ?? true
     }
 }
 

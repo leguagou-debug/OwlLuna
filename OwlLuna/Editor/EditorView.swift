@@ -17,6 +17,9 @@ protocol EditorCanvasControlling: AnyObject {
     func visibleCenter(ofPage index: Int) -> CGPoint?
     func select(_ selection: ItemSelection?)
     func editText()
+    func beginCrop()
+    func endCrop(keeping: Bool)
+    func resetCrop()
     func linksDidChange()
     func showReplay(_ timeline: ReplayTimeline?, at time: TimeInterval)
     func paneBecameActive()
@@ -63,6 +66,8 @@ final class EditorSession {
     /// The picture, sticker, text box or link being arranged. The canvas owns it; it's mirrored here for the chrome.
     var selection: ItemSelection?
     var isEditingText = false
+    /// What is kept of the selected picture while it is being cropped. The canvas owns it; it's mirrored here for the chrome.
+    var crop: CGRect?
     /// The whiteboard that is open on its own, if one is. The canvas owns it; it's mirrored here for the chrome.
     var openBoard: UUID?
     /// The page being written on is Chalkboard, where ink is light: the tray's pens show it so.
@@ -437,7 +442,7 @@ final class EditorSession {
     func addSticker(_ sticker: CustomSticker) async throws {
         guard document.pages.indices.contains(currentPage) else { return }
         let placed = document.pages.lazy.filter(\.hasItems).flatMap(\.items).first { $0.source == sticker.id && $0.assetFile != nil }
-        var file = placed?.assetFile, shape = placed?.size
+        var file = placed?.assetFile, shape = placed?.cropped(to: nil).size
         if let name = file, !FileManager.default.fileExists(atPath: document.package.assetURL(name).path(percentEncoded: false)) { file = nil }
         if file == nil {
             let url = sticker.url
@@ -463,8 +468,10 @@ final class EditorSession {
     func duplicateSelection() {
         guard let selection, let page = document.pages.first(where: { $0.id == selection.pageID }),
               var copy = page.items.first(where: { $0.id == selection.itemID }) else { return }
+        let crop = copy.crop
         copy.id = UUID()
         copy.raw = [:]
+        copy.crop = crop
         copy.center = CGPoint(x: min(copy.center.x + 24, page.size.width), y: min(copy.center.y + 24, page.size.height))
         document.updateItems(onPage: selection.pageID, actionName: String(localized: "Duplicate")) { $0.append(copy) }
         canvas?.select(ItemSelection(pageID: selection.pageID, itemID: copy.id))
@@ -620,6 +627,7 @@ fileprivate struct EditorContent: View {
     @State private var showingBoardGuide = false
     @State private var tagging: TagTarget?
     @AppStorage(SettingsKey.whiteboardTipSeen) private var boardTipSeen = false
+    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
     @State private var highlightColor = HighlightColor.last
     @State private var findText = ""
     @FocusState private var findFocused: Bool
@@ -674,19 +682,9 @@ fileprivate struct EditorContent: View {
     private var layout: some View {
         NavigationStack {
             HStack(spacing: 0) {
+                if side == .leading { AnyView(sidePanels) }
                 pageStack
-                if showsPresenterPanel {
-                    PresenterPanel(session: session, since: presentingSince) {
-                        if let page = currentPage { editingNotes = NotesTarget(id: page.id) }
-                    }
-                    .frame(width: 300)
-                    .transition(.move(edge: .trailing))
-                }
-                if showsTranscriptPanel {
-                    TranscriptPanel(session: session)
-                        .frame(width: 300)
-                        .transition(.move(edge: .trailing))
-                }
+                if side == .trailing { AnyView(sidePanels) }
             }
             .background(Color.desk.ignoresSafeArea())
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
@@ -697,6 +695,25 @@ fileprivate struct EditorContent: View {
         }
         .statusBarHidden(session.mode != .writing)
         .persistentSystemOverlays(session.mode == .writing ? .automatic : .hidden)
+    }
+
+    /// The side the ribbons and the panels beside the page keep to.
+    private var side: HorizontalEdge { .editorSide(leftHanded: leftHanded) }
+
+    @ViewBuilder
+    private var sidePanels: some View {
+        if showsPresenterPanel {
+            PresenterPanel(session: session, since: presentingSince, side: side) {
+                if let page = currentPage { editingNotes = NotesTarget(id: page.id) }
+            }
+            .frame(width: 300)
+            .transition(.move(edge: side.edge))
+        }
+        if showsTranscriptPanel {
+            TranscriptPanel(session: session, side: side)
+                .frame(width: 300)
+                .transition(.move(edge: side.edge))
+        }
     }
 
     private var pageStack: some View {
@@ -724,7 +741,7 @@ fileprivate struct EditorContent: View {
                 .hidden()
                 .accessibilityHidden(true)
             }
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: side.topCorner) {
                 switch session.mode {
                 case .writing: ribbons
                 case .focus: focusExit
@@ -739,6 +756,8 @@ fileprivate struct EditorContent: View {
                     findBar
                 } else if session.mode == .selectingText {
                     textBar
+                } else if session.crop != nil {
+                    AnyView(cropBar)
                 } else if session.selection != nil, session.mode != .presenting {
                     arrangeBar
                 } else {
@@ -1183,12 +1202,14 @@ fileprivate struct EditorContent: View {
         announce(page.bookmark == nil ? String(localized: "Page bookmarked") : String(localized: "Bookmark removed"))
     }
 
+    /// The page's own ribbon keeps to the edge.
     private var ribbons: some View {
         HStack(alignment: .top, spacing: Space.x1) {
-            bookmarkRibbon
+            if side == .trailing { AnyView(bookmarkRibbon) }
             ribbon
+            if side == .leading { AnyView(bookmarkRibbon) }
         }
-        .padding(.trailing, Space.x8)
+        .padding(Edge.Set(side.edge), Space.x8)
     }
 
     /// A slim ribbon beside the page number: mustard once the page is bookmarked.
@@ -1258,7 +1279,7 @@ fileprivate struct EditorContent: View {
     private var focusExit: some View {
         Button { enter(.writing) } label: { Label("Exit Focus Mode", systemImage: "arrow.down.right.and.arrow.up.left") }
             .buttonStyle(.plateIcon(lifted: true))
-            .padding(.trailing, Space.x8)
+            .padding(Edge.Set(side.edge), Space.x8)
             .padding(.top, Space.x2)
             .accessibilityIdentifier("editor.focus.exit")
     }
@@ -1271,7 +1292,8 @@ fileprivate struct EditorContent: View {
                 arrangeButton("Edit Text", "keyboard") { session.canvas?.editText() }
                     .disabled(session.isEditingText)
                     .accessibilityIdentifier("editor.arrange.edit")
-                textStyleMenu(box)
+                AnyView(TextStyleControls(session: session, box: box, roomy: !(isCompact || dynamicTypeSize.isAccessibilitySize),
+                                          shortcuts: isActivePane && !isPresentingModal))
             }
             if let link = item?.link {
                 arrangeButton("Open Link", "arrow.turn.down.right") {
@@ -1280,6 +1302,10 @@ fileprivate struct EditorContent: View {
                 .disabled(link.target.map { document.index(of: $0) == nil } ?? false)
                 .accessibilityIdentifier("editor.arrange.open")
                 arrangeButton("Rename Link", "pencil") { linkLabel = link.label; renamingLink = true }
+            }
+            if item?.assetFile != nil {
+                arrangeButton("Crop", "crop") { session.canvas?.beginCrop() }
+                    .accessibilityIdentifier("editor.arrange.crop")
             }
             if let tape = item?.tape, let id = item?.id {
                 let lifted = session.liftedTapes.contains(id)
@@ -1294,7 +1320,7 @@ fileprivate struct EditorContent: View {
                         .accessibilityIdentifier("editor.arrange.card")
                 }
                 arrangeButton("Duplicate", "plus.square.on.square") { session.duplicateSelection() }
-            } else if isCompact, item?.text != nil || item?.link != nil {
+            } else if isCompact, item?.text != nil || item?.link != nil || item?.assetFile != nil {
                 OwlLunaMenu {
                     Button { session.duplicateSelection() } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                     Button { session.moveSelection(forward: true) } label: { Label("Bring Forward", systemImage: "square.2.layers.3d.top.filled") }
@@ -1320,28 +1346,34 @@ fileprivate struct EditorContent: View {
         .accessibilityIdentifier("editor.arrange.bar")
     }
 
-    private func textStyleMenu(_ box: TextBox) -> some View {
-        OwlLunaMenu {
-            OwlLunaPicker("Size", selection: Binding(get: { box.fontSize }, set: { size in session.updateText { $0.fontSize = size } })) {
-                ForEach(TextBox.sizes, id: \.points) { Text($0.name).tag($0.points) }
+    /// While a picture is being cropped: back to the whole of it, or leave with the crop kept or as it was.
+    private var cropBar: some View {
+        let says = !(isCompact || dynamicTypeSize.isAccessibilitySize)
+        return HStack(spacing: 0) {
+            if says {
+                Text("Drag an edge or corner")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                    .lineLimit(1)
+                    .padding(.trailing, Space.x2)
             }
-            Toggle(isOn: Binding(get: { box.isBold }, set: { bold in session.updateText { $0.isBold = bold } })) {
-                Label("Bold", systemImage: "bold")
-            }
-            OwlLunaMenu {
-                OwlLunaPicker(selection: Binding(get: { box.tint }, set: { tint in session.updateText { $0.tint = tint } })) {
-                    ForEach(TextBox.Tint.allCases) { Text($0.displayName).tag($0) }
-                }
-            } label: { Label("Colour", systemImage: "paintpalette") }
-            OwlLunaMenu {
-                OwlLunaPicker(selection: Binding(get: { box.alignment }, set: { alignment in session.updateText { $0.alignment = alignment } })) {
-                    ForEach(TextBox.Alignment.allCases) { Label($0.displayName, systemImage: $0.symbol).tag($0) }
-                }
-            } label: { Label("Alignment", systemImage: box.alignment.symbol) }
-        } label: {
-            Label("Text Style", systemImage: "textformat.size")
+            arrangeButton("Reset Crop", "arrow.counterclockwise") { session.canvas?.resetCrop() }
+                .disabled(session.crop.map(PageItem.isWhole) ?? true)
+                .accessibilityIdentifier("editor.crop.reset")
+            barRule
+            Button("Cancel") { session.canvas?.endCrop(keeping: false) }
+                .buttonStyle(.owlLuna(.secondary, compact: true))
+                .fixedSize()
+                .accessibilityIdentifier("editor.crop.cancel")
+            barDone { session.canvas?.endCrop(keeping: true) }
+                .accessibilityIdentifier("editor.crop.done")
         }
-        .accessibilityIdentifier("editor.arrange.style")
+        .floatingBar(leading: says ? Space.x5 : Space.x1)
+        .padding(.top, Space.x2)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Crop"))
+        .accessibilityIdentifier("editor.crop.bar")
     }
 
     private func tapeColorMenu(_ current: TapeColor) -> some View {
@@ -1628,7 +1660,7 @@ fileprivate struct EditorContent: View {
                     let shows = showsPresenterPanel
                     withAnimation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion)) { presenterPanel = !shows }
                 } label: {
-                    Label("Notes and Next Page", systemImage: "sidebar.trailing")
+                    Label("Notes and Next Page", systemImage: side == .leading ? "sidebar.leading" : "sidebar.trailing")
                         .symbolVariant(showsPresenterPanel ? .fill : .none)
                 }
                 .accessibilityValue(Text(showsPresenterPanel ? "Showing" : "Hidden"))

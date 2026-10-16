@@ -50,7 +50,8 @@ struct TranscriptView: View {
     let recordingID: UUID
     /// Replays the recording with its ink from a moment in it.
     var replay: ((RecordingEntry, TimeInterval) -> Void)?
-    @AppStorage(SettingsKey.transcriptLanguage) private var language = ""
+    /// Picked for this recording alone; until then it is the first of `languages`, the one Settings has.
+    @State private var language = ""
     @State private var languages = Transcription.languages
     @State private var copied = false
 
@@ -191,6 +192,7 @@ struct TranscriptView: View {
 /// Beside the page while a recording is replayed with its ink: what is being said, line by line.
 struct TranscriptPanel: View {
     let session: EditorSession
+    var side = HorizontalEdge.trailing
 
     var body: some View {
         let lines = session.replayLines
@@ -214,7 +216,9 @@ struct TranscriptPanel: View {
             }
         }
         .background(Color.surface)
-        .overlay(alignment: .leading) { Rectangle().fill(Color.hairline).frame(width: 1).ignoresSafeArea() }
+        .overlay(alignment: Alignment(horizontal: side.other.alignment, vertical: .center)) {
+            Rectangle().fill(Color.hairline).frame(width: 1).ignoresSafeArea()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Transcript"))
         .accessibilityIdentifier("replay.transcript")

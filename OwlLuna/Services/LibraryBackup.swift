@@ -19,7 +19,7 @@ enum LibraryBackup {
     struct Summary: Sendable, Equatable {
         /// Notebooks the library didn't have.
         var added = 0
-        /// Of those, the ones the backup had in Recently Deleted. They go back there for another 30 days.
+        /// Of those, the ones the backup had in Recently Deleted. They go back there for as long again.
         var trashed = 0
         /// Notebooks the library has in a different state, brought back beside it under a new name.
         var copies = 0
@@ -225,7 +225,7 @@ enum LibraryBackup {
             let exists = fileManager.fileExists(atPath: root.package(id).path(percentEncoded: false))
             if !exists {
                 if incoming.library.deletedAt != nil {
-                    // Its 30 days start again. The old stamp stays, so a restore or delete made since on another device still wins.
+                    // Its days start again. The old stamp stays, so a restore or delete made since on another device still wins.
                     try await LibraryStore.assemble(id, in: root) { package in
                         try FileManager.default.moveItem(at: source, to: package.url)
                         try await beforeRewrite(package)
@@ -355,7 +355,9 @@ extension LibraryBackup.Summary {
     var message: String {
         var parts: [String] = []
         if added > 0 { parts.append(String(localized: "Restored \(added) notebooks.")) }
-        if trashed > 0 { parts.append(String(localized: "\(trashed) notebooks were in Recently Deleted in the backup, and are back there for another 30 days.")) }
+        if trashed > 0 {
+            parts.append(String(localized: "\(trashed) notebooks were in Recently Deleted in the backup, and are back there for another \(TrashLength.current().days) days."))
+        }
         if copies > 0 { parts.append(String(localized: "\(copies) notebooks differ from the ones in your library, so they came back beside them as copies.")) }
         if unchanged > 0 { parts.append(String(localized: "\(unchanged) notebooks were already here.")) }
         if cardsMerged > 0 { parts.append(String(localized: "\(cardsMerged) notebooks were already here, and took in flashcards and reviews from the backup.")) }

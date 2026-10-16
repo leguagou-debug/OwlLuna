@@ -17,18 +17,37 @@ struct TagSheet: View {
     let initial: [String]
     /// Tags the index may not have heard of yet, offered beside the library's.
     var known: [String] = []
-    let onDone: ([String]) -> Void
+    private let initialMixed: [String]
+    private let onDone: ([String], [String]) -> Void
 
     @Environment(LibraryStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var tags: [String] = []
+    @State private var mixed: [String] = []
     @State private var library: [String] = []
     @State private var draft = ""
     @State private var loaded = false
     @State private var finished = false
     @FocusState private var focused: Bool
 
-    private var suggestions: [String] { library.filter { !Tags.contains(tags, $0) } }
+    private var suggestions: [String] { library.filter { !Tags.contains(tags, $0) && !Tags.contains(mixed, $0) } }
+
+    init(subject: String, initial: [String], known: [String] = [], onDone: @escaping ([String]) -> Void) {
+        self.subject = subject
+        self.initial = initial
+        self.known = known
+        initialMixed = []
+        self.onDone = { tags, _ in onDone(tags) }
+    }
+
+    /// Over several notebooks: `initial` are on every one and `mixed` on only some. Done hands back the tags now on
+    /// every one, and the mixed ones left where they were.
+    init(subject: String, initial: [String], mixed: [String], onDone: @escaping (_ tags: [String], _ stillMixed: [String]) -> Void) {
+        self.subject = subject
+        self.initial = initial
+        initialMixed = mixed
+        self.onDone = onDone
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,6 +63,19 @@ struct TagSheet: View {
                                     TagChipButton(name: tag, symbol: "xmark") { remove(tag) }
                                         .accessibilityHint(Text("Removes this tag"))
                                         .accessibilityIdentifier("tags.chip.\(tag)")
+                                }
+                            }
+                        }
+                    }
+                    if !mixed.isEmpty {
+                        section(String(localized: "On some of them")) {
+                            FlowLayout(spacing: Space.x1) {
+                                ForEach(mixed, id: \.self) { tag in
+                                    TagChipButton(name: tag, isMixed: true, symbol: "plus") { add(tag) }
+                                        .accessibilityValue(Text("On some notebooks"))
+                                        .accessibilityHint(Text("Adds this tag to every notebook"))
+                                        .accessibilityAction(named: Text("Remove from All")) { removeMixed(tag) }
+                                        .accessibilityIdentifier("tags.mixed.\(tag)")
                                 }
                             }
                         }
@@ -86,6 +118,7 @@ struct TagSheet: View {
             guard !loaded else { return }
             loaded = true
             tags = Tags.merged(initial)
+            mixed = Tags.merged(initialMixed).filter { !Tags.contains(tags, $0) }
             library = Tags.merged(store.tagCounts().map(\.name) + known)
         }
         .onDisappear(perform: finish)
@@ -125,6 +158,7 @@ struct TagSheet: View {
         guard let name = Tags.normalized(name), !Tags.contains(tags, name) else { return }
         let spelled = library.first { Tags.key($0) == Tags.key(name) } ?? name
         tags = Tags.merged(tags + [spelled])
+        mixed.removeAll { Tags.key($0) == Tags.key(name) }
         AccessibilityNotification.Announcement(String(localized: "Added \(spelled)")).post()
     }
 
@@ -138,12 +172,17 @@ struct TagSheet: View {
         AccessibilityNotification.Announcement(String(localized: "Removed \(name)")).post()
     }
 
+    private func removeMixed(_ name: String) {
+        mixed.removeAll { Tags.key($0) == Tags.key(name) }
+        AccessibilityNotification.Announcement(String(localized: "Removed \(name)")).post()
+    }
+
     /// Done, or the sheet pulled down: what is still in the field counts, and the change is handed over once.
     private func finish() {
         guard !finished else { return }
         finished = true
         addDraft()
-        onDone(tags)
+        onDone(tags, mixed)
     }
 }
 

@@ -17,7 +17,7 @@ final class AppModel {
     let flashcards: FlashcardLibrary
     let sync: SyncCenter
     let spotlight: SpotlightIndexer
-    private let trash: TrashPurge
+    let trash: TrashPurge
     private let shortcutParameters = ShortcutParameters()
     private(set) var phase: Phase = .starting
     /// Set by a shortcut; the front window's library takes it and carries it out.

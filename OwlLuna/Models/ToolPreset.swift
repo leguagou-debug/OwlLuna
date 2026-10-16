@@ -235,8 +235,23 @@ final class ToolShelf {
     /// A tray needs something to write with: a shelf left with nothing usable gets the starters back.
     func restock() {
         guard usable.isEmpty else { return }
-        presets += Self.starters.map { ToolPreset(ink: $0.inkType ?? .pen, color: $0.color, width: $0.width) }
+        presets += Self.freshStarters
         save()
+    }
+
+    /// Holds the tools a new shelf starts with, and nothing else.
+    var isAsItStarted: Bool {
+        presets.count == Self.starters.count && zip(presets, Self.starters).allSatisfy { $0.isSameTool(as: $1) }
+    }
+
+    /// Back to the four tools a new shelf starts with; everything added or changed since goes.
+    func reset() {
+        presets = Self.freshStarters
+        save()
+    }
+
+    private static var freshStarters: [ToolPreset] {
+        starters.map { ToolPreset(ink: $0.inkType ?? .pen, color: $0.color, width: $0.width) }
     }
 
     private func save() {
@@ -420,6 +435,23 @@ final class Toolbox {
         guard pens.count > 1, let index = pens.firstIndex(where: { $0.id == id }) else { return }
         if choice == .pen(id) { take(.pen(pens[index == 0 ? 1 : index - 1].id)) }
         shelf.remove(id)
+    }
+
+    /// The tray's pens go back to the four it started with. A pen in hand gives way to the first of them; the eraser,
+    /// the lasso and the shortcuts stay as they are.
+    func resetPens() {
+        let hadPen = choice != .eraser && choice != .lasso
+        shelf.reset()
+        lastPen = nil
+        memory = PencilToolMemory()
+        if let first = shelf.usable.first {
+            if hadPen { choice = .pen(first.id) }
+            // So the Pencil's switches still come back to a pen.
+            memory.select(.pen(first.id), isEraser: false)
+        }
+        memory.select(choice, isEraser: choice == .eraser)
+        save()
+        post()
     }
 
     func setEraser(_ new: Eraser) {

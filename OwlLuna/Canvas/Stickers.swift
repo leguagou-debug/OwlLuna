@@ -717,7 +717,7 @@ enum PageItemRenderer {
             case .sticker:
                 item.sticker?.draw(in: ctx, rect: rect)
             case .image(let file):
-                if let image = image(file, assets: assets) {
+                if let image = image(file, assets: assets, crop: item.crop) {
                     ctx.translateBy(x: 0, y: rect.maxY + rect.minY)
                     ctx.scaleBy(x: 1, y: -1)
                     ctx.interpolationQuality = .high
@@ -738,10 +738,20 @@ enum PageItemRenderer {
         }
     }
 
-    static func image(_ file: String, assets: URL) -> CGImage? {
+    /// The picture, or just its `crop` at the file's own pixels, so an export carries nothing that was cropped away.
+    static func image(_ file: String, assets: URL, crop: CGRect? = nil) -> CGImage? {
         let url = assets.appending(path: file)
-        return PageRenderer.images.value(url.path(percentEncoded: false)) {
+        let whole = PageRenderer.images.value(url.path(percentEncoded: false)) {
             UIImage(contentsOfFile: url.path(percentEncoded: false))?.cgImage.map(SharedImage.init)
         }?.image
+        guard let whole, let crop else { return whole }
+        return whole.cropping(to: pixels(of: crop, width: whole.width, height: whole.height))
+    }
+
+    /// A crop in whole pixels of a picture `width` by `height`, at least one each way.
+    static func pixels(of crop: CGRect, width: Int, height: Int) -> CGRect {
+        let w = CGFloat(width), h = CGFloat(height)
+        let x = min((crop.minX * w).rounded(), w - 1), y = min((crop.minY * h).rounded(), h - 1)
+        return CGRect(x: x, y: y, width: max(min((crop.maxX * w).rounded(), w) - x, 1), height: max(min((crop.maxY * h).rounded(), h) - y, 1))
     }
 }

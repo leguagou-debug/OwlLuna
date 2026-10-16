@@ -135,4 +135,16 @@ final class TranscriptTests: XCTestCase {
         XCTAssertNil(recorder.recordings.first?.transcriptFile, "a cancelled transcription writes nothing")
         XCTAssertFalse(Transcription.languages.isEmpty)
     }
+
+    func testATranscriptionStartsInTheLanguageSettingsHas() {
+        let supported: Set = ["en-US", "fr-FR", "it-IT", "de-DE", Locale.current.identifier(.bcp47)]
+        let italian = Transcription.languages(preferring: "it-IT", supported: supported).map { $0.identifier(.bcp47) }
+        XCTAssertEqual(italian.first, "it-IT")
+        XCTAssertEqual(italian.filter { $0 == "it-IT" }.count, 1)
+        let iPad = Transcription.languages(preferring: "", supported: supported).map { $0.identifier(.bcp47) }
+        XCTAssertEqual(iPad.first, Locale.current.identifier(.bcp47), "Same as iPad starts in the iPad's own")
+        XCTAssertFalse(iPad.contains("it-IT"))
+        XCTAssertEqual(Transcription.languages(preferring: "ja-JP", supported: supported).map { $0.identifier(.bcp47) }, iPad,
+                       "one this iPad can't transcribe isn't started in")
+    }
 }

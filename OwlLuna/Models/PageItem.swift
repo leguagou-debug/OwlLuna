@@ -13,6 +13,23 @@ struct TextBox: Sendable, Hashable {
         var id: String { rawValue }
     }
 
+    enum Face: String, Sendable, CaseIterable, Identifiable {
+        case system, serif, mono, fraunces
+        var id: String { rawValue }
+    }
+
+    /// Every line of a box that is a list is an item of it.
+    enum List: String, Sendable, CaseIterable, Identifiable {
+        case bullet, number, check
+        var id: String { rawValue }
+    }
+
+    /// The highlighter's tints, laid behind the words.
+    enum Highlight: String, Sendable, CaseIterable, Identifiable {
+        case yellow, green, pink, blue
+        var id: String { rawValue }
+    }
+
     static let fontSizes: ClosedRange<CGFloat> = 8...200
 
     var string: String
@@ -20,6 +37,81 @@ struct TextBox: Sendable, Hashable {
     var isBold = false
     var tint = Tint.ink
     var alignment = Alignment.leading
+    var face = Face.system
+    var isItalic = false
+    var isUnderlined = false
+    var list: List?
+    var highlight: Highlight?
+    /// The lines of a checklist that are ticked, counted from 0. Kept while the box is another kind of list.
+    var checked: Set<Int> = []
+}
+
+extension TextBox {
+    var lines: [String] { (string as NSString).components(separatedBy: "\n") }
+
+    /// A line with nothing written on it is passed over by a list: it has no bullet, number or box.
+    static func isItem(_ line: String) -> Bool {
+        !line.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Each line's number in a numbered list; one that is passed over has none.
+    var numbers: [Int?] { Self.numbers(of: lines) }
+
+    static func numbers(of lines: [String]) -> [Int?] {
+        var next = 0
+        return lines.map { line in
+            guard isItem(line) else { return nil }
+            next += 1
+            return next
+        }
+    }
+
+    mutating func toggleCheck(line: Int) {
+        if checked.remove(line) == nil { checked.insert(line) }
+    }
+
+    /// Replaces part of the text, each tick staying with the line it was on. New lines have none.
+    mutating func replaceCharacters(in range: NSRange, with text: String) {
+        let old = string as NSString, new = text as NSString
+        checked = Self.carried(checked, in: old, range: range, with: new, NSRange(location: 0, length: new.length))
+        string = old.replacingCharacters(in: range, with: text)
+    }
+
+    /// The same, for text that was changed somewhere: what the old and new share at either end is what was kept.
+    mutating func carryChecks(to newString: String) {
+        let old = string as NSString, new = newString as NSString
+        var start = 0
+        while start < old.length, start < new.length, old.character(at: start) == new.character(at: start) { start += 1 }
+        var end = 0
+        while end < old.length - start, end < new.length - start,
+              old.character(at: old.length - 1 - end) == new.character(at: new.length - 1 - end) { end += 1 }
+        checked = Self.carried(checked, in: old, range: NSRange(location: start, length: old.length - start - end), with: new,
+                               NSRange(location: start, length: new.length - start - end))
+        string = newString
+    }
+
+    private static func newlines(in text: NSString, _ range: NSRange) -> Int {
+        var count = 0
+        for index in range.location..<NSMaxRange(range) where text.character(at: index) == 10 { count += 1 }
+        return count
+    }
+
+    /// A tick goes with the start of its line. A line loses it when its start is cut away along with its end, or when
+    /// it is left joined onto the end of another line.
+    private static func carried(_ checked: Set<Int>, in old: NSString, range: NSRange, with new: NSString, _ inserted: NSRange) -> Set<Int> {
+        guard !checked.isEmpty else { return checked }
+        let line = newlines(in: old, NSRange(location: 0, length: range.location)), removed = newlines(in: old, range), added = newlines(in: new, inserted)
+        let atStart = range.location == 0 || old.character(at: range.location - 1) == 10
+        let breaks = atStart || inserted.length > 0 && new.character(at: NSMaxRange(inserted) - 1) == 10
+        let lastStartsAtEnd = removed > 0 && old.character(at: NSMaxRange(range) - 1) == 10
+        return Set(checked.compactMap { ticked in
+            if ticked < line || ticked == line && !atStart { return ticked }
+            if ticked == line { return removed == 0 ? line + added : nil }
+            if ticked < line + removed { return nil }
+            if ticked == line + removed { return lastStartsAtEnd && breaks ? ticked + added - removed : nil }
+            return ticked + added - removed
+        })
+    }
 }
 
 /// A tab on a page that opens another page, a page of another notebook, or a web address.
@@ -142,6 +234,40 @@ struct PageItem: Sendable, Hashable, Identifiable {
         set { raw["source"] = newValue.map(JSONValue.string) }
     }
 
+    static let wholePicture = CGRect(x: 0, y: 0, width: 1, height: 1)
+
+    /// The part of a picture that shows, in its unit square from the top left. Nil shows all of it; the file is never cut.
+    var crop: CGRect? {
+        get {
+            guard let values = raw["crop"]?.arrayValue?.compactMap(\.doubleValue), values.count == 4, values.allSatisfy(\.isFinite) else { return nil }
+            let rect = Self.inPicture(CGRect(x: values[0], y: values[1], width: values[2], height: values[3]))
+            return rect.isNull || rect.width <= 0 || rect.height <= 0 || Self.isWhole(rect) ? nil : rect
+        }
+        set { raw["crop"] = newValue.flatMap { Self.isWhole($0) ? nil : .array([$0.minX, $0.minY, $0.width, $0.height].map { .number(Double($0)) }) } }
+    }
+
+    static func isWhole(_ crop: CGRect) -> Bool {
+        abs(crop.minX) < 1e-4 && abs(crop.minY) < 1e-4 && abs(crop.maxX - 1) < 1e-4 && abs(crop.maxY - 1) < 1e-4
+    }
+
+    /// Cut to the picture, and left exactly as it is when it is already inside it.
+    private static func inPicture(_ crop: CGRect) -> CGRect {
+        wholePicture.contains(crop) ? crop : crop.intersection(wholePicture)
+    }
+
+    /// Shows `newCrop` of the picture, or all of it for nil. What still shows stays where it was on the page, turned or not.
+    func cropped(to newCrop: CGRect?) -> PageItem {
+        let old = crop ?? Self.wholePicture, new = Self.inPicture(newCrop ?? Self.wholePicture)
+        guard !new.isNull, new.width > 0, new.height > 0 else { return self }
+        let whole = CGSize(width: size.width / old.width, height: size.height / old.height)
+        let dx = (new.midX - old.midX) * whole.width, dy = (new.midY - old.midY) * whole.height
+        var copy = self
+        copy.size = CGSize(width: new.width * whole.width, height: new.height * whole.height)
+        copy.center = CGPoint(x: center.x + dx * cos(rotation) - dy * sin(rotation), y: center.y + dx * sin(rotation) + dy * cos(rotation))
+        copy.crop = new
+        return copy
+    }
+
     /// Whether a point on the page falls on the item, allowing for its rotation.
     func contains(_ point: CGPoint, slop: CGFloat = 0) -> Bool {
         let dx = point.x - center.x, dy = point.y - center.y
@@ -199,6 +325,12 @@ struct PageItem: Sendable, Hashable, Identifiable {
             box.isBold = object["bold"]?.boolValue ?? false
             box.tint = object["color"]?.stringValue.flatMap(TextBox.Tint.init(rawValue:)) ?? .ink
             box.alignment = object["align"]?.stringValue.flatMap(TextBox.Alignment.init(rawValue:)) ?? .leading
+            box.face = object["face"]?.stringValue.flatMap(TextBox.Face.init(rawValue:)) ?? .system
+            box.isItalic = object["italic"]?.boolValue ?? false
+            box.isUnderlined = object["underline"]?.boolValue ?? false
+            box.list = object["list"]?.stringValue.flatMap(TextBox.List.init(rawValue:))
+            box.highlight = object["highlight"]?.stringValue.flatMap(TextBox.Highlight.init(rawValue:))
+            box.checked = Set(object["checked"]?.arrayValue?.compactMap { $0.intValue.flatMap { (0..<100_000).contains($0) ? $0 : nil } } ?? [])
             content = .text(box)
         case ("link", _, _):
             let label = object["label"]?.stringValue ?? ""
@@ -241,6 +373,12 @@ struct PageItem: Sendable, Hashable, Identifiable {
             object["bold"] = .bool(box.isBold)
             object["color"] = .string(box.tint.rawValue)
             object["align"] = .string(box.alignment.rawValue)
+            object["face"] = Self.optional(box.face == .system ? nil : box.face, was: object["face"])
+            object["italic"] = box.isItalic ? .bool(true) : nil
+            object["underline"] = box.isUnderlined ? .bool(true) : nil
+            object["list"] = Self.optional(box.list, was: object["list"])
+            object["highlight"] = Self.optional(box.highlight, was: object["highlight"])
+            object["checked"] = box.checked.isEmpty ? nil : .array(box.checked.sorted().map { .number(Double($0)) })
         case .link(let link):
             object["kind"] = .string("link")
             object["label"] = .string(link.label)
@@ -262,6 +400,14 @@ struct PageItem: Sendable, Hashable, Identifiable {
             break
         }
         return .object(object)
+    }
+
+    /// A key left out at its default, so a box made before it existed is stored as it was, unless it holds a value from
+    /// a newer version that this one can't read.
+    private static func optional<Value: RawRepresentable<String>>(_ value: Value?, was old: JSONValue?) -> JSONValue? {
+        if let value { return .string(value.rawValue) }
+        guard let old, old.stringValue.flatMap(Value.init(rawValue:)) == nil else { return nil }
+        return old
     }
 }
 

@@ -31,6 +31,8 @@ enum SettingsKey {
     static let defaultPageSize = "defaultPageSize"
     static let darkPaper = "darkPaper"
     static let librarySort = "librarySort"
+    static let librarySortReversed = "librarySortReversed"
+    static let libraryLayout = "libraryLayout"
     static let dailyJournalID = "dailyJournalID"
     static let whiteboardTipSeen = "whiteboardTipSeen"
     static let dailyJournalPromptHidden = "dailyJournalPromptHidden"
@@ -55,4 +57,7 @@ enum SettingsKey {
     static let snapsHighlighter = "snapsHighlighter"
     static let highlightColor = "highlightColor"
     static let toolbox = "toolbox"
+    static let appearance = "appearance"
+    static let leftHanded = "leftHanded"
+    static let trashLength = "trashLength"
 }

@@ -21,6 +21,8 @@ extension NotebookDocument {
 struct PresenterPanel: View {
     let session: EditorSession
     let since: Date
+    /// The side of the editor it stands on; its rule is on the page's side.
+    var side = HorizontalEdge.trailing
     let editNotes: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -59,7 +61,9 @@ struct PresenterPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color.surface)
-        .overlay(alignment: .leading) { Rectangle().fill(Color.hairline).frame(width: 1).ignoresSafeArea() }
+        .overlay(alignment: Alignment(horizontal: side.other.alignment, vertical: .center)) {
+            Rectangle().fill(Color.hairline).frame(width: 1).ignoresSafeArea()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Presenter view"))
         .accessibilityIdentifier("presenter.panel")

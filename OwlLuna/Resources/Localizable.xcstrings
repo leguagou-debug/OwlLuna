@@ -48,6 +48,28 @@
         }
       }
     },
+    "%@, ticked" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, abgehakt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, marcado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, coché"
+          }
+        }
+      }
+    },
     "%lld cards" : {
       "localizations" : {
         "de" : {
@@ -291,6 +313,158 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld cartes créées"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld locked notebooks were left out. Unlock them to export them." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gesperrtes Notizbuch wurde ausgelassen. Entsperre es, um es zu exportieren."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gesperrte Notizbücher wurden ausgelassen. Entsperre sie, um sie zu exportieren."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld locked notebook was left out. Unlock it to export it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld locked notebooks were left out. Unlock them to export them."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Se omitió %lld cuaderno bloqueado. Desbloquéalo para exportarlo."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Se omitieron %lld cuadernos bloqueados. Desbloquéalos para exportarlos."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet verrouillé a été laissé de côté. Déverrouillez-le pour l’exporter."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets verrouillés ont été laissés de côté. Déverrouillez-les pour les exporter."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notebooks locked" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch gesperrt"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher gesperrt"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook locked"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks locked"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno bloqueado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos bloqueados"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet verrouillé"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets verrouillés"
                 }
               }
             }
@@ -754,6 +928,28 @@
         }
       }
     },
+    "%lld pt" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pt"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pt"
+          }
+        }
+      }
+    },
     "%lld strips of tape have no card yet" : {
       "localizations" : {
         "de" : {
@@ -906,6 +1102,1080 @@
         }
       }
     },
+    "Adds this tag to every notebook" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fügt diesen Tag jedem Notizbuch hinzu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade esta etiqueta a todos los cuadernos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoute cette étiquette à tous les carnets"
+          }
+        }
+      }
+    },
+    "Bullets" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzählung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viñetas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puces"
+          }
+        }
+      }
+    },
+    "Changed the tags of %lld notebooks" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tags von %lld Notizbuch geändert"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tags von %lld Notizbüchern geändert"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Changed the tags of %lld notebook"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Changed the tags of %lld notebooks"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Etiquetas de %lld cuaderno cambiadas"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Etiquetas de %lld cuadernos cambiadas"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Étiquettes de %lld carnet modifiées"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Étiquettes de %lld carnets modifiées"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Deselect All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auswahl aufheben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deseleccionar todo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout désélectionner"
+          }
+        }
+      }
+    },
+    "Export %lld locked notebooks" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gesperrtes Notizbuch exportieren"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gesperrte Notizbücher exportieren"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Export %lld locked notebook"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Export %lld locked notebooks"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exportar %lld cuaderno bloqueado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exportar %lld cuadernos bloqueados"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exporter %lld carnet verrouillé"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exporter %lld carnets verrouillés"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Export as PDFs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als PDFs exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar como PDF"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter en PDF"
+          }
+        }
+      }
+    },
+    "Export PDFs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDFs exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar PDF"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter les PDF"
+          }
+        }
+      }
+    },
+    "Italic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kursiv"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cursiva"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Italique"
+          }
+        }
+      }
+    },
+    "Last changed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt geändert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Último cambio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière modification"
+          }
+        }
+      }
+    },
+    "Layout" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ansicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Présentation"
+          }
+        }
+      }
+    },
+    "least recently edited first" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zuletzt bearbeitete zuletzt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "últimos editados al final"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "derniers modifiés en dernier"
+          }
+        }
+      }
+    },
+    "least recently opened first" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zuletzt geöffnete zuletzt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "últimos abiertos al final"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "derniers ouverts en dernier"
+          }
+        }
+      }
+    },
+    "List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste"
+          }
+        }
+      }
+    },
+    "Lock" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sperren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquear"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verrouiller"
+          }
+        }
+      }
+    },
+    "Lock %lld notebooks" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch sperren"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher sperren"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Lock %lld notebook"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Lock %lld notebooks"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Bloquear %lld cuaderno"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Bloquear %lld cuadernos"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Verrouiller %lld carnet"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Verrouiller %lld carnets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Mono" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mono"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mono"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mono"
+          }
+        }
+      }
+    },
+    "Newest First" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neueste zuerst"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más recientes primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus récents en premier"
+          }
+        }
+      }
+    },
+    "No Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Markierung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin resaltado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun surlignage"
+          }
+        }
+      }
+    },
+    "No List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Liste"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin lista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune liste"
+          }
+        }
+      }
+    },
+    "Numbers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nummerierung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numeración"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numérotation"
+          }
+        }
+      }
+    },
+    "oldest first" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "älteste zuerst"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "más antiguos primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "plus anciens en premier"
+          }
+        }
+      }
+    },
+    "Oldest First" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Älteste zuerst"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más antiguos primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus anciens en premier"
+          }
+        }
+      }
+    },
+    "On some notebooks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei einigen Notizbüchern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En algunos cuadernos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur certains carnets"
+          }
+        }
+      }
+    },
+    "On some of them" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei einigen davon"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En algunos de ellos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur certains d’entre eux"
+          }
+        }
+      }
+    },
+    "Order" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reihenfolge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orden"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre"
+          }
+        }
+      }
+    },
+    "Remove from All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei allen entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar de todos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer de tous"
+          }
+        }
+      }
+    },
+    "Select All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle auswählen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar todo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout sélectionner"
+          }
+        }
+      }
+    },
+    "Serif" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serif"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serifa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serif"
+          }
+        }
+      }
+    },
+    "Shelf" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estante"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étagère"
+          }
+        }
+      }
+    },
+    "Sort by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach %@ sortieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordenar por %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier par %@"
+          }
+        }
+      }
+    },
+    "Text Colour" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textfarbe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color del texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couleur du texte"
+          }
+        }
+      }
+    },
+    "Tick" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abhaken"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cocher"
+          }
+        }
+      }
+    },
+    "Tick %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ abhaken"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcar %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cocher %@"
+          }
+        }
+      }
+    },
+    "Typeface" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schrift"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipo de letra"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Police"
+          }
+        }
+      }
+    },
+    "Underline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstrichen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subrayado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Souligné"
+          }
+        }
+      }
+    },
+    "Untick" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haken entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desmarcar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décocher"
+          }
+        }
+      }
+    },
+    "Untick %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haken bei %@ entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desmarcar %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décocher %@"
+          }
+        }
+      }
+    },
+    "Your %lld PDFs are ready." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Dein %lld PDF ist fertig."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deine %lld PDFs sind fertig."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Your %lld PDF is ready."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Your %lld PDFs are ready."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tu %lld PDF está listo."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tus %lld PDF están listos."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Votre %lld PDF est prêt."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Vos %lld PDF sont prêts."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Z to A" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Z bis A"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De la Z a la A"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De Z à A"
+          }
+        }
+      }
+    },
     "“%@”" : {
       "localizations" : {
         "de" : {
@@ -978,24 +2248,46 @@
         }
       }
     },
-    "“System Setting” follows Settings › Apple Pencil › Only Draw with Apple Pencil." : {
+    "“System Setting” follows Settings › Apple Pencil › Only Draw with Apple Pencil. With Left-Handed on, the page ribbon, the zoom window's buttons and the panels beside the page are on the left." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„Systemeinstellung“ folgt Einstellungen › Apple Pencil › Nur mit Apple Pencil zeichnen."
+            "value" : "„Systemeinstellung“ folgt Einstellungen › Apple Pencil › Nur mit Apple Pencil zeichnen. Ist „Linkshändig“ an, sind das Band mit der Seitenzahl, die Tasten des Zoomfensters und die Bereiche neben der Seite links."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "«Ajuste del sistema» sigue Ajustes › Apple Pencil › Dibujar solo con Apple Pencil."
+            "value" : "«Ajuste del sistema» sigue Ajustes › Apple Pencil › Dibujar solo con Apple Pencil. Con «Para zurdos» activado, la cinta con el número de página, los botones de la ventana de zoom y los paneles junto a la página quedan a la izquierda."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "« Réglage système » suit Réglages › Apple Pencil › Dessiner uniquement avec l’Apple Pencil."
+            "value" : "« Réglage système » suit Réglages › Apple Pencil › Dessiner uniquement avec l’Apple Pencil. Avec « Pour gauchers » activé, le ruban du numéro de page, les boutons de la fenêtre de zoom et les panneaux à côté de la page passent à gauche."
+          }
+        }
+      }
+    },
+    "“System” follows the iPad's Light or Dark appearance. With Keep Paper Light on, pages, paper colours and templates stay light in Dark Mode, and ink looks as it does on light paper. A PDF, a photo and everything you export keep their own colours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„System“ folgt dem hellen oder dunklen Erscheinungsbild des iPad. Ist „Papier hell lassen“ an, bleiben Seiten, Papierfarben und Vorlagen im Dunkelmodus hell, und Tinte sieht aus wie auf hellem Papier. PDFs, Fotos und alles, was du exportierst, behalten ihre eigenen Farben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Sistema» sigue el aspecto claro u oscuro del iPad. Con «Mantener el papel claro» activado, las páginas, los colores del papel y las plantillas siguen claros en modo oscuro, y la tinta se ve como sobre papel claro. Los PDF, las fotos y todo lo que exportes conservan sus propios colores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "« Système » suit l’apparence claire ou sombre de l’iPad. Avec « Garder le papier clair » activé, les pages, les couleurs de papier et les modèles restent clairs en mode sombre, et l’encre apparaît comme sur du papier clair. Les PDF, les photos et tout ce que vous exportez conservent leurs propres couleurs."
           }
         }
       }
@@ -1256,6 +2548,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ copie"
+          }
+        }
+      }
+    },
+    "%@ cut off" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ abgeschnitten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ recortado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ rogné"
           }
         }
       }
@@ -3264,75 +4578,195 @@
         }
       }
     },
-    "%lld notebooks were in Recently Deleted in the backup, and are back there for another 30 days." : {
+    "%lld notebooks were in Recently Deleted in the backup, and are back there for another %lld days." : {
       "localizations" : {
         "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Notizbuch lag im Backup in „Zuletzt gelöscht“ und liegt dort jetzt für weitere 30 Tage."
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@notebooks@ für weitere %#@days@."
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Tag"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Tage"
+                    }
+                  }
                 }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Notizbücher lagen im Backup in „Zuletzt gelöscht“ und liegen dort jetzt für weitere 30 Tage."
+              }
+            },
+            "notebooks" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Notizbuch lag im Backup in „Zuletzt gelöscht“ und liegt dort jetzt"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Notizbücher lagen im Backup in „Zuletzt gelöscht“ und liegen dort jetzt"
+                    }
+                  }
                 }
               }
             }
           }
         },
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld notebook was in Recently Deleted in the backup, and is back there for another 30 days."
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@notebooks@ for another %#@days@."
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg day"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg days"
+                    }
+                  }
                 }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld notebooks were in Recently Deleted in the backup, and are back there for another 30 days."
+              }
+            },
+            "notebooks" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg notebook was in Recently Deleted in the backup, and is back there"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg notebooks were in Recently Deleted in the backup, and are back there"
+                    }
+                  }
                 }
               }
             }
           }
         },
         "es" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld cuaderno estaba en Eliminados recientemente en la copia de seguridad y vuelve a estar allí otros 30 días."
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@notebooks@ otros %#@days@."
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg día"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg días"
+                    }
+                  }
                 }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld cuadernos estaban en Eliminados recientemente en la copia de seguridad y vuelven a estar allí otros 30 días."
+              }
+            },
+            "notebooks" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg cuaderno estaba en Eliminados recientemente en la copia de seguridad y vuelve a estar allí"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg cuadernos estaban en Eliminados recientemente en la copia de seguridad y vuelven a estar allí"
+                    }
+                  }
                 }
               }
             }
           }
         },
         "fr" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld carnet était dans Supprimés récemment dans la sauvegarde : il y retourne pour 30 jours de plus."
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@notebooks@ pour %#@days@ de plus."
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg jour"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg jours"
+                    }
+                  }
                 }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld carnets étaient dans Supprimés récemment dans la sauvegarde : ils y retournent pour 30 jours de plus."
+              }
+            },
+            "notebooks" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg carnet était dans Supprimés récemment dans la sauvegarde : il y retourne"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg carnets étaient dans Supprimés récemment dans la sauvegarde : ils y retournent"
+                    }
+                  }
                 }
               }
             }
@@ -6142,24 +7576,24 @@
         }
       }
     },
-    "Any device that still has them moves them to Recently Deleted, where they stay for 30 days." : {
+    "Any device that still has them moves them to Recently Deleted, where they stay as long as that device keeps deleted notebooks." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jedes Gerät, auf dem sie noch sind, legt sie in „Zuletzt gelöscht“, wo sie 30 Tage bleiben."
+            "value" : "Jedes Gerät, auf dem sie noch sind, legt sie in „Zuletzt gelöscht“, wo sie so lange bleiben, wie dieses Gerät gelöschte Notizbücher behält."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cualquier dispositivo que aún los tenga los mueve a Eliminados recientemente, donde se conservan 30 días."
+            "value" : "Cualquier dispositivo que aún los tenga los mueve a Eliminados recientemente, donde se conservan el tiempo que ese dispositivo guarde los cuadernos eliminados."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tout appareil qui les a encore les déplace vers Supprimés récemment, où ils restent 30 jours."
+            "value" : "Tout appareil qui les a encore les déplace vers Supprimés récemment, où ils restent aussi longtemps que cet appareil garde les carnets supprimés."
           }
         }
       }
@@ -6204,6 +7638,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Icône de l’app"
+          }
+        }
+      }
+    },
+    "Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erscheinungsbild"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apariencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparence"
           }
         }
       }
@@ -6820,6 +8276,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Signets"
+          }
+        }
+      }
+    },
+    "Bottom Edge" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untere Kante"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borde inferior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bord inférieur"
           }
         }
       }
@@ -8515,6 +9993,28 @@
         }
       }
     },
+    "Crop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuschneiden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recortar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recadrer"
+          }
+        }
+      }
+    },
     "Current" : {
       "localizations" : {
         "de" : {
@@ -8691,24 +10191,24 @@
         }
       }
     },
-    "Dark Paper in Dark Mode" : {
+    "Dark" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dunkles Papier im Dunkelmodus"
+            "value" : "Dunkel"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Papel oscuro en modo oscuro"
+            "value" : "Oscuro"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Papier sombre en mode sombre"
+            "value" : "Sombre"
           }
         }
       }
@@ -9261,46 +10761,154 @@
         }
       }
     },
-    "Deleted notebooks stay here for 30 days" : {
+    "Deleted notebooks stay here for %lld days" : {
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gelöschte Notizbücher bleiben 30 Tage hier"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Gelöschte Notizbücher bleiben %lld Tag hier"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Gelöschte Notizbücher bleiben %lld Tage hier"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted notebooks stay here for %lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted notebooks stay here for %lld days"
+                }
+              }
+            }
           }
         },
         "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los cuadernos eliminados se conservan aquí 30 días"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Los cuadernos eliminados se conservan aquí %lld día"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Los cuadernos eliminados se conservan aquí %lld días"
+                }
+              }
+            }
           }
         },
         "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les carnets supprimés restent ici 30 jours"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Les carnets supprimés restent ici %lld jour"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Les carnets supprimés restent ici %lld jours"
+                }
+              }
+            }
           }
         }
       }
     },
-    "Deleted notebooks stay here for 30 days." : {
+    "Deleted notebooks stay here for %lld days." : {
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gelöschte Notizbücher bleiben 30 Tage hier."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Gelöschte Notizbücher bleiben %lld Tag hier."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Gelöschte Notizbücher bleiben %lld Tage hier."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted notebooks stay here for %lld day."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted notebooks stay here for %lld days."
+                }
+              }
+            }
           }
         },
         "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los cuadernos eliminados se conservan aquí 30 días."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Los cuadernos eliminados se conservan aquí %lld día."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Los cuadernos eliminados se conservan aquí %lld días."
+                }
+              }
+            }
           }
         },
         "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les carnets supprimés restent ici 30 jours."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Les carnets supprimés restent ici %lld jour."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Les carnets supprimés restent ici %lld jours."
+                }
+              }
+            }
           }
         }
       }
@@ -9543,6 +11151,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Faites glisser sur les mots d’une page PDF"
+          }
+        }
+      }
+    },
+    "Drag an edge or corner" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ziehe an einer Kante oder Ecke"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrastra un borde o una esquina"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faites glisser un bord ou un coin"
           }
         }
       }
@@ -12542,28 +14172,6 @@
         }
       }
     },
-    "In Dark Mode, light paper is shown dark and its ink light. A PDF, a photo and everything you export keep their own colours." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Im Dunkelmodus wird helles Papier dunkel und seine Tinte hell angezeigt. PDFs, Fotos und alles, was du exportierst, behalten ihre eigenen Farben."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En modo oscuro, el papel claro se muestra oscuro y su tinta, clara. Los PDF, las fotos y todo lo que exportes conservan sus propios colores."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En mode sombre, le papier clair s’affiche en sombre et son encre en clair. Les PDF, les photos et tout ce que vous exportez conservent leurs propres couleurs."
-          }
-        }
-      }
-    },
     "Index Card" : {
       "localizations" : {
         "de" : {
@@ -12806,6 +14414,28 @@
         }
       }
     },
+    "It goes back to the four it started with: a black, a blue and a red pen and a yellow highlighter. Pens you added or changed are taken off it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie bekommt wieder die vier vom Anfang: einen schwarzen, einen blauen und einen roten Stift und einen gelben Textmarker. Stifte, die du hinzugefügt oder geändert hast, werden entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a tener los cuatro del principio: un bolígrafo negro, uno azul y uno rojo, y un resaltador amarillo. Se quitan los bolígrafos que hayas añadido o cambiado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il retrouve les quatre outils du début : un stylo noir, un bleu et un rouge, et un surligneur jaune. Les stylos que vous avez ajoutés ou modifiés sont retirés."
+          }
+        }
+      }
+    },
     "Its copy in iCloud can't be read." : {
       "localizations" : {
         "de" : {
@@ -12982,6 +14612,28 @@
         }
       }
     },
+    "Keep Deleted Notebooks For" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelöschte Notizbücher behalten für"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar los cuadernos eliminados durante"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les carnets supprimés pendant"
+          }
+        }
+      }
+    },
     "Keep Editing" : {
       "localizations" : {
         "de" : {
@@ -13000,6 +14652,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continuer à modifier"
+          }
+        }
+      }
+    },
+    "Keep Paper Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier hell lassen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener el papel claro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garder le papier clair"
           }
         }
       }
@@ -13444,6 +15118,50 @@
         }
       }
     },
+    "Left Edge" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linke Kante"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borde izquierdo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bord gauche"
+          }
+        }
+      }
+    },
+    "Left-Handed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linkshändig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para zurdos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour gauchers"
+          }
+        }
+      }
+    },
     "Legal Pad" : {
       "localizations" : {
         "de" : {
@@ -13594,6 +15312,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Soulève le ruban ou le remet en place. Maintenez le doigt pour déplacer ou redimensionner."
+          }
+        }
+      }
+    },
+    "Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clair"
           }
         }
       }
@@ -16242,6 +17982,28 @@
         }
       }
     },
+    "Notebooks in Recently Deleted are deleted for good once they have been there this long. Each iPad keeps to its own setting: with iCloud sync on, a notebook whose time runs out here stays on another iPad set to keep it longer, until its time there runs out too." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizbücher in „Zuletzt gelöscht“ werden endgültig gelöscht, wenn sie so lange dort lagen. Jedes iPad hält sich an seine eigene Einstellung: Mit iCloud-Synchronisierung bleibt ein Notizbuch, dessen Zeit hier abläuft, auf einem iPad, das es länger behält, bis seine Zeit auch dort abläuft."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cuadernos de Eliminados recientemente se eliminan para siempre cuando llevan ahí este tiempo. Cada iPad sigue su propio ajuste: con la sincronización de iCloud activada, un cuaderno cuyo tiempo se acaba aquí sigue en otro iPad que lo conserve más tiempo, hasta que allí también se acabe."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les carnets de Supprimés récemment sont supprimés définitivement après y être restés aussi longtemps. Chaque iPad suit son propre réglage : avec la synchronisation iCloud activée, un carnet dont le temps est écoulé ici reste sur un autre iPad réglé pour le garder plus longtemps, jusqu’à ce que son temps y soit écoulé aussi."
+          }
+        }
+      }
+    },
     "Notes" : {
       "localizations" : {
         "de" : {
@@ -18148,6 +19910,28 @@
         }
       }
     },
+    "Pen Tray" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stiftablage"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bandeja de bolígrafos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plumier"
+          }
+        }
+      }
+    },
     "Pencil" : {
       "localizations" : {
         "de" : {
@@ -19342,6 +21126,28 @@
         }
       }
     },
+    "Recently Deleted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt gelöscht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminados recientemente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimés récemment"
+          }
+        }
+      }
+    },
     "recently edited first" : {
       "localizations" : {
         "de" : {
@@ -19492,6 +21298,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrements"
+          }
+        }
+      }
+    },
+    "Recordings are transcribed on this iPad, in this language unless you pick another for one. Only the languages this iPad can transcribe without sending a recording away are listed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahmen werden auf diesem iPad transkribiert, in dieser Sprache, außer du wählst für eine Aufnahme eine andere. Aufgeführt sind nur die Sprachen, die dieses iPad transkribieren kann, ohne eine Aufnahme wegzuschicken."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las grabaciones se transcriben en este iPad, en este idioma, salvo que elijas otro para alguna. Solo aparecen los idiomas que este iPad puede transcribir sin enviar la grabación fuera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les enregistrements sont transcrits sur cet iPad, dans cette langue, sauf si vous en choisissez une autre pour l’un d’eux. Seules les langues que cet iPad peut transcrire sans envoyer l’enregistrement ailleurs sont proposées."
           }
         }
       }
@@ -20308,6 +22136,94 @@
         }
       }
     },
+    "Reset Crop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuschnitt zurücksetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restablecer recorte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le recadrage"
+          }
+        }
+      }
+    },
+    "Reset Pen Tray" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stiftablage zurücksetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restablecer bandeja de bolígrafos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le plumier"
+          }
+        }
+      }
+    },
+    "Reset Pen Tray…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stiftablage zurücksetzen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restablecer bandeja de bolígrafos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le plumier…"
+          }
+        }
+      }
+    },
+    "Reset the pen tray?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stiftablage zurücksetzen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Restablecer la bandeja de bolígrafos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le plumier ?"
+          }
+        }
+      }
+    },
     "Resize and rotate" : {
       "localizations" : {
         "de" : {
@@ -20636,6 +22552,28 @@
         }
       }
     },
+    "Right Edge" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechte Kante"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borde derecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bord droit"
+          }
+        }
+      }
+    },
     "Ring" : {
       "localizations" : {
         "de" : {
@@ -20742,6 +22680,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sauge"
+          }
+        }
+      }
+    },
+    "Same as iPad" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie iPad"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Igual que el iPad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comme l’iPad"
           }
         }
       }
@@ -23628,6 +25588,28 @@
         }
       }
     },
+    "System" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Système"
+          }
+        }
+      }
+    },
     "System Setting" : {
       "localizations" : {
         "de" : {
@@ -26180,6 +28162,28 @@
         }
       }
     },
+    "Top Edge" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obere Kante"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borde superior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bord supérieur"
+          }
+        }
+      }
+    },
     "Top Level" : {
       "localizations" : {
         "de" : {
@@ -26440,6 +28444,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Options de transcription"
+          }
+        }
+      }
+    },
+    "Transcription Language" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprache der Transkription"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idioma de transcripción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Langue de transcription"
           }
         }
       }

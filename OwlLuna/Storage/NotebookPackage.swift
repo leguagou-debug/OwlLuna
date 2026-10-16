@@ -247,6 +247,24 @@ actor NotebookPackage {
         return manifest
     }
 
+    /// Rewrites how the notebook is filed and leaves every other key as it was, so a manifest saved by a newer
+    /// version can go in and out of Recently Deleted without this one writing what it can't read.
+    func updateLibraryState(_ change: @Sendable (inout LibraryState) -> Void) throws -> NotebookManifest {
+        let data: Data
+        do { data = try Data(contentsOf: manifestURL) } catch { throw PackageError.missing }
+        guard var object = (try? JSONValue.parse(data))?.objectValue else { throw PackageError.unreadable }
+        let raw = object["library"] ?? .null
+        guard raw == .null || raw.objectValue != nil else { throw PackageError.readOnly }
+        var state = ManifestCodec.decodeLibrary(raw.objectValue ?? [:])
+        change(&state)
+        object["library"] = ManifestCodec.encodeLibrary(state)
+        let written = try JSONValue.object(object).serialized()
+        try? FileManager.default.removeItem(at: previousManifestURL)
+        try? FileManager.default.copyItem(at: manifestURL, to: previousManifestURL)
+        try written.write(to: manifestURL, options: .atomic)
+        return try ManifestCodec.decode(written, fallbackID: id).manifest
+    }
+
     func writeText(_ text: String, pageID: UUID) throws {
         try makeDirectoryInExistingPackage(textDirectory)
         try Data(text.utf8).write(to: textURL(pageID), options: .atomic)

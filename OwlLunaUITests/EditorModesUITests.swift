@@ -249,6 +249,8 @@ final class EditorModesUITests: XCTestCase {
         let title = app.buttons["Title"].firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "a tap beside the card puts it away")
         XCTAssertGreaterThan(text.frame.height, before.height * 1.5, "a larger size makes a taller box")
         attach(app, "text-selected")
 

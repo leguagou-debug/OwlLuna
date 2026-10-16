@@ -247,7 +247,13 @@ final class ZoomWindowPanel: UIView {
     private let title = UILabel()
     private let rule = UIView()
     private var buttons: [Action: UIButton] = [:]
+    private var barLeading: NSLayoutConstraint?
+    private var barTrailing: NSLayoutConstraint?
     var onAction: ((Action) -> Void)?
+    /// The buttons keep to the side the writing hand is on, the close button outermost. The title takes the rest.
+    var isLeftHanded = false {
+        didSet { if isLeftHanded != oldValue { arrange() } }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -287,10 +293,10 @@ final class ZoomWindowPanel: UIView {
             button.isPointerInteractionEnabled = true
             button.widthAnchor.constraint(equalToConstant: 44).isActive = true
             button.heightAnchor.constraint(equalToConstant: 44).isActive = true
-            if action == .close { bar.setCustomSpacing(Space.x3, after: bar.arrangedSubviews.last ?? title) }
             bar.addArrangedSubview(button)
             buttons[action] = button
         }
+        arrange()
 
         canvasArea.clipsToBounds = true
         canvasArea.backgroundColor = .white
@@ -306,10 +312,14 @@ final class ZoomWindowPanel: UIView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        let barLeading = bar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: Space.x4)
+        let barTrailing = bar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -Space.x2)
+        self.barLeading = barLeading
+        self.barTrailing = barTrailing
         NSLayoutConstraint.activate([
             bar.topAnchor.constraint(equalTo: topAnchor),
-            bar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: Space.x4),
-            bar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -Space.x2),
+            barLeading,
+            barTrailing,
             bar.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumBarHeight),
             canvasArea.topAnchor.constraint(equalTo: bar.bottomAnchor),
             canvasArea.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -326,6 +336,21 @@ final class ZoomWindowPanel: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    private func arrange() {
+        guard let close = buttons[.close] else { return }
+        let moves = Action.allCases.filter { $0 != .close }.compactMap { buttons[$0] }
+        let order: [UIView] = isLeftHanded ? [close] + moves + [title] : [title] + moves + [close]
+        for (index, view) in order.enumerated() {
+            bar.insertArrangedSubview(view, at: index)
+            bar.setCustomSpacing(UIStackView.spacingUseDefault, after: view)
+        }
+        bar.setCustomSpacing(Space.x3, after: isLeftHanded ? close : moves.last ?? title)
+        if isLeftHanded, let last = moves.last { bar.setCustomSpacing(Space.x3, after: last) }
+        // The buttons' own insets stand in for some of the margin on their side.
+        barLeading?.constant = isLeftHanded ? Space.x2 : Space.x4
+        barTrailing?.constant = isLeftHanded ? -Space.x4 : -Space.x2
+    }
 
     @objc private func buttonShapesChanged() {
         buttons.values.forEach { $0.setNeedsUpdateConfiguration() }

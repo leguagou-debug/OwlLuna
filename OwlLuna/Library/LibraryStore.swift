@@ -33,6 +33,7 @@ final class LibraryStore {
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "library")
     @ObservationIgnored private var changesInFlight: [UUID: [UUID: @Sendable (inout NotebookManifest) -> Void]] = [:]
     @ObservationIgnored private var manifestWrites: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lastRefile: [UUID: UUID] = [:]
     @ObservationIgnored private var folderWrite: Task<Void, Never>?
     @ObservationIgnored private var smartShelfWrite: Task<Void, Never>?
     /// Backup files made while a notebook was locked: they hold it whatever has happened to it since.
@@ -237,14 +238,22 @@ final class LibraryStore {
         searchVersion &+= 1
     }
 
+    /// Adds and takes off tags across notebooks, each keeping the other tags it has.
+    func editTags(_ edit: TagEdit, for records: [NotebookRecord]) {
+        guard !edit.isEmpty else { return }
+        changeLibraryState(records, index: { $0.tagsRaw = Tags.joined(edit.applied(to: $0.tags)) }) { $0.tags = edit.applied(to: $0.tags) }
+        searchVersion &+= 1
+    }
+
+    /// A notebook saved by a newer version goes in and out of Recently Deleted too, with only its filing written.
     func moveToTrash(_ records: [NotebookRecord]) {
         let now = Date.now
-        changeLibraryState(records, index: { $0.deletedAt = now }) { $0.deletedAt = now }
+        changeLibraryState(records, includingReadOnly: true, index: { $0.deletedAt = now }) { $0.deletedAt = now }
     }
 
     func restore(_ records: [NotebookRecord]) {
         let journal = records.contains(where: \.isJournal)
-        changeLibraryState(records, index: { $0.deletedAt = nil }) { $0.deletedAt = nil }
+        changeLibraryState(records, includingReadOnly: true, index: { $0.deletedAt = nil }) { $0.deletedAt = nil }
         if journal { Task { await settleJournal() } }
     }
 
@@ -255,8 +264,9 @@ final class LibraryStore {
 
     /// Permanently removes notebooks from the library. Only offered for notebooks already in Recently Deleted.
     /// Each package is renamed into `Deleting/` (one cheap move on the main thread) and removed in the background;
-    /// anything left there is swept at the next launch.
-    func deletePermanently(_ records: [NotebookRecord]) {
+    /// anything left there is swept at the next launch. `expiring` is this device's Recently Deleted running out.
+    func deletePermanently(_ records: [NotebookRecord], expiring: Bool = false) {
+        guard noteExpiry(of: records, expiring: expiring) else { return }
         let registry = DocumentRegistry.shared
         var moved: [URL] = []
         var deleted: [UUID] = []
@@ -279,6 +289,26 @@ final class LibraryStore {
             for url in moved { try? FileManager.default.removeItem(at: url) }
         }
         onPermanentlyDeleted?(deleted)
+    }
+
+    /// A delete for good made here goes to every device. One that is only this device's Recently Deleted running out is
+    /// noted first, so a sync leaves the copy to a device that may keep it longer; if it can't be noted, nothing goes.
+    private func noteExpiry(of records: [NotebookRecord], expiring: Bool) -> Bool {
+        var expired = ExpiredTrash.read(root)
+        let before = expired
+        if expiring {
+            expired.note(Dictionary(records.map { ($0.id, $0.deletedAt ?? .now) }, uniquingKeysWith: { $1 }))
+        } else {
+            for record in records { expired.notebooks[record.id] = nil }
+        }
+        guard expired != before else { return true }
+        do {
+            try expired.write(root)
+            return true
+        } catch {
+            log.error("expired notebooks couldn't be noted: \(error.localizedDescription)")
+            return !expiring
+        }
     }
 
     /// Finishes deletes interrupted by the app quitting.
@@ -320,8 +350,8 @@ final class LibraryStore {
 
     /// The index may be behind the files (a sync that stopped part-way), so each notebook's own manifest has the last
     /// word. `waiting` are notebooks a sync couldn't settle, which may have been restored on another device.
-    func purgeExpiredTrash(olderThan days: Int = 30, skipping waiting: Set<UUID> = []) async {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
+    func purgeExpiredTrash(olderThan days: Int = TrashLength.initial.days, skipping waiting: Set<UUID> = []) async {
+        let cutoff = TrashLength.cutoff(days)
         let candidates = ((try? context.fetch(FetchDescriptor<NotebookRecord>(predicate: #Predicate { $0.deletedAt != nil }))) ?? [])
             .filter { ($0.deletedAt ?? .now) < cutoff && !waiting.contains($0.id) }.map(\.id)
         guard !candidates.isEmpty else { return }
@@ -331,16 +361,22 @@ final class LibraryStore {
             candidates.filter { id in LibrarySync.filing(ofPackage: root.package(id))?.deletedAt.map { $0 < cutoff } ?? false }
         }.value
         let records = expired.compactMap(record).filter { ($0.deletedAt ?? .now) < cutoff }
-        if !records.isEmpty { deletePermanently(records) }
+        if !records.isEmpty { deletePermanently(records, expiring: true) }
     }
 
     /// Each change is stamped, which is what carries it to other devices without dating the notebook.
-    private func changeLibraryState(_ records: [NotebookRecord], index: (NotebookRecord) -> Void,
+    private func changeLibraryState(_ records: [NotebookRecord], includingReadOnly: Bool = false, index: (NotebookRecord) -> Void,
                                     manifest change: @escaping @Sendable (inout LibraryState) -> Void) {
         let now = Date.now
-        for record in records where !record.isReadOnly {
+        for record in records where includingReadOnly || !record.isReadOnly {
             index(record)
-            if let document = DocumentRegistry.shared.document(for: record.id) {
+            if record.isReadOnly {
+                refile(record.id) {
+                    let before = $0
+                    change(&$0)
+                    $0.stamp(changesSince: before, at: now)
+                }
+            } else if let document = DocumentRegistry.shared.document(for: record.id) {
                 document.updateLibraryState(change)
             } else {
                 update(record.id) {
@@ -351,6 +387,31 @@ final class LibraryStore {
             }
         }
         saveIndex()
+    }
+
+    /// Writes only a notebook's filing, in turn with its other writes, for one this version mustn't save whole.
+    @discardableResult
+    private func refile(_ id: UUID, _ change: @escaping @Sendable (inout LibraryState) -> Void) -> Task<Void, Never> {
+        let package = NotebookPackage(root: root, id: id), registry = DocumentRegistry.shared
+        let previous = manifestWrites[id], token = UUID()
+        lastRefile[id] = token
+        registry.willChange(id)
+        let write = Task {
+            await previous?.value
+            await registry.whenReleased(id)
+            do {
+                let written = try await package.updateLibraryState(change)
+                if lastRefile[id] == token, record(id) != nil { index(written) }
+            } catch {
+                lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
+                log.error("filing update failed for \(id): \(error.localizedDescription)")
+                if let manifest = try? await package.readManifest().manifest { index(manifest) }
+            }
+            registry.didChange(id)
+            if lastRefile[id] == token { lastRefile[id] = nil }
+        }
+        manifestWrites[id] = write
+        return write
     }
 
     /// Read-modify-write of a closed notebook's manifest. A document that starts opening meanwhile gets the

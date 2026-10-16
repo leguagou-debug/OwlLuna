@@ -222,6 +222,38 @@ final class ToolPresetTests: XCTestCase {
         XCTAssertEqual(toolbox.choice, .lasso)
     }
 
+    func testResettingThePenTrayBringsBackTheFourItStartedWith() throws {
+        let defaults = try freshDefaults()
+        let toolbox = Toolbox(defaults: defaults)
+        XCTAssertTrue(toolbox.shelf.isAsItStarted)
+        let first = try XCTUnwrap(toolbox.pen)
+        toolbox.changePen(first.id) { $0.color = 0x3D5A_40FF }
+        let added = try XCTUnwrap(toolbox.addPen())
+        toolbox.removePen(toolbox.shelf.usable[2].id)
+        toolbox.setExtra(.ruler, shown: true)
+        toolbox.setEraser(Eraser(kind: .part, width: 30))
+        XCTAssertFalse(toolbox.shelf.isAsItStarted)
+        XCTAssertEqual(toolbox.choice, .pen(added))
+
+        toolbox.resetPens()
+        XCTAssertTrue(toolbox.shelf.isAsItStarted)
+        XCTAssertEqual(toolbox.shelf.usable.map(\.color), ToolShelf.starters.map(\.color))
+        XCTAssertEqual(toolbox.shelf.usable.map(\.width), ToolShelf.starters.map(\.width))
+        XCTAssertEqual(toolbox.choice, .pen(toolbox.shelf.usable[0].id), "the pen in hand gives way to the first")
+        XCTAssertTrue(toolbox.extras.contains(.ruler), "the shortcuts stay")
+        XCTAssertEqual(toolbox.eraser.kind, .part, "and so does the eraser")
+        let relaunched = Toolbox(defaults: defaults)
+        XCTAssertTrue(relaunched.shelf.isAsItStarted, "it lasts")
+        XCTAssertEqual(relaunched.choice, toolbox.choice)
+
+        toolbox.addPen()
+        toolbox.take(.eraser)
+        toolbox.resetPens()
+        XCTAssertEqual(toolbox.choice, .eraser, "with the eraser in hand, the eraser stays")
+        toolbox.switchEraser()
+        XCTAssertEqual(toolbox.choice, .pen(toolbox.shelf.usable[0].id), "and the Pencil's switch goes back to a pen on the tray")
+    }
+
     func testEveryCanvasTakesTheToolInHand() throws {
         let document = try makeDocument()
         let session = EditorSession(document: document)

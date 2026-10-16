@@ -113,6 +113,23 @@ extension LibraryStore {
         AccessibilityNotification.Announcement(locking ? String(localized: "“\(title)” is locked") : String(localized: "Lock removed from “\(title)”")).post()
         return nil
     }
+
+    /// Locks every notebook in `records` that isn't locked yet, asking once for all of them. Returns what went wrong, if the iPad can't ask.
+    func lock(_ records: [NotebookRecord]) async -> String? {
+        let ids = records.filter { !$0.isLocked && !$0.isReadOnly && !$0.isTrashed }.map(\.id)
+        guard !ids.isEmpty else { return nil }
+        let lock = NotebookLock.shared
+        guard lock.isAvailable else { return NotebookLock.unavailableMessage }
+        let title = records.first { $0.id == ids[0] }.map { $0.title.isEmpty ? String(localized: "Untitled") : $0.title } ?? ""
+        let reason = ids.count == 1 ? String(localized: "Lock “\(title)”") : String(localized: "Lock \(ids.count) notebooks")
+        guard await lock.confirm(reason) else { return nil }
+        let locking = ids.compactMap(record).filter { !$0.isLocked }
+        guard !locking.isEmpty else { return nil }
+        for record in locking where DocumentRegistry.shared.document(for: record.id) != nil { lock.keepOpen(record.id) }
+        setLocked(true, for: locking)
+        AccessibilityNotification.Announcement(String(localized: "\(locking.count) notebooks locked")).post()
+        return nil
+    }
 }
 
 /// What stands in for a locked notebook until it is unlocked, and whenever the app isn't in front.

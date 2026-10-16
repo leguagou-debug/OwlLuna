@@ -518,6 +518,7 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
     @Binding var selection: Value
     let options: [Value]
     var inBar: Bool
+    var identifier: ((Value) -> String)?
     @ViewBuilder var label: (Value) -> Label
     @Namespace private var thumb
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -526,11 +527,12 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(_ title: LocalizedStringKey, selection: Binding<Value>, options: [Value], inBar: Bool = false,
-         @ViewBuilder label: @escaping (Value) -> Label) {
+         identifier: ((Value) -> String)? = nil, @ViewBuilder label: @escaping (Value) -> Label) {
         self.title = title
         self._selection = selection
         self.options = options
         self.inBar = inBar
+        self.identifier = identifier
         self.label = label
     }
 
@@ -557,6 +559,7 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
                 .matchedGeometryEffect(id: option, in: thumb)
                 .modifier(BarLimit(active: inBar))
                 .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier(identifier?(option) ?? "", isEnabled: identifier != nil)
             }
         }
         .background { thumbView.matchedGeometryEffect(id: selection, in: thumb, isSource: false) }

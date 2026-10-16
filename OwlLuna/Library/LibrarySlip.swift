@@ -39,14 +39,14 @@ final class LibraryChangeCenter {
     // MARK: Changes
 
     func moveToTrash(_ records: [NotebookRecord], in store: LibraryStore, undoManager: UndoManager?) {
-        perform(records, in: store, undoManager: undoManager, action: String(localized: "Delete"), symbol: "trash", isTrash: true,
+        perform(records, includingReadOnly: true, in: store, undoManager: undoManager, action: String(localized: "Delete"), symbol: "trash", isTrash: true,
                 message: { $0.count == 1 ? String(localized: "Moved “\($0[0].title)” to Recently Deleted")
                                          : String(localized: "Moved \($0.count) notebooks to Recently Deleted") },
                 apply: { store.moveToTrash($0) }, inverse: { store.restore($0) })
     }
 
     func restore(_ records: [NotebookRecord], in store: LibraryStore, undoManager: UndoManager?) {
-        perform(records, in: store, undoManager: undoManager, action: String(localized: "Restore"), symbol: "arrow.uturn.backward",
+        perform(records, includingReadOnly: true, in: store, undoManager: undoManager, action: String(localized: "Restore"), symbol: "arrow.uturn.backward",
                 message: { $0.count == 1 ? String(localized: "Restored “\($0[0].title)”") : String(localized: "Restored \($0.count) notebooks") },
                 apply: { store.restore($0) }, inverse: { store.moveToTrash($0) })
     }
@@ -81,6 +81,18 @@ final class LibraryChangeCenter {
                 apply: { store.setTags(tags, for: $0) }, inverse: { store.setTags(previous, for: $0) })
     }
 
+    /// Tags added to and taken off several notebooks at once. Undo gives each one the tags it had.
+    func editTags(_ edit: TagEdit, for records: [NotebookRecord], in store: LibraryStore, undoManager: UndoManager?) {
+        let previous = Dictionary(records.map { ($0.id, $0.tags) }, uniquingKeysWith: { first, _ in first })
+        perform(records.filter { edit.applied(to: $0.tags) != $0.tags }, in: store, undoManager: undoManager, action: String(localized: "Change Tags"),
+                symbol: "tag",
+                message: { $0.count == 1 ? String(localized: "Changed the tags of “\($0[0].title)”") : String(localized: "Changed the tags of \($0.count) notebooks") },
+                apply: { store.editTags(edit, for: $0) },
+                inverse: { records in
+                    for (tags, group) in Dictionary(grouping: records, by: { previous[$0.id] ?? [] }) { store.setTags(tags, for: group) }
+                })
+    }
+
     /// Undo returns each notebook to the shelf it was on, or off the shelves if that shelf has since been deleted.
     func move(_ records: [NotebookRecord], to folder: FolderRecord?, in store: LibraryStore, undoManager: UndoManager?) {
         let previous = Dictionary(records.map { ($0.id, $0.folder?.id) }, uniquingKeysWith: { first, _ in first })
@@ -108,10 +120,10 @@ final class LibraryChangeCenter {
         return try? store.context.fetch(FetchDescriptor<FolderRecord>(predicate: #Predicate { $0.id == id })).first
     }
 
-    private func perform(_ records: [NotebookRecord], in store: LibraryStore, undoManager: UndoManager?, action: String, symbol: String,
-                         isTrash: Bool = false, message: ([NotebookRecord]) -> String,
+    private func perform(_ records: [NotebookRecord], includingReadOnly: Bool = false, in store: LibraryStore, undoManager: UndoManager?, action: String,
+                         symbol: String, isTrash: Bool = false, message: ([NotebookRecord]) -> String,
                          apply: @escaping @MainActor ([NotebookRecord]) -> Void, inverse: @escaping @MainActor ([NotebookRecord]) -> Void) {
-        let records = records.filter { !$0.isReadOnly }
+        let records = includingReadOnly ? records : records.filter { !$0.isReadOnly }
         guard !records.isEmpty else { return }
         let text = message(records)
         let ids = records.map(\.id)

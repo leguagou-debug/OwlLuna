@@ -20,6 +20,13 @@ struct OwlLunaSettingsView: View {
     @AppStorage(SettingsKey.pencilSqueeze) private var pencilSqueeze: PencilAction = .system
     @AppStorage(SettingsKey.journalAgenda) private var printsAgenda = false
     @AppStorage(SettingsKey.spotlight) private var showsInSpotlight = true
+    @AppStorage(SettingsKey.appearance) private var appearance: AppAppearance = .initial
+    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
+    @AppStorage(SettingsKey.trashLength) private var trashLength: TrashLength = .initial
+    @AppStorage(SettingsKey.transcriptLanguage) private var transcriptLanguage = ""
+    @State private var transcriptLanguages: [Locale] = []
+    @State private var toolbox = Toolbox.shared
+    @State private var confirmingPenReset = false
     @State private var agendaMessage: String?
     @State private var confirmingHistoryClear = false
     @State private var backupWork: BackupWork?
@@ -44,15 +51,18 @@ struct OwlLunaSettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x8) {
+                    appearanceSection
                     inputSection
                     pencilSection
+                    penTraySection
                     paperSection
-                    pagesSection
                     if UIApplication.shared.supportsAlternateIcons {
                         SettingsSection("App Icon") { AppIconPicker().settingsRow() }
                     }
+                    recordingsSection
                     journalSection
                     historySection
+                    trashSection
                     searchSection
                     syncSection
                     backupSection
@@ -94,14 +104,76 @@ struct OwlLunaSettingsView: View {
         }
     }
 
+    private var appearanceSection: some View {
+        SettingsSection("Appearance", note: "“System” follows the iPad's Light or Dark appearance. With Keep Paper Light on, pages, paper colours and templates stay light in Dark Mode, and ink looks as it does on light paper. A PDF, a photo and everything you export keep their own colours.") {
+            OwlLunaSegmentedPicker("Appearance", selection: $appearance, options: AppAppearance.allCases,
+                                   identifier: { "settings.appearance.\($0.rawValue)" }) { Text($0.displayName) }
+                .accessibilityIdentifier("settings.appearance")
+                .padding(.vertical, Space.x2)
+                .settingsRow()
+            Toggle("Keep Paper Light", isOn: Binding(get: { !darkPaper }, set: { darkPaper = !$0 }))
+                .accessibilityIdentifier("settings.appearance.paperLight")
+                .settingsRow()
+        }
+    }
+
     private var inputSection: some View {
-        SettingsSection("Input", note: "“System Setting” follows Settings › Apple Pencil › Only Draw with Apple Pencil.") {
+        SettingsSection("Input", note: "“System Setting” follows Settings › Apple Pencil › Only Draw with Apple Pencil. With Left-Handed on, the page ribbon, the zoom window's buttons and the panels beside the page are on the left.") {
             VStack(alignment: .leading, spacing: Space.x2) {
                 Text("Draw With")
                 OwlLunaSegmentedPicker("Draw With", selection: $drawingInput, options: DrawingInput.allCases) { Text($0.displayName) }
             }
             .padding(.vertical, Space.x2)
             .settingsRow()
+            Toggle("Left-Handed", isOn: $leftHanded)
+                .accessibilityIdentifier("settings.input.leftHanded")
+                .settingsRow()
+        }
+    }
+
+    private var penTraySection: some View {
+        SettingsSection("Pen Tray") {
+            SettingsActionRow(title: "Reset Pen Tray…", systemImage: "arrow.counterclockwise", role: .destructive) { confirmingPenReset = true }
+                .disabled(toolbox.shelf.isAsItStarted)
+                .accessibilityIdentifier("settings.pens.reset")
+                .notice("Reset the pen tray?", isPresented: $confirmingPenReset,
+                        message: Text("It goes back to the four it started with: a black, a blue and a red pen and a yellow highlighter. Pens you added or changed are taken off it.")) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Reset Pen Tray", role: .destructive) { toolbox.resetPens() }
+                }
+        }
+    }
+
+    private var recordingsSection: some View {
+        let chosen = transcriptLanguage.isEmpty ? nil : Locale(identifier: transcriptLanguage)
+        return SettingsSection("Recordings", note: "Recordings are transcribed on this iPad, in this language unless you pick another for one. Only the languages this iPad can transcribe without sending a recording away are listed.") {
+            SettingsChoiceRow(title: "Transcription Language", value: chosen.map(Transcription.name(of:)) ?? String(localized: "Same as iPad"),
+                              selection: $transcriptLanguage) {
+                Section { Text("Same as iPad").tag("") }
+                if !transcriptLanguages.isEmpty {
+                    Section {
+                        ForEach(transcriptLanguages, id: \.identifier) { Text(Transcription.name(of: $0)).tag($0.identifier(.bcp47)) }
+                    }
+                }
+            }
+            .accessibilityIdentifier("settings.transcription.language")
+        }
+        .task { transcriptLanguages = await Task.detached(priority: .userInitiated) { Transcription.onDeviceLanguages() }.value }
+    }
+
+    private var trashSection: some View {
+        SettingsSection("Recently Deleted", note: "Notebooks in Recently Deleted are deleted for good once they have been there this long. Each iPad keeps to its own setting: with iCloud sync on, a notebook whose time runs out here stays on another iPad set to keep it longer, until its time there runs out too.") {
+            VStack(alignment: .leading, spacing: Space.x2) {
+                Text("Keep Deleted Notebooks For")
+                OwlLunaSegmentedPicker("Keep Deleted Notebooks For", selection: $trashLength, options: TrashLength.allCases,
+                                       identifier: { "settings.trash.\($0.days)" }) { Text($0.displayName) }
+                    .accessibilityIdentifier("settings.trash.length")
+            }
+            .padding(.vertical, Space.x2)
+            .settingsRow()
+            .onChange(of: trashLength) { _, _ in
+                if let app { Task { await app.trash.lengthChanged() } }
+            }
         }
     }
 
@@ -141,14 +213,6 @@ struct OwlLunaSettingsView: View {
             SettingsChoiceRow(title: "Page Size", value: size.displayName, selection: $size) {
                 ForEach(PageSize.allCases) { Text($0.displayName).tag($0) }
             }
-        }
-    }
-
-    private var pagesSection: some View {
-        SettingsSection("Pages", note: "In Dark Mode, light paper is shown dark and its ink light. A PDF, a photo and everything you export keep their own colours.") {
-            Toggle("Dark Paper in Dark Mode", isOn: $darkPaper)
-                .accessibilityIdentifier("settings.paper.dark")
-                .settingsRow()
         }
     }
 

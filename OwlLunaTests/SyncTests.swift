@@ -316,7 +316,7 @@ final class SyncTests: XCTestCase {
     }
 
     /// A notebook in Recently Deleted on both devices, put there 40 days ago, and in step.
-    private func longDeleted() async throws -> NotebookManifest {
+    private nonisolated(nonsending) func longDeleted() async throws -> NotebookManifest {
         let notes = try await makeNotebook("Notes", on: a, strokes: 2)
         try await sync(a)
         try await sync(b)
@@ -385,6 +385,85 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(b.packageIDs(), [unsynced.id], "the one in Recently Deleted here too goes for good")
         let binned = try await library(unsynced.id, on: b)
         XCTAssertNotNil(binned.deletedAt, "and the one that never went in there here goes in now")
+    }
+
+    // MARK: Recently Deleted kept for different lengths on each device
+
+    /// This device's own Recently Deleted running out, as the library does it.
+    @MainActor
+    private func expire(on root: StorageRoot, after length: TrashLength) async throws -> LibraryStore {
+        let store = try device(root)
+        await store.reloadFromDisk()
+        await store.purgeExpiredTrash(olderThan: length.days)
+        return store
+    }
+
+    @MainActor
+    func testRecentlyDeletedRunningOutHereLeavesItOnADeviceThatKeepsItLonger() async throws {
+        let notes = try await longDeleted()
+        let here = try await expire(on: a, after: .month)
+        XCTAssertNil(here.record(notes.id))
+        XCTAssertFalse(a.packageIDs().contains(notes.id))
+        XCTAssertNotNil(ExpiredTrash.read(a).notebooks[notes.id])
+
+        let report = try await sync(a)
+        XCTAssertEqual(report, SyncReport(), "the other device may keep Recently Deleted for 90 days, so its copy is left for it")
+        XCTAssertTrue(isSynced(notes.id))
+        XCTAssertFalse(marked(notes.id))
+        let other = try await sync(b)
+        XCTAssertEqual(other, SyncReport())
+        let kept = try await library(notes.id, on: b)
+        XCTAssertNotNil(kept.deletedAt, "it is still in Recently Deleted there")
+
+        // Taken back out there, it comes back here as any restore would.
+        try await file(notes.id, on: b, at: .now) { $0.deletedAt = nil }
+        try await sync(b)
+        let back = try await sync(a)
+        XCTAssertEqual(back.pulled, [notes.id])
+        let restored = try await library(notes.id, on: a)
+        XCTAssertNil(restored.deletedAt)
+        let count = await strokes(notes, on: a)
+        XCTAssertEqual(count, 2)
+        try await settled()
+    }
+
+    @MainActor
+    func testADeleteForGoodMadeHereStillGoesEverywhere() async throws {
+        let notes = try await longDeleted()
+        let here = try await expire(on: a, after: .month)
+        try await sync(a)
+        try await file(notes.id, on: b, at: .now) { $0.deletedAt = nil }
+        try await sync(b)
+        try await sync(a)
+        // Back here, then put in Recently Deleted again and deleted for good from it.
+        try await file(notes.id, on: a, at: .now) { $0.deletedAt = .now }
+        try await sync(a)
+        try await sync(b)
+        await here.reloadFromDisk()
+        here.deletePermanently([try XCTUnwrap(here.record(notes.id))])
+        XCTAssertNil(ExpiredTrash.read(a).notebooks[notes.id], "a delete made here is meant for every device")
+
+        let report = try await sync(a)
+        XCTAssertEqual(report.removedThere, [notes.id])
+        let other = try await sync(b)
+        XCTAssertEqual(other.removedHere, [notes.id])
+        XCTAssertEqual(b.packageIDs(), [])
+    }
+
+    @MainActor
+    func testOnceNoDeviceCanStillKeepItItsDeleteGoesEverywhere() async throws {
+        let notes = try await longDeleted()
+        _ = try await expire(on: a, after: .month)
+        let kept = try await sync(a)
+        XCTAssertEqual(kept, SyncReport())
+        // 51 days on it has been in Recently Deleted for more than 90, longer than any device keeps one.
+        let later = Date.now.addingTimeInterval(51 * 86_400)
+        let report = try await LibrarySync.run(root: a, cloud: cloud, now: later)
+        XCTAssertEqual(report.removedThere, [notes.id])
+        XCTAssertTrue(marked(notes.id))
+        let other = try await LibrarySync.run(root: b, cloud: cloud, now: later)
+        XCTAssertEqual(other.removedHere, [notes.id])
+        XCTAssertEqual(b.packageIDs(), [], "where its time would have run out by then as well")
     }
 
     // MARK: A pass and what changes while it runs

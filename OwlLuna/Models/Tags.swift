@@ -136,3 +136,34 @@ extension Tags {
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }
+
+/// Tags added to and taken off several notebooks at once. Each notebook keeps the other tags it has.
+struct TagEdit: Sendable, Hashable {
+    var adding: [String] = []
+    var removing: [String] = []
+
+    var isEmpty: Bool { adding.isEmpty && removing.isEmpty }
+
+    func applied(to names: [String]) -> [String] {
+        let gone = Set(removing.map(Tags.key))
+        return Tags.merged(names.filter { !gone.contains(Tags.key($0)) } + adding)
+    }
+
+    /// The tags every notebook carries, and those only some of them do.
+    static func shared(_ lists: [[String]]) -> (common: [String], mixed: [String]) {
+        let all = Tags.merged(lists.flatMap { $0 })
+        let common = all.filter { tag in lists.allSatisfy { Tags.contains($0, tag) } }
+        return (common, all.filter { !Tags.contains(common, $0) })
+    }
+
+    /// What a tag sheet over several notebooks did: `tags` are now on every one, and `stillMixed` stay only where they were.
+    init(before: (common: [String], mixed: [String]), tags: [String], stillMixed: [String]) {
+        adding = tags.filter { !Tags.contains(before.common, $0) }
+        removing = Tags.merged(before.common + before.mixed).filter { !Tags.contains(tags, $0) && !Tags.contains(stillMixed, $0) }
+    }
+
+    init(adding: [String] = [], removing: [String] = []) {
+        self.adding = adding
+        self.removing = removing
+    }
+}

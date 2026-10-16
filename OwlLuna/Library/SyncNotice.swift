@@ -35,7 +35,7 @@ struct SyncNoticeButton: View {
             SyncNoticeCard(sync: sync, onOpen: onOpen, onDelete: { confirmingDelete = true }, onReplace: { confirmingReplace = true })
         }
         .notice(Text("Delete \(news.held.count) notebooks?"), isPresented: $confirmingDelete,
-                message: Text("Any device that still has them moves them to Recently Deleted, where they stay for 30 days.")) {
+                message: Text("Any device that still has them moves them to Recently Deleted, where they stay as long as that device keeps deleted notebooks.")) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) { Task { await sync.letHeldGo() } }
         }

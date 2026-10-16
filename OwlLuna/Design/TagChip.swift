@@ -5,6 +5,8 @@ import SwiftUI
 struct TagChip: View {
     let name: String
     var isChosen = false
+    /// On some of the notebooks being tagged and not the others: a dashed edge.
+    var isMixed = false
     /// A glyph after the name saying what a tap does: a cross to take the tag off, a plus to add it.
     var symbol: String?
 
@@ -27,7 +29,13 @@ struct TagChip: View {
         .padding(.vertical, Space.x1)
         .frame(minHeight: 32)
         .background(isChosen ? Color.mustard : Color.labelCream, in: RoundedRectangle.plate)
-        .overlay { RoundedRectangle.plate.strokeBorder(Color.hairline, lineWidth: 1) }
+        .overlay {
+            if isMixed {
+                RoundedRectangle.plate.strokeBorder(Color.labelInkSecondary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            } else {
+                RoundedRectangle.plate.strokeBorder(Color.hairline, lineWidth: 1)
+            }
+        }
     }
 }
 
@@ -60,12 +68,13 @@ struct TagMark: View {
 struct TagChipButton: View {
     let name: String
     var isChosen = false
+    var isMixed = false
     var symbol: String?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            TagChip(name: name, isChosen: isChosen, symbol: symbol)
+            TagChip(name: name, isChosen: isChosen, isMixed: isMixed, symbol: symbol)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }

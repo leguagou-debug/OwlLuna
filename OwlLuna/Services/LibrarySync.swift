@@ -471,6 +471,14 @@ enum LibrarySync {
         return marker.covers(local) ?? same(local.modifiedAt, agreed)
     }
 
+    /// Whether a notebook gone from here only ran out of this device's Recently Deleted, and is in the synced copy's,
+    /// unchanged, from a time another device may still be keeping it.
+    private static func expiredOnlyHere(_ id: UUID, _ remote: (modifiedAt: Date, library: LibraryState), agreed: Date?,
+                                        expired: ExpiredTrash, now: Date) -> Bool {
+        guard expired.notebooks[id] != nil, let agreed, same(remote.modifiedAt, agreed), let trashed = remote.library.deletedAt else { return false }
+        return ExpiredTrash.mayBeKeptElsewhere(deletedAt: trashed, now: now)
+    }
+
     /// Whether the notebook here went into Recently Deleted after the one the marker's delete knew of: for that delete, or since.
     private static func isTrashedSince(_ local: LibraryState, _ marker: DeleteMarker?) -> Bool {
         guard local.deletedAt != nil, let stamp = local.changedAt(.deleted) else { return false }
@@ -543,6 +551,8 @@ enum LibrarySync {
         for id in keeping { state.forget(id) }
         sweepUploads(in: cloud, now: now)
         let here = Set(try root.listPackageIDs()), there = try packageIDs(in: cloud.library)
+        // Read after the packages are listed: it is written before an expired one goes.
+        let expired = ExpiredTrash.read(root)
         let deleted = Set(((try? fileManager.contentsOfDirectory(atPath: cloud.tombstones.path(percentEncoded: false))) ?? []).compactMap(UUID.init(uuidString:)))
         func deleteMarker(_ id: UUID) throws -> DeleteMarker? {
             guard deleted.contains(id), let data = try contents(of: cloud.tombstone(id)) else { return nil }
@@ -683,6 +693,9 @@ enum LibrarySync {
                             state.agree(on: id, local)
                             report.pushed.append(id)
                         }
+                    case (nil, let remote?) where expiredOnlyHere(id, remote, agreed: agreed, expired: expired, now: now):
+                        // Another device may keep Recently Deleted longer, and still have it there.
+                        break
                     case (nil, let remote?):
                         if let agreed, same(remote.modifiedAt, agreed), !remote.library.wasRestored(since: state.trashStamps[id]) {
                             // It was here and in step, it's gone, and nobody has written in it or restored it since: it was deleted on this device.

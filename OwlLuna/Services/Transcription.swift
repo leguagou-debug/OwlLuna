@@ -101,14 +101,24 @@ enum Transcription {
         return DeviceTranscriber()
     }
 
-    /// The languages offered: the iPad's own, then the ones the app is written in.
-    static var languages: [Locale] {
-        let supported = Set(SFSpeechRecognizer.supportedLocales().map { $0.identifier(.bcp47) })
+    /// The languages offered: the one chosen in Settings, the iPad's own, then the ones the app is written in.
+    /// The first is what a transcription starts in.
+    static var languages: [Locale] { languages(preferring: UserDefaults.standard.string(forKey: SettingsKey.transcriptLanguage) ?? "") }
+
+    static func languages(preferring chosen: String, supported: Set<String> = Set(SFSpeechRecognizer.supportedLocales().map { $0.identifier(.bcp47) })) -> [Locale] {
         var seen = Set<String>(), result: [Locale] = []
-        for identifier in [Locale.current.identifier(.bcp47), "en-US", "es-ES", "fr-FR", "de-DE"] where supported.contains(identifier) && seen.insert(identifier).inserted {
+        for identifier in [chosen, Locale.current.identifier(.bcp47), "en-US", "es-ES", "fr-FR", "de-DE"] where supported.contains(identifier) && seen.insert(identifier).inserted {
             result.append(Locale(identifier: identifier))
         }
         return result.isEmpty ? [Locale(identifier: "en-US")] : result
+    }
+
+    /// Every language this iPad can transcribe without sending a recording away, by name.
+    static func onDeviceLanguages() -> [Locale] {
+        var seen = Set<String>()
+        return SFSpeechRecognizer.supportedLocales()
+            .filter { seen.insert($0.identifier(.bcp47)).inserted && SFSpeechRecognizer(locale: $0)?.supportsOnDeviceRecognition == true }
+            .sorted { name(of: $0).localizedStandardCompare(name(of: $1)) == .orderedAscending }
     }
 
     static func name(of locale: Locale) -> String {

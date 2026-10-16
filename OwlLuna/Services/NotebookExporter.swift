@@ -16,6 +16,15 @@ enum NotebookExporter {
         var package: NotebookPackage
     }
 
+    /// The open document, with its unsaved ink, if the notebook is being edited, otherwise its saved pages.
+    @MainActor
+    static func input(for id: UUID, root: StorageRoot) async throws -> Input {
+        if let document = DocumentRegistry.shared.document(for: id) { return Input(document: document) }
+        let package = NotebookPackage(root: root, id: id)
+        let manifest = try await package.readManifest().manifest
+        return Input(title: manifest.title, pages: manifest.pages, inMemoryInk: [:], package: package)
+    }
+
     /// Streams pages to disk one at a time: each page's ink is read, drawn and released before the next,
     /// so memory stays flat however long the notebook is.
     static func export(_ input: Input, progress: @escaping @Sendable (Double) async -> Void) async throws -> URL {
@@ -167,39 +176,71 @@ final class ExportJob: Identifiable {
     let format: Format
     /// The first page's width over its height, for showing a film of it.
     let shape: CGFloat
+    /// Locked notebooks left out of an export of several, because nobody unlocked them.
+    let skipped: Int
+    private let inputCount: Int
     private(set) var progress: Double = 0
     private(set) var state: State = .running
     @ObservationIgnored private var task: Task<Void, Never>?
 
     /// `pages` narrows the export to some of the notebook's pages; nil exports them all.
     convenience init(document: NotebookDocument, format: Format = .pdf, pages: [NotebookPage]? = nil) {
-        let pages = pages ?? document.pages
-        var inMemory: [UUID: PKDrawing] = [:]
-        for page in pages { if let ink = document.loadedInk(page.id) { inMemory[page.id] = ink } }
-        self.init(input: NotebookExporter.Input(title: document.title, pages: pages, inMemoryInk: inMemory, package: document.package), format: format)
+        self.init(input: NotebookExporter.Input(document: document, pages: pages), format: format)
     }
 
     /// Exports from the library: the open document, with its unsaved ink, if the notebook is being edited, otherwise the saved pages.
     static func forNotebook(_ id: UUID, root: StorageRoot, format: Format = .pdf) async throws -> ExportJob {
-        if let document = DocumentRegistry.shared.document(for: id) { return ExportJob(document: document, format: format) }
-        let package = NotebookPackage(root: root, id: id)
-        let manifest = try await package.readManifest().manifest
-        return ExportJob(input: NotebookExporter.Input(title: manifest.title, pages: manifest.pages, inMemoryInk: [:], package: package), format: format)
+        ExportJob(input: try await NotebookExporter.input(for: id, root: root), format: format)
     }
 
-    init(input: NotebookExporter.Input, format: Format = .pdf) {
+    /// A PDF of each notebook. Locked ones go in once whoever is holding the iPad has shown it is theirs, asked once
+    /// for all of them; otherwise they are left out, and the sheet says so.
+    static func pdfs(of records: [NotebookRecord], root: StorageRoot) async throws -> ExportJob {
+        let locked = records.filter(\.isLocked)
+        var ids = records.map(\.id)
+        if !locked.isEmpty {
+            let lock = NotebookLock.shared
+            let reason = locked.count == 1 ? String(localized: "Export “\(locked[0].title)”") : String(localized: "Export \(locked.count) locked notebooks")
+            let unlocked = lock.isAvailable ? await lock.confirm(reason) : false
+            if !unlocked { ids = records.filter { !$0.isLocked }.map(\.id) }
+        }
+        var inputs: [NotebookExporter.Input] = []
+        for id in ids { inputs.append(try await NotebookExporter.input(for: id, root: root)) }
+        return ExportJob(inputs: inputs, skipped: records.count - ids.count)
+    }
+
+    convenience init(input: NotebookExporter.Input, format: Format = .pdf) {
+        self.init(inputs: [input], format: format)
+    }
+
+    /// Each notebook is written in turn into a folder of its own.
+    init(inputs: [NotebookExporter.Input], format: Format = .pdf, skipped: Int = 0) {
         self.format = format
-        shape = input.pages.first.map { $0.size.width / max($0.size.height, 1) } ?? 0.77
+        self.skipped = skipped
+        inputCount = inputs.count
+        shape = inputs.first?.pages.first.map { $0.size.width / max($0.size.height, 1) } ?? 0.77
+        let count = Double(max(inputs.count, 1))
         task = Task { [weak self] in
-            let report: @Sendable (Double) async -> Void = { value in
-                await MainActor.run { self?.progress = max(self?.progress ?? 0, value) }
+            let report: @Sendable (Int, Double) async -> Void = { index, value in
+                await MainActor.run { self?.progress = max(self?.progress ?? 0, (Double(index) + value) / count) }
             }
             let work = Task.detached(priority: .userInitiated) { () throws -> [URL] in
-                switch format {
-                case .pdf: [try await NotebookExporter.export(input, progress: report)]
-                case .images: try await NotebookExporter.exportImages(input, progress: report)
-                case .timelapse: [try await InkTimelapse.export(input, progress: report)]
+                var urls: [URL] = []
+                do {
+                    for (index, input) in inputs.enumerated() {
+                        let progress: @Sendable (Double) async -> Void = { await report(index, $0) }
+                        switch format {
+                        case .pdf: urls.append(try await NotebookExporter.export(input, progress: progress))
+                        case .images: urls += try await NotebookExporter.exportImages(input, progress: progress)
+                        case .timelapse: urls.append(try await InkTimelapse.export(input, progress: progress))
+                        }
+                    }
+                } catch {
+                    let written = urls
+                    await MainActor.run { ExportFolder.discard(written) }
+                    throw error
                 }
+                return urls
             }
             do {
                 let urls = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
@@ -211,6 +252,8 @@ final class ExportJob: Identifiable {
             }
         }
     }
+
+    var isSeveral: Bool { inputCount + skipped > 1 }
 
     func cancel() {
         task?.cancel()
@@ -250,17 +293,27 @@ struct ExportSheet: View {
                             .accessibilityAddTraits(.isImage)
                             .accessibilityIdentifier("export.preview")
                     }
-                    Label(readyText(urls.count), systemImage: "checkmark.circle").font(.headline)
-                        .accessibilityIdentifier("export.ready")
-                    HStack(spacing: Space.x3) {
-                        Button { sharing = true } label: { Label("Share", systemImage: "square.and.arrow.up") }
-                            .prominentButton()
-                        if job.format != .timelapse {
-                            Button { print(urls) } label: { Label(String(localized: "export.print", defaultValue: "Print"), systemImage: "printer") }
-                                .buttonStyle(.owlLuna)
+                    if !urls.isEmpty {
+                        Label(readyText(urls.count), systemImage: "checkmark.circle").font(.headline)
+                            .accessibilityIdentifier("export.ready")
+                        HStack(spacing: Space.x3) {
+                            Button { sharing = true } label: { Label("Share", systemImage: "square.and.arrow.up") }
+                                .prominentButton()
+                                .accessibilityIdentifier("export.share")
+                            if job.format != .timelapse {
+                                Button { print(urls) } label: { Label(String(localized: "export.print", defaultValue: "Print"), systemImage: "printer") }
+                                    .buttonStyle(.owlLuna)
+                            }
                         }
+                        .sheet(isPresented: $sharing) { ShareSheet(items: urls).presentationCornerRadius(Radius.sheet) }
                     }
-                    .sheet(isPresented: $sharing) { ShareSheet(items: urls).presentationCornerRadius(Radius.sheet) }
+                    if job.skipped > 0 {
+                        Label(String(localized: "\(job.skipped) locked notebooks were left out. Unlock them to export them."), systemImage: "lock")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("export.skipped")
+                    }
                 case .failed(let message):
                     Label(message, systemImage: "exclamationmark.triangle")
                 case .cancelled:
@@ -270,7 +323,8 @@ struct ExportSheet: View {
             .padding(Space.x8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.surface)
-            .navigationTitle(job.format == .pdf ? Text("Export PDF") : job.format == .images ? Text("Export Images") : Text("Export Video"))
+            .navigationTitle(job.format == .pdf ? (job.isSeveral ? Text("Export PDFs") : Text("Export PDF"))
+                             : job.format == .images ? Text("Export Images") : Text("Export Video"))
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -287,7 +341,7 @@ struct ExportSheet: View {
 
     private func readyText(_ count: Int) -> String {
         switch job.format {
-        case .pdf: String(localized: "Your PDF is ready.")
+        case .pdf: count == 1 ? String(localized: "Your PDF is ready.") : String(localized: "Your \(count) PDFs are ready.")
         case .images: count == 1 ? String(localized: "Your image is ready.") : String(localized: "Your \(count) images are ready.")
         case .timelapse: String(localized: "Your video is ready.")
         }
@@ -303,6 +357,17 @@ struct ExportSheet: View {
         if urls.count == 1 { controller.printingItem = first } else { controller.printingItems = urls }
         ExportFolder.beginReading(urls)
         if !controller.present(animated: true, completionHandler: { _, _, _ in ExportFolder.endReading(urls) }) { ExportFolder.endReading(urls) }
+    }
+}
+
+extension NotebookExporter.Input {
+    /// `pages` narrows the export to some of the notebook's pages; nil takes them all.
+    @MainActor
+    init(document: NotebookDocument, pages: [NotebookPage]? = nil) {
+        let pages = pages ?? document.pages
+        var inMemory: [UUID: PKDrawing] = [:]
+        for page in pages { if let ink = document.loadedInk(page.id) { inMemory[page.id] = ink } }
+        self.init(title: document.title, pages: pages, inMemoryInk: inMemory, package: document.package)
     }
 }
 

@@ -32,14 +32,18 @@ struct ShelfView: View {
     @Query private var records: [NotebookRecord]
     @Query(sort: \FolderRecord.sortIndex) private var folders: [FolderRecord]
     @AppStorage(SettingsKey.librarySort) private var sort: LibrarySortOrder = .opened
+    @AppStorage(SettingsKey.librarySortReversed) private var sortReversed = false
+    @AppStorage(SettingsKey.libraryLayout) private var layout: LibraryLayout = .shelf
     @AppStorage("libraryGrouping") private var grouping: LibraryGrouping = .recency
     @AppStorage(SettingsKey.dailyJournalID) private var journalID = ""
+    @AppStorage(SettingsKey.trashLength) private var trashLength: TrashLength = .initial
     @State private var searchText = ""
     @State private var matches: Set<UUID>?
     @State private var pageHits: [UUID: [PageHit]] = [:]
     @State private var hitsQuery = ""
     @State private var tagPages: [UUID: [PageHit]] = [:]
     @State private var tagging: NotebookRecord?
+    @State private var taggingSelection: SelectionTags?
     @State private var searchPending = false
     @State private var export: ExportJob?
     @State private var editingCover: NotebookRecord?
@@ -52,6 +56,8 @@ struct ShelfView: View {
     @State private var confirmingEmptyTrash = false
     @State private var errorMessage: String?
     @State private var shelfWidth: CGFloat?
+    @State private var listWidth: CGFloat = 0
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
     @State private var showsBarTitle = false
     @FocusState private var searchFocused: Bool
     @State private var barRoom = CGFloat.infinity
@@ -84,22 +90,9 @@ struct ShelfView: View {
 
     private var tree: FolderTree { FolderTree(folders: folders) }
 
-    /// A folder shows what is in it and in the folders inside it.
-    private var visible: [NotebookRecord] {
-        let inside: Set<UUID> = if case .folder(let id) = scope { tree.subtree(id) } else { [] }
-        let rule = rule
-        let scoped = records.filter { record in
-            switch scope {
-            case .all: !record.isTrashed
-            case .favorites: !record.isTrashed && record.isFavorite
-            case .trash: record.isTrashed
-            case .folder: !record.isTrashed && record.folder.map { inside.contains($0.id) } ?? false
-            case .tag, .smart: !record.isTrashed && rule?.matches(notebook: record.tags) == true
-            }
-        }
-        let searched = matches.map { found in scoped.filter { found.contains($0.id) } } ?? scoped
-        return searched.sorted(by: sort)
-    }
+    private var filter: ShelfFilter { ShelfFilter(scope: scope, tree: tree, rule: rule, matches: matches, sort: sort, reversed: sortReversed) }
+
+    private var visible: [NotebookRecord] { filter.shown(records) }
 
     /// Matches titles and handwriting on a background context, a moment after typing stops, so neither the
     /// keystroke nor a library full of PDF text ever scans on the main thread.
@@ -145,7 +138,7 @@ struct ShelfView: View {
             return
         }
         let sources = records.filter { record in !record.isTrashed && !record.isLocked && rule.tags.contains { Tags.contains(record.pageTags, $0) } }
-            .sorted(by: sort)
+            .sorted(by: sort, reversed: sortReversed)
             .map { TagPages.Source(id: $0.id, tags: $0.tags, pages: DocumentRegistry.shared.document(for: $0.id)?.pages) }
         let hits = await TagPages.hits(for: rule, in: sources, root: store.root)
         guard !Task.isCancelled, hits != tagPages else { return }
@@ -162,7 +155,9 @@ struct ShelfView: View {
     var body: some View {
         let visible = visible
         Group {
-            if dynamicTypeSize.isAccessibilitySize {
+            if layout == .list {
+                list(visible)
+            } else if dynamicTypeSize.isAccessibilitySize {
                 accessibleList(visible)
             } else {
                 shelves(visible)
@@ -218,6 +213,7 @@ struct ShelfView: View {
             endSelection()
             tagPages = [:]
         }
+        .onChange(of: sort) { _, _ in sortReversed = false }
         .task(id: "\(store.searchVersion)|\(records.count)|\(scope)|\(searchText)") { await runSearch() }
         .task(id: tagPagesKey) { await loadTagPages() }
         .sheet(item: $export) { job in ExportSheet(job: job).presentationCornerRadius(Radius.sheet) }
@@ -225,6 +221,14 @@ struct ShelfView: View {
         .sheet(item: $tagging) { record in
             TagSheet(subject: record.title.isEmpty ? String(localized: "Untitled") : record.title, initial: record.tags) { tags in
                 changes.setTags(tags, for: record, in: store, undoManager: undoManager)
+            }
+            .presentationCornerRadius(Radius.sheet)
+        }
+        .sheet(item: $taggingSelection) { tagging in
+            TagSheet(subject: String(localized: "\(tagging.ids.count) notebooks"), initial: tagging.common, mixed: tagging.mixed) { tags, stillMixed in
+                let edit = TagEdit(before: (tagging.common, tagging.mixed), tags: tags, stillMixed: stillMixed)
+                changes.editTags(edit, for: records.filter { tagging.ids.contains($0.id) }, in: store, undoManager: undoManager)
+                endSelection()
             }
             .presentationCornerRadius(Radius.sheet)
         }
@@ -289,6 +293,57 @@ struct ShelfView: View {
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
+    /// Rows in columns, a board for each run, with as many columns as the pane and the text size leave room for.
+    private func list(_ visible: [NotebookRecord]) -> some View {
+        let columns = ShelfColumns.fitting(width: listWidth, scale: textScale, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: Space.x5) {
+                LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: showsRhythm, onOpenPage: onOpenPage)
+                if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash {
+                    PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
+                        .transition(.opacity)
+                }
+                if !visible.isEmpty, !columns.isEmpty {
+                    ShelfListHeadings(columns: columns, isSelecting: isSelecting, sort: $sort, reversed: $sortReversed)
+                        .padding(.bottom, -Space.x3)
+                }
+                ForEach(groups(visible)) { shelf in
+                    ShelfListBoard(title: shelf.title, cloth: shelf.cloth) {
+                        ForEach(shelf.records) { record in row(record, columns: columns) }
+                    }
+                }
+                if showsTagPages {
+                    PageHitsSection(records: taggedNotebooks, hits: tagPages, query: "", zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
+                        .padding(.top, Space.x2)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+            .padding(.horizontal, Space.x8)
+            .padding(.vertical, Space.x6)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
+    }
+
+    private func row(_ record: NotebookRecord, columns: ShelfColumns) -> some View {
+        NotebookListRow(record: record, columns: columns, isSelecting: isSelecting, isSelected: selection.contains(record.id)) {
+            if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
+        }
+        .accessibilityLabel(record.accessibilityDescription)
+        .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
+        .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
+        .accessibilityIdentifier("notebook.\(record.title)")
+        .accessibilityActions { if !isSelecting { trashActions(for: record) } }
+        .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
+        .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
+    }
+
+    private func dragPreview(_ record: NotebookRecord) -> some View {
+        Text(record.title).padding(Space.x2).background(Color.surface, in: RoundedRectangle.plate)
+    }
+
     /// The notebook to reopen at the top of All notebooks: the last one opened.
     private var continueCandidate: NotebookRecord? {
         guard scope == .all, searchText.isEmpty, !isSelecting else { return nil }
@@ -297,7 +352,7 @@ struct ShelfView: View {
     }
 
     /// The notebooks whose pages a tag shelf lists, whether or not they are on the shelf themselves.
-    private var taggedNotebooks: [NotebookRecord] { records.filter { tagPages[$0.id] != nil }.sorted(by: sort) }
+    private var taggedNotebooks: [NotebookRecord] { records.filter { tagPages[$0.id] != nil }.sorted(by: sort, reversed: sortReversed) }
 
     /// A view that mixes shelves says which shelf a notebook is on.
     private var showsFolder: Bool {
@@ -313,9 +368,7 @@ struct ShelfView: View {
             if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
         }
         .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
-        .draggable(NotebookReference(id: record.id)) {
-            Text(record.title).padding(Space.x2).background(Color.surface, in: RoundedRectangle.plate)
-        }
+        .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
     }
 
     private func accessibleList(_ visible: [NotebookRecord]) -> some View {
@@ -360,7 +413,7 @@ struct ShelfView: View {
                 .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
                 .accessibilityActions { if !isSelecting { trashActions(for: record) } }
                 .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
-                .draggable(NotebookReference(id: record.id))
+                .onDrag { NotebookDrag.provider(for: record, root: store.root) }
                 .listRowBackground(Color.surface)
             }
             if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash { pageRows(visible, hits: pageHits, query: hitsQuery) }
@@ -389,17 +442,18 @@ struct ShelfView: View {
 
     private func subtitle(_ visible: [NotebookRecord]) -> String {
         if isSelecting { return String(localized: "Select notebooks to move, favourite or delete") }
-        if scope == .trash { return String(localized: "Deleted notebooks stay here for 30 days") }
+        if scope == .trash { return String(localized: "Deleted notebooks stay here for \(trashLength.days) days") }
         let count = visible.count
         let notebooks = String(localized: "\(count) notebooks")
         // On a tag shelf the pages counted are the tagged ones it lists, not every page of its notebooks.
         if rule != nil {
             let tagged = tagPages.values.reduce(0) { $0 + $1.count }
-            return tagged == 0 ? "\(notebooks) · \(sort.summary)" : "\(notebooks) · \(String(localized: "\(tagged) pages")) · \(sort.summary)"
+            let order = sort.summary(reversed: sortReversed)
+            return tagged == 0 ? "\(notebooks) · \(order)" : "\(notebooks) · \(String(localized: "\(tagged) pages")) · \(order)"
         }
         let pageCount = visible.reduce(0) { $0 + $1.pageCount }
         let pages = String(localized: "\(pageCount) pages")
-        return "\(notebooks) · \(pages) · \(sort.summary)"
+        return "\(notebooks) · \(pages) · \(sort.summary(reversed: sortReversed))"
     }
 
     /// This week's writing shows at the top of All notebooks, but not while searching or selecting.
@@ -408,7 +462,9 @@ struct ShelfView: View {
     private func groups(_ visible: [NotebookRecord]) -> [Shelf] {
         guard !visible.isEmpty else { return [] }
         if !searchText.isEmpty { return [Shelf(id: "results", title: String(localized: "Results"), records: visible)] }
-        if scope == .trash || sort == .title { return [Shelf(id: "all", title: sort == .title ? String(localized: "A to Z") : title, records: visible)] }
+        if scope == .trash || sort == .title {
+            return [Shelf(id: "all", title: sort == .title ? sort.directionName(reversed: sortReversed) : title, records: visible)]
+        }
         let tree = tree
         var root: UUID?
         if case .folder(let id) = scope { root = id }
@@ -478,26 +534,62 @@ struct ShelfView: View {
                 }
                 .disabled(selection.isEmpty)
             } else {
+                let chosen = selected(visible)
                 BarGroup {
-                    Button { changes.setFavorite(true, for: selected(visible), in: store, undoManager: undoManager); endSelection() } label: {
+                    Button { changes.setFavorite(true, for: chosen, in: store, undoManager: undoManager); endSelection() } label: {
                         Label("Favourite", systemImage: "star")
                     }
+                    .accessibilityIdentifier("library.selection.favourite")
+                    Button { tagSelection(chosen) } label: { Label("Tags…", systemImage: "tag") }
+                        .disabled(!chosen.contains { !$0.isReadOnly })
+                        .accessibilityIdentifier("library.selection.tags")
                     OwlLunaMenu {
-                        Button("Not on a shelf") { move(selected(visible), to: nil); endSelection() }
-                        ForEach(folders) { folder in Button(tree.path(of: folder.id)) { move(selected(visible), to: folder); endSelection() } }
+                        Button("Not on a shelf") { move(chosen, to: nil); endSelection() }
+                        ForEach(folders) { folder in Button(tree.path(of: folder.id)) { move(chosen, to: folder); endSelection() } }
                     } label: { Label("Move", systemImage: "folder") }
+                    .accessibilityIdentifier("library.selection.move")
+                    Button { lockSelection(chosen) } label: { Label("Lock", systemImage: "lock") }
+                        .disabled(!chosen.contains { !$0.isLocked && !$0.isReadOnly })
+                        .accessibilityIdentifier("library.selection.lock")
+                    Button { exportSelection(chosen) } label: { Label("Export as PDFs", systemImage: "square.and.arrow.up") }
+                        .accessibilityIdentifier("library.selection.export")
                 }
-                .disabled(selection.isEmpty)
+                .disabled(chosen.isEmpty)
                 Spacer()
                 BarGroup {
-                    Button(role: .destructive) { changes.moveToTrash(selected(visible), in: store, undoManager: undoManager); endSelection() } label: {
+                    Button(role: .destructive) { changes.moveToTrash(chosen, in: store, undoManager: undoManager); endSelection() } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .accessibilityIdentifier("library.selection.delete")
                 }
-                .disabled(selection.isEmpty)
+                .disabled(chosen.isEmpty)
             }
         }
         .boardBackground()
+    }
+
+    /// The tags every chosen notebook has are on, the ones only some have are shown as mixed.
+    private func tagSelection(_ chosen: [NotebookRecord]) {
+        let writable = chosen.filter { !$0.isReadOnly }
+        let shared = TagEdit.shared(writable.map(\.tags))
+        taggingSelection = SelectionTags(ids: writable.map(\.id), common: shared.common, mixed: shared.mixed)
+    }
+
+    private func lockSelection(_ chosen: [NotebookRecord]) {
+        Task {
+            if let failure = await store.lock(chosen) { errorMessage = failure } else { endSelection() }
+        }
+    }
+
+    private func exportSelection(_ chosen: [NotebookRecord]) {
+        Task {
+            do {
+                export = try await ExportJob.pdfs(of: chosen, root: store.root)
+                endSelection()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     // MARK: Toolbar and menus
@@ -524,18 +616,34 @@ struct ShelfView: View {
         }
         ToolbarItem(placement: .primaryAction) {
             if isSelecting {
-                Button("Done") { endSelection() }
-                    .buttonStyle(.owlLuna(.primary, inBar: true))
-                    .accessibilityLabel(selection.isEmpty ? String(localized: "Done") : String(localized: "\(selection.count) selected, done"))
+                let count = selected(visible).count, everything = !visible.isEmpty && count == visible.count
+                HStack(spacing: Space.x2) {
+                    Button(everything ? String(localized: "Deselect All") : String(localized: "Select All")) {
+                        selection = everything ? [] : filter.selectingAll(records)
+                    }
+                    .buttonStyle(.owlLuna(.secondary, inBar: true))
+                    .disabled(visible.isEmpty)
+                    .accessibilityIdentifier("library.selectAll")
+                    Button("Done") { endSelection() }
+                        .buttonStyle(.owlLuna(.primary, inBar: true))
+                        .accessibilityLabel(count == 0 ? String(localized: "Done") : String(localized: "\(count) selected, done"))
+                }
             } else {
                 HStack(spacing: Space.x2) {
                     if let sync = app?.sync, !sync.news.isEmpty { SyncNoticeButton(sync: sync, onOpen: onOpen) }
+                    OwlLunaSegmentedPicker("Layout", selection: $layout, options: LibraryLayout.allCases, inBar: true,
+                                           identifier: { "library.layout.\($0.rawValue)" }) { option in
+                        Label(option.displayName, systemImage: option.symbol).labelStyle(.iconOnly)
+                    }
                     if scope == .trash {
                         Button("Empty") { confirmingEmptyTrash = true }.disabled(visible.isEmpty)
                     } else {
                         OwlLunaMenu {
                             OwlLunaPicker("Sort By", selection: $sort) {
                                 ForEach(LibrarySortOrder.allCases) { Text($0.displayName).tag($0) }
+                            }
+                            OwlLunaPicker("Order", selection: $sortReversed) {
+                                ForEach([false, true], id: \.self) { Text(sort.directionName(reversed: $0)).tag($0) }
                             }
                             OwlLunaPicker("Group By", selection: $grouping) {
                                 ForEach(LibraryGrouping.allCases) { Text($0.displayName).tag($0) }
@@ -573,7 +681,7 @@ struct ShelfView: View {
         }
         if isSelecting {
             ToolbarItem(placement: .status) {
-                Text("\(selection.count) selected")
+                Text("\(selected(visible).count) selected")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Color.ink)
             }
@@ -598,6 +706,9 @@ struct ShelfView: View {
             Button { onOpen(record) } label: { Label("Open", systemImage: "book") }
             Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
             Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
+            MenuBreak()
+            Button(role: .destructive) { changes.moveToTrash([record], in: store, undoManager: undoManager) } label: { Label("Delete", systemImage: "trash") }
+                .accessibilityIdentifier("notebook.menu.delete")
             Text("Made with a newer version of OwlLuna, so it can only be read here.")
                 .font(.footnote)
                 .foregroundStyle(Color.textSecondary)
@@ -690,7 +801,7 @@ struct ShelfView: View {
         if !searchText.isEmpty {
             EmptyShelf(title: String(localized: "Nothing found for “\(searchText)”"), message: String(localized: "Check the spelling, or try other words."))
         } else if scope == .trash {
-            EmptyShelf(title: String(localized: "Nothing in the bin"), message: String(localized: "Deleted notebooks stay here for 30 days."))
+            EmptyShelf(title: String(localized: "Nothing in the bin"), message: String(localized: "Deleted notebooks stay here for \(trashLength.days) days."))
         } else if scope == .favorites {
             EmptyShelf(title: String(localized: "No favourites yet"), message: String(localized: "Touch and hold a notebook, then choose Favourite."),
                        illustration: { RibbonIllustration() })
@@ -759,13 +870,14 @@ extension LibrarySortOrder {
 }
 
 extension Array where Element == NotebookRecord {
-    /// Reads each record's sort key once, rather than twice per comparison.
-    func sorted(by order: LibrarySortOrder) -> [NotebookRecord] {
+    /// Reads each record's sort key once, rather than twice per comparison. Turned round, the oldest come first, or Z.
+    func sorted(by order: LibrarySortOrder, reversed: Bool = false) -> [NotebookRecord] {
         switch order {
         case .title:
-            map { ($0, $0.title) }.sorted { $0.1.localizedStandardCompare($1.1) == .orderedAscending }.map(\.0)
+            let first: ComparisonResult = reversed ? .orderedDescending : .orderedAscending
+            return map { ($0, $0.title) }.sorted { $0.1.localizedStandardCompare($1.1) == first }.map(\.0)
         default:
-            map { ($0, order.date(of: $0)) }.sorted { $0.1 > $1.1 }.map(\.0)
+            return map { ($0, order.date(of: $0)) }.sorted { reversed ? $0.1 < $1.1 : $0.1 > $1.1 }.map(\.0)
         }
     }
 }

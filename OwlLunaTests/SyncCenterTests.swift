@@ -468,8 +468,8 @@ final class SyncCenterTests: XCTestCase {
 
         await center.syncNow()
         let report = try await LibrarySync.run(root: there, cloud: cloud)
-        XCTAssertEqual(report.removedHere, [expired])
-        XCTAssertEqual(Set(there.packageIDs()), [restored, written], "nothing wanted is removed from the device that wanted it")
+        XCTAssertEqual(report.removedHere, [], "its time ran out here, and the other device may keep Recently Deleted longer")
+        XCTAssertEqual(Set(there.packageIDs()), [restored, written, expired], "and nothing wanted is removed from the device that wanted it")
     }
 
     /// A notebook put in Recently Deleted 40 days ago, as its own manifest and the index both have it.
@@ -549,6 +549,38 @@ final class SyncCenterTests: XCTestCase {
         XCTAssertNotNil(store.record(restored), "each notebook's own manifest has the last word")
         XCTAssertTrue(isOnDisk(restored))
         XCTAssertNil(store.record(expired))
+    }
+
+    func testRecentlyDeletedKeepsNotebooksForTheLengthChosen() async throws {
+        let store = try makeStore()
+        func binned(_ title: String, daysAgo: Double) async throws -> UUID {
+            let id = try await makeNotebook(title, on: root), when = Date.now.addingTimeInterval(-daysAgo * 86_400)
+            try await file(id, on: root, deletedAt: when, stamped: when)
+            return id
+        }
+        let ten = try await binned("Ten days", daysAgo: 10), forty = try await binned("Forty days", daysAgo: 40)
+        let hundred = try await binned("A hundred days", daysAgo: 100), two = try await binned("Two days", daysAgo: 2)
+        await store.reloadFromDisk()
+        XCTAssertEqual(TrashLength.current(defaults), .month, "30 days until it is changed")
+
+        defaults.set(TrashLength.season.rawValue, forKey: SettingsKey.trashLength)
+        let center = SyncCenter(root: root, defaults: defaults), purge = TrashPurge(library: store, sync: center, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await purge.launchSyncTried()
+        XCTAssertNil(store.record(hundred))
+        XCTAssertNotNil(store.record(forty), "kept for 90 days")
+
+        defaults.set(TrashLength.month.rawValue, forKey: SettingsKey.trashLength)
+        await purge.lengthChanged()
+        XCTAssertNil(store.record(forty), "a shorter length counts from when each went in, and doesn't wait for the next launch")
+        XCTAssertNotNil(store.record(ten))
+        defaults.set(TrashLength.week.rawValue, forKey: SettingsKey.trashLength)
+        await purge.lengthChanged()
+        XCTAssertNil(store.record(ten))
+        XCTAssertNotNil(store.record(two))
+        XCTAssertFalse(isOnDisk(ten))
+        XCTAssertEqual(Set(ExpiredTrash.read(root).notebooks.keys), [forty, ten],
+                       "each is noted as this device's own running out, but one past 90 days that no device keeps any longer")
     }
 
     // MARK: A pass that stops part-way

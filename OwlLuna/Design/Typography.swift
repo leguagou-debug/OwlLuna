@@ -38,6 +38,11 @@ enum OwlLunaFonts {
         variable(frauncesSemiBold, size: size, axes: [weight: 600, soft: 50, wonk: 1, opticalSize: min(max(size, 9), 144)])
     }
 
+    /// Fraunces for typed text: regular or bold, plain, its optical size following the type size.
+    static func text(size: CGFloat, bold: Bool) -> CTFont {
+        variable(frauncesRegular, size: size, axes: [weight: bold ? 700 : 400, soft: 0, wonk: 0, opticalSize: min(max(size, 9), 144)])
+    }
+
     /// Bricolage Grotesque condensed ExtraBold, for Print titles only.
     static func printTitle(size: CGFloat) -> CTFont {
         variable(bricolage, size: size, axes: [weight: 800, width: 75, opticalSize: min(max(size, 12), 96)])
