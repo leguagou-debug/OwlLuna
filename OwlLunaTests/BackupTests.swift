@@ -118,6 +118,29 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(try fresh.context.fetchCount(FetchDescriptor<NotebookRecord>()), 2)
     }
 
+    func testARestoreOverADamagedFolderListKeepsTheFoldersTheIndexHas() async throws {
+        let store = try makeStore()
+        let science = try XCTUnwrap(store.createFolder(name: "Science", cloth: .jade))
+        _ = try await makeNotebook("Mechanics", in: store, folder: science)
+        await store.finishWritingShelves()
+        let backup = try await store.makeBackup()
+        addTeardownBlock { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) }
+
+        let other = try makeStore()
+        other.createFolder(name: "Art", cloth: .rose)
+        await other.finishWritingShelves()
+        try Data("damaged".utf8).write(to: other.root.foldersFile)
+
+        let summary = try await other.restoreBackup(from: backup)
+        XCTAssertEqual(summary.folders, 1)
+        XCTAssertEqual(FolderFile.read(other.root).folders.map(\.name).sorted(), ["Art", "Science"],
+                       "the list is written with the folders the index had, so a sync doesn't take them as deleted")
+        let tree = other.folderTree()
+        XCTAssertEqual(tree.ordered.map { tree.name(of: $0) }.sorted(), ["Art", "Science"])
+        XCTAssertEqual(try String(contentsOf: other.root.foldersFile.appendingPathExtension("corrupt"), encoding: .utf8), "damaged",
+                       "and the damaged list is kept aside")
+    }
+
     func testARestoreKeepsTheJournalAndAgreesWithItsMark() async throws {
         let store = try makeStore(defaults: ownSettings())
         let journal = try await store.createDailyJournal()

@@ -81,6 +81,10 @@ final class SyncCenter {
     @ObservationIgnored private var putAway = SyncNews()
     /// Notebooks a pass held back that were asked to be kept, which the next pass brings back.
     @ObservationIgnored private var keeping: Set<UUID> = []
+    /// Notebooks a pass held back whose deletes were meant, which the next pass lets through.
+    @ObservationIgnored private var lettingGo: Set<UUID> = []
+    /// The folder list in iCloud that can't be read is to be made again from this device's, which the next pass does.
+    @ObservationIgnored private var replacingFolders = false
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "sync")
     /// Reads what iCloud has still to upload. A test stands in for iCloud here.
     @ObservationIgnored var readUploads: @Sendable (CloudFolder) -> CloudUploads = { $0.isUbiquitous ? CloudUploads.read($0) : CloudUploads() }
@@ -296,10 +300,12 @@ final class SyncCenter {
         // A pull for an editor goes first: it is quick, and gives up after a few seconds.
         while pulls > 0 { try? await Task.sleep(for: .milliseconds(20)) }
         guard canSync, let cloud else { return nil }
-        let root = root, account = account, keeping = keeping, take = take, release = release, holdFolders = holdFolders
+        let root = root, account = account, keeping = keeping, lettingGo = lettingGo, replacing = replacingFolders
+        let take = take, release = release, holdFolders = holdFolders
         let signedIn: @Sendable () -> String? = { SyncCenter.marker(for: FileManager.default.ubiquityIdentityToken) }
         let task = Task.detached(priority: .utility) {
-            try await LibrarySync.run(root: root, cloud: cloud, account: account, keeping: keeping, take: { await take($0) }, release: { await release($0) },
+            try await LibrarySync.run(root: root, cloud: cloud, account: account, keeping: keeping, lettingGo: lettingGo, replacingFolders: replacing,
+                                      take: { await take($0) }, release: { await release($0) },
                                       holdingFolders: { try await holdFolders($0) }, signedIn: cloud.isUbiquitous ? signedIn : nil)
         }
         running = task
@@ -307,10 +313,14 @@ final class SyncCenter {
         do {
             let report = try await task.value
             self.keeping.subtract(keeping)
+            // One the pass left for later is still let go when it comes back to it.
+            self.lettingGo.subtract(lettingGo.subtracting(report.waiting))
+            if replacing { replacingFolders = false }
             return report
         } catch let stopped as StoppedPass {
             // What was agreed was saved, kept notebooks and all.
             self.keeping.subtract(keeping)
+            self.lettingGo.subtract(stopped.report.removedHere + stopped.report.removedThere)
             throw stopped
         }
     }
@@ -319,6 +329,21 @@ final class SyncCenter {
     /// wherever they're gone.
     func keepHeld() async {
         keeping.formUnion(news.held)
+        refreshNews()
+        await syncNow()
+    }
+
+    /// The deletes the last pass held back were meant: the next pass lets them through, as it would one at a time.
+    func letHeldGo() async {
+        lettingGo.formUnion(news.held)
+        refreshNews()
+        await syncNow()
+    }
+
+    /// The folder list in iCloud can't be read: the next pass puts a new one made from this device's folders in its
+    /// place, and every other device adds its own to it.
+    func replaceFolders() async {
+        replacingFolders = true
         refreshNews()
         await syncNow()
     }
@@ -401,7 +426,7 @@ final class SyncCenter {
 
     /// Whether the last pass finished with nothing left behind, and iCloud holds everything it sent.
     var isUpToDate: Bool {
-        lastError == nil && lastReport?.waiting.isEmpty == true && uploads.isClear
+        lastError == nil && lastReport?.waiting.isEmpty == true && lastReport?.foldersUnreadable == false && uploads.isClear
     }
 
     /// "15 Oct, 14:05": the day as well as the time, since the last sync may be days ago.
@@ -419,15 +444,18 @@ final class SyncCenter {
 
     /// What is shown now, less what was put away and hasn't changed since.
     private func refreshNews() {
-        let failed = lastReport?.failed ?? [], held = (lastReport?.held ?? []).filter { !keeping.contains($0) }
+        let failed = lastReport?.failed ?? [], held = (lastReport?.held ?? []).filter { !keeping.contains($0) && !lettingGo.contains($0) }
+        let foldersUnreadable = lastReport?.foldersUnreadable == true && !replacingFolders
         putAway.failed.removeAll { !failed.contains($0) }
         if Set(putAway.held) != Set(held) { putAway.held = [] }
         if putAway.uploadProblem != uploads.problem { putAway.uploadProblem = nil }
         if putAway.stopped != stopped { putAway.stopped = nil }
+        if !foldersUnreadable { putAway.foldersUnreadable = false }
         let fresh = SyncNews(failed: failed.filter { !putAway.failed.contains($0) }, held: putAway.held.isEmpty ? held : [],
                              conflictCopies: newCopies, journals: setAsideJournals,
                              uploadProblem: uploads.problem == putAway.uploadProblem ? nil : uploads.problem,
-                             stopped: stopped == putAway.stopped ? nil : stopped)
+                             stopped: stopped == putAway.stopped ? nil : stopped,
+                             foldersUnreadable: foldersUnreadable && !putAway.foldersUnreadable)
         if fresh != news { news = fresh }
     }
 
@@ -437,6 +465,7 @@ final class SyncCenter {
         if !news.held.isEmpty { putAway.held = news.held }
         putAway.uploadProblem = uploads.problem
         putAway.stopped = stopped
+        if news.foldersUnreadable { putAway.foldersUnreadable = true }
         newCopies = []
         setAsideJournals = []
         refreshNews()
@@ -504,6 +533,7 @@ extension SyncReport {
         if arriving.count > 0 { parts.append(String(localized: "\(arriving.count) notebooks still downloading from iCloud")) }
         if failed.count > 0 { parts.append(String(localized: "\(failed.count) notebooks didn't sync")) }
         if held.count > 0 { parts.append(String(localized: "\(held.count) deletions held back")) }
+        if foldersUnreadable { parts.append(String(localized: "Folders aren't syncing")) }
         return parts
     }
 
@@ -621,11 +651,16 @@ struct SyncNews: Equatable {
     var uploadProblem: CloudUploads.Problem?
     /// Why the last pass stopped part-way.
     var stopped: String?
+    /// The folder list in iCloud can't be read, so folders aren't syncing.
+    var foldersUnreadable = false
 
-    var isEmpty: Bool { failed.isEmpty && held.isEmpty && conflictCopies.isEmpty && journals.isEmpty && uploadProblem == nil && stopped == nil }
+    var isEmpty: Bool { !isTrouble && conflictCopies.isEmpty && journals.isEmpty }
     /// Something went wrong, as opposed to a conflicted copy, which is only worth knowing about.
-    var isTrouble: Bool { !failed.isEmpty || !held.isEmpty || uploadProblem != nil || stopped != nil }
-    var count: Int { failed.count + (held.isEmpty ? 0 : 1) + conflictCopies.count + journals.count + (uploadProblem == nil ? 0 : 1) + (stopped == nil ? 0 : 1) }
+    var isTrouble: Bool { !failed.isEmpty || !held.isEmpty || uploadProblem != nil || stopped != nil || foldersUnreadable }
+    var count: Int {
+        failed.count + (held.isEmpty ? 0 : 1) + conflictCopies.count + journals.count + (uploadProblem == nil ? 0 : 1) + (stopped == nil ? 0 : 1)
+            + (foldersUnreadable ? 1 : 0)
+    }
 
     func keeping(copies kept: (UUID) -> Bool) -> SyncNews {
         var news = self

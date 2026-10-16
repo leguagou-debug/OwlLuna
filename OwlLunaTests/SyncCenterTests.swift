@@ -870,4 +870,80 @@ final class SyncCenterTests: XCTestCase {
         XCTAssertTrue(center.news.isEmpty, "once put away, the same ones aren't shown again")
         XCTAssertTrue(ids.allSatisfy { synced($0, in: cloud) }, "and they are still held")
     }
+
+    func testNotebooksHeldBackFromDeletingCanBeLetGo() async throws {
+        var ids: [UUID] = []
+        for title in ["One", "Two", "Three", "Four"] { ids.append(try await makeNotebook(title, on: root)) }
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        for id in ids { try FileManager.default.removeItem(at: root.package(id)) }
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(Set(center.news.held), Set(ids))
+
+        await center.letHeldGo()
+        XCTAssertEqual(Set(center.lastReport?.removedThere ?? []), Set(ids), "let go, the deletes are carried over")
+        XCTAssertFalse(ids.contains { synced($0, in: cloud) })
+        XCTAssertTrue(center.news.isEmpty)
+        XCTAssertTrue(center.isUpToDate)
+        XCTAssertEqual(center.status, "4 deletions carried over")
+        await center.syncNow()
+        XCTAssertTrue(center.news.isEmpty, "and they aren't held again")
+        XCTAssertEqual(root.packageIDs(), [])
+        XCTAssertEqual(center.status, "Everything is up to date")
+    }
+
+    func testAFolderListInICloudThatCannotBeReadIsTroubleUntilPutAway() async throws {
+        var folders = FolderFile()
+        folders.folders = [FolderEntry(id: UUID(), name: "Science", clothRaw: "jade", createdAt: .now, sortIndex: 0)]
+        try folders.write(root)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        let good = try Data(contentsOf: cloud.foldersFile)
+        try Data("damaged".utf8).write(to: cloud.foldersFile)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertTrue(center.news.foldersUnreadable)
+        XCTAssertTrue(center.news.isTrouble)
+        XCTAssertEqual(center.news.count, 1)
+        XCTAssertFalse(center.isUpToDate)
+        XCTAssertEqual(center.status, "Folders aren't syncing")
+
+        center.putAwayNews()
+        await center.syncNow()
+        XCTAssertTrue(center.news.isEmpty, "once put away, it isn't shown again while it lasts")
+        XCTAssertFalse(center.isUpToDate, "though Settings still says so")
+
+        try good.write(to: cloud.foldersFile)
+        await center.syncNow()
+        XCTAssertTrue(center.isUpToDate)
+        try Data("damaged".utf8).write(to: cloud.foldersFile)
+        await center.syncNow()
+        XCTAssertTrue(center.news.foldersUnreadable, "damaged again, it is news again")
+    }
+
+    func testAFolderListInICloudThatCannotBeReadIsReplacedWhenAsked() async throws {
+        var folders = FolderFile()
+        folders.folders = [FolderEntry(id: UUID(), name: "Science", clothRaw: "jade", createdAt: .now, sortIndex: 0)]
+        try folders.write(root)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        try Data("damaged".utf8).write(to: cloud.foldersFile)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertTrue(center.news.foldersUnreadable)
+
+        await center.replaceFolders()
+        XCTAssertTrue(center.news.isEmpty)
+        XCTAssertTrue(center.isUpToDate)
+        XCTAssertEqual(FolderFile(try Data(contentsOf: cloud.foldersFile))?.folders.map(\.name), ["Science"])
+
+        try Data("damaged".utf8).write(to: cloud.foldersFile)
+        await center.syncNow()
+        XCTAssertTrue(center.news.foldersUnreadable, "replaced once, it isn't replaced again unasked")
+        XCTAssertEqual(try String(contentsOf: cloud.foldersFile, encoding: .utf8), "damaged")
+    }
 }

@@ -189,6 +189,22 @@ final class FolderTests: XCTestCase {
         XCTAssertNil(renamed.changedAt(.cloth), "and only what changed")
     }
 
+    func testAFolderListKeepsItsNameAndKeysThisVersionDoesNotKnow() throws {
+        let raw = """
+        {"folders": [{"id": "\(UUID().uuidString)", "name": "Bio"}], "listID": "one", "later": {"kept": true}}
+        """
+        var file = try XCTUnwrap(FolderFile(Data(raw.utf8)))
+        XCTAssertEqual(file.listID, "one")
+        file.folders[0].name = "Biology"
+        let again = try XCTUnwrap(FolderFile(file.encoded()))
+        XCTAssertEqual(again.folders.map(\.name), ["Biology"])
+        XCTAssertEqual(again.listID, "one")
+        XCTAssertEqual(again.extra["later"], JSONValue.object(["kept": .bool(true)]))
+        let unnamed = try JSONValue.parse(FolderFile(folders: again.folders).encoded())
+        XCTAssertNil(unnamed["listID"], "a list without a name is written without one")
+        XCTAssertNil(FolderFile(Data(#"["folders"]"#.utf8)), "and one that isn't an object isn't a list")
+    }
+
     func testAFolderOnTwoDevicesIsSettledOneFieldAtATime() throws {
         let earlier = Date(timeIntervalSinceReferenceDate: 800_000_000), later = earlier.addingTimeInterval(60)
         let base = FolderEntry(id: UUID(), name: "Science", clothRaw: "jade", createdAt: earlier, sortIndex: 0)

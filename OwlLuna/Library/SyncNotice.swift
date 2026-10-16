@@ -6,6 +6,8 @@ struct SyncNoticeButton: View {
     let onOpen: (NotebookRecord) -> Void
     @Environment(LibraryStore.self) private var store
     @State private var showing = false
+    @State private var confirmingDelete = false
+    @State private var confirmingReplace = false
 
     var body: some View {
         // A conflicted copy deleted before it was seen has nothing left to show.
@@ -30,7 +32,17 @@ struct SyncNoticeButton: View {
         .accessibilityValue(Text("\(news.count) notices"))
         .accessibilityIdentifier("library.sync.notice")
         .panel("iCloud", isPresented: $showing) {
-            SyncNoticeCard(sync: sync, onOpen: onOpen)
+            SyncNoticeCard(sync: sync, onOpen: onOpen, onDelete: { confirmingDelete = true }, onReplace: { confirmingReplace = true })
+        }
+        .notice(Text("Delete \(news.held.count) notebooks?"), isPresented: $confirmingDelete,
+                message: Text("Any device that still has them moves them to Recently Deleted, where they stay for 30 days.")) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { Task { await sync.letHeldGo() } }
+        }
+        .notice(Text("Replace the folder list in iCloud?"), isPresented: $confirmingReplace,
+                message: Text("A new one is made from this iPad's folders, and your other devices add theirs to it, so no folder is lost. A folder deleted while folders weren't syncing may come back.")) {
+            Button("Cancel", role: .cancel) {}
+            Button("Replace") { Task { await sync.replaceFolders() } }
         }
     }
 }
@@ -39,6 +51,8 @@ struct SyncNoticeButton: View {
 private struct SyncNoticeCard: View {
     let sync: SyncCenter
     let onOpen: (NotebookRecord) -> Void
+    let onDelete: () -> Void
+    let onReplace: () -> Void
     @Environment(LibraryStore.self) private var store
     @Environment(\.panelClose) private var close
 
@@ -102,11 +116,26 @@ private struct SyncNoticeCard: View {
         }
         if !news.held.isEmpty {
             SyncNoticeRow(systemImage: "trash.slash", trouble: true, title: Text("\(news.held.count) notebooks weren't deleted"),
-                          message: Text("They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere.")) {
-                Button("Keep") { closing { Task { await sync.keepHeld() } } }
-                    .buttonStyle(.owlLuna(.secondary, compact: true))
+                          message: Text("They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere, and Delete lets the deletions go through.")) {
+                VStack(spacing: 0) {
+                    Button { closing { Task { await sync.keepHeld() } } } label: { Text("Keep").frame(maxWidth: .infinity) }
+                        .buttonStyle(.owlLuna(.secondary, compact: true))
+                    Button { closing(then: onDelete) } label: { Text("Delete").frame(maxWidth: .infinity) }
+                        .buttonStyle(.owlLuna(.destructive, compact: true))
+                        .accessibilityIdentifier("library.sync.delete")
+                }
+                .fixedSize(horizontal: true, vertical: false)
             }
             .accessibilityIdentifier("library.sync.held")
+        }
+        if news.foldersUnreadable {
+            SyncNoticeRow(systemImage: "folder.badge.questionmark", trouble: true, title: Text("Folders aren't syncing"),
+                          message: Text("The folder list in iCloud can't be read, so folder changes aren't sent or received. Folders on this iPad stay as they are, and notebooks still sync.")) {
+                Button("Replace") { closing(then: onReplace) }
+                    .buttonStyle(.owlLuna(.secondary, compact: true))
+                    .accessibilityIdentifier("library.sync.replaceFolders")
+            }
+            .accessibilityIdentifier("library.sync.folders")
         }
         ForEach(news.conflictCopies.compactMap { store.record($0) }, id: \.id) { copy in
             SyncNoticeRow(systemImage: "doc.on.doc", trouble: false, title: Text(copy.title),

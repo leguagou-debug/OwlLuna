@@ -188,17 +188,18 @@ enum LibraryBackup {
     }
 
     /// Adds what the backup holds to the library and never replaces anything: a notebook the library has in a different
-    /// state comes back beside it as a copy. The caller refreshes the index afterwards.
-    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now,
+    /// state comes back beside it as a copy. `indexed` are the folders the index has, which stand in for a folder list
+    /// here that can't be read. The caller refreshes the index afterwards.
+    static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now, indexed: [FolderEntry] = [],
                         beforeRewrite: @Sendable (NotebookPackage) async throws -> Void = { _ in }) async throws -> Summary {
         do {
-            return try await restoring(from: archive, into: root, keepsHistory: keepsHistory, now: now, beforeRewrite: beforeRewrite)
+            return try await restoring(from: archive, into: root, keepsHistory: keepsHistory, now: now, indexed: indexed, beforeRewrite: beforeRewrite)
         } catch {
             throw Failure.explaining(error)
         }
     }
 
-    private static func restoring(from archive: URL, into root: StorageRoot, keepsHistory: Bool, now: Date,
+    private static func restoring(from archive: URL, into root: StorageRoot, keepsHistory: Bool, now: Date, indexed: [FolderEntry],
                                   beforeRewrite: @Sendable (NotebookPackage) async throws -> Void) async throws -> Summary {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory.appending(path: "restore-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -260,7 +261,9 @@ enum LibraryBackup {
             summary.copies += 1
         }
 
-        var folders = FolderFile.read(root)
+        // A list that can't be read is taken as the index's: the backup's folders alone would have sync delete the rest everywhere.
+        var folders: FolderFile
+        do { folders = try FolderFile.load(root) ?? FolderFile() } catch { folders = FolderFile(folders: indexed) }
         let known = Set(folders.folders.map(\.id))
         let incoming = FolderFile.read(backup).folders.filter { !known.contains($0.id) }
         if !incoming.isEmpty {

@@ -2088,6 +2088,132 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(folderNames(b), ["Art", "Labs", "Science"])
     }
 
+    func testAFolderListInTheSyncedCopyThatCannotBeReadIsSaidAndNotWrittenOver() async throws {
+        try fill(a)
+        try await sync(a)
+        try await sync(b)
+        let good = try Data(contentsOf: cloud.foldersFile)
+        try fill(b, folder: "Art", sticker: "dog.png")
+        try Data("{\"folders\": [".utf8).write(to: cloud.foldersFile)
+
+        let report = try await sync(b)
+        XCTAssertTrue(report.foldersUnreadable)
+        XCTAssertFalse(report.foldersChanged)
+        XCTAssertTrue(report.parts.contains("Folders aren't syncing"))
+        XCTAssertEqual(try String(contentsOf: cloud.foldersFile, encoding: .utf8), "{\"folders\": [",
+                       "a device doesn't write its own list over it, which would delete a folder only that list holds everywhere else")
+        XCTAssertEqual(folderNames(b), ["Art", "Science"], "nothing is taken as deleted here")
+        XCTAssertEqual(stickers(in: cloud.stickers), ["cat.png", "dog.png"], "and the rest still syncs")
+
+        try good.write(to: cloud.foldersFile)
+        let mended = try await sync(b)
+        XCTAssertFalse(mended.foldersUnreadable)
+        try await sync(a)
+        XCTAssertEqual(folderNames(a), ["Art", "Science"], "a good list again, folders sync again")
+    }
+
+    private func syncedFolders() throws -> FolderFile { try XCTUnwrap(FolderFile(Data(contentsOf: cloud.foldersFile))) }
+
+    func testADamagedFolderListReplacedByOneDeviceDeletesNoFolderOnTheOther() async throws {
+        try fill(a)
+        try await sync(a)
+        try await sync(b)
+        // The first device last wrote the list, with a folder the second never saw, before it was damaged.
+        try fill(a, folder: "Art", sticker: "dog.png")
+        try await sync(a)
+        let damaged = Data("{\"folders\": [".utf8)
+        try damaged.write(to: cloud.foldersFile)
+        try fill(b, folder: "Labs", sticker: "owl.png")
+        let stalled = try await sync(b)
+        XCTAssertTrue(stalled.foldersUnreadable)
+
+        let replaced = try await LibrarySync.run(root: b, cloud: cloud, replacingFolders: true)
+        XCTAssertFalse(replaced.foldersUnreadable)
+        let list = try syncedFolders()
+        XCTAssertEqual(list.folders.map(\.name).sorted(), ["Labs", "Science"], "made again from this device's folders")
+        XCTAssertNotNil(list.listID)
+        XCTAssertNotEqual(list.listID, SyncState.read(a).folderList, "under a new name")
+        XCTAssertEqual(SyncState.read(b).folderList, list.listID)
+        XCTAssertEqual(try Data(contentsOf: b.library.appending(path: "icloud-folders.json.corrupt")), damaged, "the damaged one is kept aside")
+
+        let report = try await sync(a)
+        XCTAssertFalse(report.foldersUnreadable)
+        XCTAssertEqual(folderNames(a), ["Art", "Labs", "Science"], "a folder only the damaged list held isn't taken as deleted")
+        try await sync(b)
+        XCTAssertEqual(folderNames(b), ["Art", "Labs", "Science"])
+        let after = try syncedFolders()
+        XCTAssertEqual(after.folders.map(\.name).sorted(), ["Art", "Labs", "Science"])
+        XCTAssertEqual(after.listID, list.listID, "the list keeps its new name")
+        XCTAssertEqual(SyncState.read(a).folderList, after.listID)
+
+        _ = try await LibrarySync.run(root: a, cloud: cloud, replacingFolders: true)
+        XCTAssertEqual(try syncedFolders(), after, "a list that reads is never replaced")
+        var folders = FolderFile.read(a)
+        folders.folders.removeAll { $0.name == "Labs" }
+        try folders.write(a)
+        try await sync(a)
+        try await sync(b)
+        XCTAssertEqual(folderNames(b), ["Art", "Science"], "once both have the new list, a delete carries over again")
+    }
+
+    func testTwoDevicesReplacingADamagedFolderListAtOnceLoseNoFolder() async throws {
+        try fill(a)
+        try await sync(a)
+        try await sync(b)
+        try fill(a, folder: "Art", sticker: "dog.png")
+        try fill(b, folder: "Labs", sticker: "owl.png")
+        let damaged = Data("damaged".utf8)
+        try damaged.write(to: cloud.foldersFile)
+
+        // Each replaces it before the other's has arrived, and iCloud keeps the second device's.
+        _ = try await LibrarySync.run(root: a, cloud: cloud, replacingFolders: true)
+        try damaged.write(to: cloud.foldersFile)
+        _ = try await LibrarySync.run(root: b, cloud: cloud, replacingFolders: true)
+        XCTAssertNotEqual(SyncState.read(a).folderList, SyncState.read(b).folderList)
+
+        try await sync(a)
+        try await sync(b)
+        XCTAssertEqual(folderNames(a), ["Art", "Labs", "Science"])
+        XCTAssertEqual(folderNames(b), ["Art", "Labs", "Science"])
+        XCTAssertEqual(SyncState.read(a).folderList, try syncedFolders().listID)
+    }
+
+    func testAFolderListFromBeforeListsWereNamedIsNamedAndDeletesNothing() async throws {
+        try fill(a)
+        try fill(a, folder: "Art", sticker: "dog.png")
+        try await sync(a)
+        try await sync(b)
+        // As an older build left things: a list without a name, and none in either device's state.
+        var unnamed = try syncedFolders()
+        unnamed.listID = nil
+        try unnamed.encoded().write(to: cloud.foldersFile)
+        for root in [a!, b!] {
+            var state = SyncState.read(root)
+            state.folderList = nil
+            try state.write(root)
+        }
+
+        var folders = FolderFile.read(a)
+        folders.folders.removeAll { $0.name == "Art" }
+        try folders.write(a)
+        try await sync(a)
+        let named = try syncedFolders()
+        XCTAssertEqual(named.folders.map(\.name), ["Science"], "a list without a name is the one a state without one agreed with")
+        XCTAssertEqual(SyncState.read(a).folderList, try XCTUnwrap(named.listID), "and it is named")
+
+        try await sync(b)
+        XCTAssertEqual(folderNames(b), ["Art", "Science"], "a device that doesn't know the name can't tell the list from one made again, so it only adds")
+        XCTAssertEqual(SyncState.read(b).folderList, named.listID)
+        try await sync(a)
+        folders = FolderFile.read(b)
+        folders.folders.removeAll { $0.name == "Art" }
+        try folders.write(b)
+        try await sync(b)
+        try await sync(a)
+        XCTAssertEqual(folderNames(a), ["Science"], "once both know the name, a delete carries over")
+        XCTAssertEqual(folderNames(b), ["Science"])
+    }
+
     func testALibraryThatCannotBeListedDeletesNoNotebooks() async throws {
         let ids = sorted([try await makeNotebook("One", on: a), try await makeNotebook("Two", on: a)])
         try await sync(a)
@@ -2208,6 +2334,76 @@ final class SyncTests: XCTestCase {
         XCTAssertFalse(marked(notes.id))
         let back = try await sync(a)
         XCTAssertEqual(back.pulled, [notes.id])
+        try await settled()
+    }
+
+    func testHeldDeletesLetGoAreCarriedOverAndNotHeldAgainElsewhere() async throws {
+        var made: [NotebookManifest] = []
+        for title in ["One", "Two", "Three", "Four", "Five"] { made.append(try await makeNotebook(title, on: a)) }
+        let ids = sorted(made)
+        try await sync(a)
+        try await sync(b)
+        for id in ids { try FileManager.default.removeItem(at: a.package(id)) }
+        let held = try await sync(a)
+        XCTAssertEqual(held.held, ids)
+
+        let letGo = try await LibrarySync.run(root: a, cloud: cloud, lettingGo: Set(ids))
+        XCTAssertEqual(letGo.held, [], "meant, they aren't held again")
+        XCTAssertEqual(letGo.removedThere, ids)
+        XCTAssertFalse(ids.contains(where: isSynced))
+        XCTAssertTrue(try ids.allSatisfy { DeleteMarker(try Data(contentsOf: cloud.tombstone($0))).confirmed }, "and each marker says they were let go")
+
+        let other = try await sync(b)
+        XCTAssertEqual(other.held, [], "so the other device doesn't hold them again")
+        XCTAssertEqual(other.removedHere, ids)
+        for id in ids {
+            let state = try await library(id, on: b)
+            XCTAssertNotNil(state.deletedAt, "they go into Recently Deleted there")
+        }
+        try await settled()
+        XCTAssertEqual(a.packageIDs(), [])
+    }
+
+    func testHeldDeletesFromAnotherDeviceLetGoGoIntoRecentlyDeleted() async throws {
+        var made: [NotebookManifest] = []
+        for title in ["One", "Two", "Three", "Four"] { made.append(try await makeNotebook(title, on: a)) }
+        let ids = sorted(made)
+        try await sync(a)
+        try await sync(b)
+        for id in ids {
+            try DeleteMarker(modifiedAt: try XCTUnwrap(LibrarySync.stamp(ofPackage: cloud.package(id)))).encoded().write(to: cloud.tombstone(id))
+            try FileManager.default.removeItem(at: cloud.package(id))
+        }
+        let held = try await sync(b)
+        XCTAssertEqual(held.held, ids)
+
+        let letGo = try await LibrarySync.run(root: b, cloud: cloud, lettingGo: Set(ids))
+        XCTAssertEqual(letGo.removedHere, ids)
+        for id in ids {
+            let state = try await library(id, on: b)
+            XCTAssertNotNil(state.deletedAt)
+        }
+        let again = try await sync(b)
+        XCTAssertEqual(again, SyncReport(), "and stay there")
+    }
+
+    func testLettingHeldDeletesGoTakesNothingWrittenInSince() async throws {
+        var made: [NotebookManifest] = []
+        for title in ["One", "Two", "Three", "Four"] { made.append(try await makeNotebook(title, on: a)) }
+        let ids = sorted(made)
+        try await sync(a)
+        try await sync(b)
+        for id in ids { try FileManager.default.removeItem(at: a.package(id)) }
+        let held = try await sync(a)
+        XCTAssertEqual(held.held, ids)
+        try await edit(ids[0], on: b, strokes: 3, after: 60)
+        try await sync(b)
+
+        let letGo = try await LibrarySync.run(root: a, cloud: cloud, lettingGo: Set(ids))
+        XCTAssertEqual(letGo.removedThere, Array(ids.dropFirst()))
+        XCTAssertEqual(letGo.pulled, [ids[0]], "one written in since comes back, as it would after a single delete")
+        let other = try await sync(b)
+        XCTAssertEqual(other.removedHere, Array(ids.dropFirst()))
         try await settled()
     }
 

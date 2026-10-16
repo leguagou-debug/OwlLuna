@@ -69,6 +69,10 @@ extension FolderEntry {
 struct FolderFile: Sendable, Hashable {
     var folders: [FolderEntry] = []
     var opaque: [JSONValue] = []
+    /// Names the list in the synced copy. One that replaces a damaged list has a new name, which tells every other
+    /// device that what it agreed on with the old one no longer holds.
+    var listID: String?
+    var extra: [String: JSONValue] = [:]
 
     /// A file that is there and isn't a folder list.
     struct Damaged: Error {}
@@ -102,7 +106,10 @@ struct FolderFile: Sendable, Hashable {
             if let parent = folder.parentID { writer.set("parent", .string(parent.uuidString)) }
             return .object(writer.values)
         }
-        return try JSONValue.object(["folders": .array(encoded + opaque)]).serialized()
+        var values = extra
+        values["folders"] = .array(encoded + opaque)
+        values["listID"] = listID.map(JSONValue.string)
+        return try JSONValue.object(values).serialized()
     }
 
     /// A damaged file this replaces is set aside as `folders.json.corrupt`, so it's kept and never overwritten.
@@ -142,7 +149,9 @@ struct FolderFile: Sendable, Hashable {
 
 extension FolderFile {
     init?(_ data: Data) {
-        guard let values = (try? JSONValue.parse(data))?["folders"]?.arrayValue else { return nil }
+        guard var top = (try? JSONValue.parse(data))?.objectValue, let values = top.removeValue(forKey: "folders")?.arrayValue else { return nil }
+        listID = top.removeValue(forKey: "listID")?.stringValue
+        extra = top
         for raw in values {
             guard let object = raw.objectValue,
                   let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)),

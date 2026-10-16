@@ -803,9 +803,9 @@ extension LibraryStore {
     /// Adds a backup's notebooks, folders and stickers to the library, then brings the index up to date.
     func restoreBackup(from url: URL) async throws -> LibraryBackup.Summary {
         await finishWritingShelves()
-        let root = root, keepsHistory = defaults.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true
+        let root = root, keepsHistory = defaults.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true, indexed = folderEntries()
         let summary = try await Task.detached(priority: .userInitiated) {
-            try await LibraryBackup.restore(from: url, into: root, keepsHistory: keepsHistory)
+            try await LibraryBackup.restore(from: url, into: root, keepsHistory: keepsHistory, indexed: indexed)
         }.value
         await LibraryIndex.refresh(root: root, context: context)
         await loadSmartShelves()

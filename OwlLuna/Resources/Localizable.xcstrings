@@ -5098,6 +5098,28 @@
         }
       }
     },
+    "A new one is made from this iPad's folders, and your other devices add theirs to it, so no folder is lost. A folder deleted while folders weren't syncing may come back." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine neue wird aus den Ordnern dieses iPads erstellt, und deine anderen Geräte fügen ihre hinzu, sodass kein Ordner verloren geht. Ein Ordner, der gelöscht wurde, während Ordner nicht synchronisiert wurden, kann wieder auftauchen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se crea una nueva con las carpetas de este iPad y tus otros dispositivos le añaden las suyas, así que no se pierde ninguna carpeta. Una carpeta eliminada mientras las carpetas no se sincronizaban puede volver a aparecer."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une nouvelle liste est créée à partir des dossiers de cet iPad, et vos autres appareils y ajoutent les leurs, donc aucun dossier n’est perdu. Un dossier supprimé pendant que les dossiers ne se synchronisaient pas peut réapparaître."
+          }
+        }
+      }
+    },
     "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy." : {
       "localizations" : {
         "de" : {
@@ -6116,6 +6138,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réponse"
+          }
+        }
+      }
+    },
+    "Any device that still has them moves them to Recently Deleted, where they stay for 30 days." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Gerät, auf dem sie noch sind, legt sie in „Zuletzt gelöscht“, wo sie 30 Tage bleiben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cualquier dispositivo que aún los tenga los mueve a Eliminados recientemente, donde se conservan 30 días."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout appareil qui les a encore les déplace vers Supprimés récemment, où ils restent 30 jours."
           }
         }
       }
@@ -8867,6 +8911,82 @@
         }
       }
     },
+    "Delete %lld notebooks?" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch löschen?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher löschen?"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %lld notebook?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %lld notebooks?"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld cuaderno?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld cuadernos?"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Supprimer %lld carnet ?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Supprimer %lld carnets ?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Delete %lld notebooks permanently?" : {
       "localizations" : {
         "de" : {
@@ -11046,6 +11166,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dossier"
+          }
+        }
+      }
+    },
+    "Folders aren't syncing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner werden nicht synchronisiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las carpetas no se sincronizan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les dossiers ne se synchronisent pas"
           }
         }
       }
@@ -20012,6 +20154,28 @@
         }
       }
     },
+    "Replace" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sustituir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer"
+          }
+        }
+      }
+    },
     "Replace Handwriting" : {
       "localizations" : {
         "de" : {
@@ -20030,6 +20194,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remplacer l’écriture"
+          }
+        }
+      }
+    },
+    "Replace the folder list in iCloud?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordnerliste in iCloud ersetzen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Sustituir la lista de carpetas de iCloud?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer la liste des dossiers dans iCloud ?"
           }
         }
       }
@@ -24190,6 +24376,28 @@
         }
       }
     },
+    "The folder list in iCloud can't be read, so folder changes aren't sent or received. Folders on this iPad stay as they are, and notebooks still sync." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Ordnerliste in iCloud kann nicht gelesen werden, daher werden Änderungen an Ordnern weder gesendet noch empfangen. Die Ordner auf diesem iPad bleiben, wie sie sind, und Notizbücher werden weiter synchronisiert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede leer la lista de carpetas de iCloud, así que los cambios en las carpetas no se envían ni se reciben. Las carpetas de este iPad se quedan como están y los cuadernos se siguen sincronizando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La liste des dossiers dans iCloud ne peut pas être lue, donc les modifications des dossiers ne sont ni envoyées ni reçues. Les dossiers de cet iPad restent tels quels et les carnets continuent de se synchroniser."
+          }
+        }
+      }
+    },
     "The handwriting recogniser didn't answer. Try again in a moment." : {
       "localizations" : {
         "de" : {
@@ -24878,24 +25086,24 @@
         }
       }
     },
-    "They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere." : {
+    "They went missing from this iPad or another device all at once, which looks like a mistake, so sync left them as they are. Keep brings them back everywhere, and Delete lets the deletions go through." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sie sind auf diesem iPad oder einem anderen Gerät alle auf einmal verschwunden, was nach einem Fehler aussieht. Deshalb hat die Synchronisierung sie gelassen, wie sie sind. „Behalten“ holt sie überall zurück."
+            "value" : "Sie sind auf diesem iPad oder einem anderen Gerät alle auf einmal verschwunden, was nach einem Fehler aussieht. Deshalb hat die Synchronisierung sie gelassen, wie sie sind. „Behalten“ holt sie überall zurück, „Löschen“ lässt die Löschungen zu."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desaparecieron todos a la vez de este iPad o de otro dispositivo, lo que parece un error, así que la sincronización los dejó como estaban. «Conservar» los recupera en todas partes."
+            "value" : "Desaparecieron todos a la vez de este iPad o de otro dispositivo, lo que parece un error, así que la sincronización los dejó como estaban. «Conservar» los recupera en todas partes y «Eliminar» deja que se eliminen."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ils ont tous disparu en même temps de cet iPad ou d’un autre appareil, ce qui ressemble à une erreur. La synchronisation les a donc laissés tels quels. « Conserver » les rétablit partout."
+            "value" : "Ils ont tous disparu en même temps de cet iPad ou d’un autre appareil, ce qui ressemble à une erreur. La synchronisation les a donc laissés tels quels. « Conserver » les rétablit partout et « Supprimer » laisse passer les suppressions."
           }
         }
       }
