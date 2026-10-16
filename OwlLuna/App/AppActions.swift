@@ -1,5 +1,6 @@
 import AppIntents
 import SwiftData
+import Observation
 
 /// Something asked of the app from outside its windows: a widget link, a shortcut, Siri.
 enum AppAction: Equatable, Sendable {
@@ -78,9 +79,15 @@ struct NotebookEntity: AppEntity {
 
 struct NotebookQuery: EntityStringQuery {
     @MainActor
-    private func library() async -> [NotebookRecord] {
+    private func library() async -> LibraryStore {
         await AppModel.shared.start()
-        return AppModel.shared.library.notebooks().sorted { ($0.lastOpenedAt ?? $0.modifiedAt) > ($1.lastOpenedAt ?? $1.modifiedAt) }
+        return AppModel.shared.library
+    }
+
+    /// The notebooks out of Recently Deleted, last used first.
+    @MainActor
+    static func recent(_ library: LibraryStore) -> [NotebookRecord] {
+        library.notebooks().sorted { ($0.lastOpenedAt ?? $0.modifiedAt) > ($1.lastOpenedAt ?? $1.modifiedAt) }
     }
 
     /// What Siri and Shortcuts are offered to choose from. A locked notebook's name isn't handed out, as it isn't to Spotlight.
@@ -89,20 +96,82 @@ struct NotebookQuery: EntityStringQuery {
         records.filter { !$0.isLocked && (string.map($0.title.localizedCaseInsensitiveContains) ?? true) }
     }
 
+    /// The names Siri learns for "Open ‹notebook› in OwlLuna".
+    @MainActor
+    static func suggested(_ library: LibraryStore) -> [NotebookEntity] {
+        offered(recent(library)).prefix(24).map(NotebookEntity.init)
+    }
+
     /// A shortcut made before its notebook was locked still finds it; opening it asks as the library does.
     @MainActor
+    static func identified(_ identifiers: [UUID], in library: LibraryStore) -> [NotebookEntity] {
+        recent(library).filter { identifiers.contains($0.id) }.map(NotebookEntity.init)
+    }
+
+    @MainActor
     func entities(for identifiers: [UUID]) async throws -> [NotebookEntity] {
-        await library().filter { identifiers.contains($0.id) }.map(NotebookEntity.init)
+        Self.identified(identifiers, in: await library())
     }
 
     @MainActor
     func suggestedEntities() async throws -> [NotebookEntity] {
-        Self.offered(await library()).prefix(24).map(NotebookEntity.init)
+        Self.suggested(await library())
     }
 
     @MainActor
     func entities(matching string: String) async throws -> [NotebookEntity] {
-        Self.offered(await library(), matching: string).map(NotebookEntity.init)
+        Self.offered(Self.recent(await library()), matching: string).map(NotebookEntity.init)
+    }
+}
+
+/// Tells Siri the names "Open ‹notebook› in OwlLuna" can take: once the library is ready, then after a run of index
+/// saves that changes them. UI-test libraries never reach Siri.
+@MainActor
+final class ShortcutParameters {
+    private let isLive: Bool
+    private let delay: Duration
+    private let update: () -> Void
+    private weak var library: LibraryStore?
+    private var told: [UUID: String]?
+    private var pending: Task<Void, Never>?
+
+    init(isLive: Bool = !LaunchOptions.usesTestStorage, delay: Duration = .seconds(2),
+         update: @escaping () -> Void = { OwlLunaShortcuts.updateAppShortcutParameters() }) {
+        self.isLive = isLive
+        self.delay = delay
+        self.update = update
+    }
+
+    func start(_ library: LibraryStore) {
+        guard isLive, self.library == nil else { return }
+        self.library = library
+        tellIfChanged()
+        watch()
+    }
+
+    private func watch() {
+        guard let library else { return }
+        withObservationTracking { _ = library.indexVersion } onChange: { [weak self] in
+            Task { @MainActor in self?.indexSaved() }
+        }
+    }
+
+    private func indexSaved() {
+        watch()
+        pending?.cancel()
+        pending = Task { [weak self, delay] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.tellIfChanged()
+        }
+    }
+
+    private func tellIfChanged() {
+        guard let library else { return }
+        let names = Dictionary(NotebookQuery.suggested(library).map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+        guard names != told else { return }
+        told = names
+        update()
     }
 }
 

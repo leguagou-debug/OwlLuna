@@ -42,6 +42,8 @@ struct Flashcard: Codable, Identifiable, Equatable, Sendable {
     var reviews = 0
     var lapses = 0
     var lastReviewed: Date?
+    /// When it was last answered or rewritten. Older builds leave it out.
+    var changedAt: Date?
 
     init(front: CardSide, back: CardSide, pageID: UUID? = nil, tapeID: UUID? = nil, now: Date = .now, calendar: Calendar = .current) {
         self.front = front
@@ -66,9 +68,13 @@ struct Flashcard: Codable, Identifiable, Equatable, Sendable {
         reviews = try values.decodeIfPresent(Int.self, forKey: .reviews) ?? 0
         lapses = try values.decodeIfPresent(Int.self, forKey: .lapses) ?? 0
         lastReviewed = try values.decodeIfPresent(Date.self, forKey: .lastReviewed)
+        changedAt = try values.decodeIfPresent(Date.self, forKey: .changedAt)
     }
 
     func isDue(on day: String) -> Bool { due <= day }
+
+    /// When it last changed, to the second as `cards.json` keeps it. Two copies of a card are settled by it.
+    var stamp: Date { FlashcardFile.second(max(createdAt, changedAt ?? createdAt, lastReviewed ?? createdAt)) }
 }
 
 /// Spaced repetition in the manner of SM-2: each time a card is remembered the wait before it comes back grows,
@@ -105,6 +111,7 @@ enum CardSchedule {
         }
         next.reviews += 1
         next.lastReviewed = now
+        next.changedAt = now
         let day = calendar.date(byAdding: .day, value: next.interval, to: now) ?? now
         next.due = ActivityFile.dayKey(for: day, calendar: calendar)
         return next
@@ -117,4 +124,8 @@ struct FlashcardFile: Codable, Sendable {
 
     var version = FlashcardFile.currentVersion
     var cards: [Flashcard] = []
+    /// When each deleted card was deleted, by ID, so a copy that still has it doesn't bring it back.
+    var removed: [String: Date]?
+
+    static func second(_ date: Date) -> Date { Date(timeIntervalSinceReferenceDate: date.timeIntervalSinceReferenceDate.rounded(.down)) }
 }

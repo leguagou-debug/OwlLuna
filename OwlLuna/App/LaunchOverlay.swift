@@ -4,15 +4,21 @@ import SwiftUI
 enum LaunchAnimation {
     @MainActor private static var claimed = false
 
+    #if DEBUG
     static func isEnabled(arguments: [String], underTest: Bool, firstScene: Bool) -> Bool {
         firstScene && !underTest && !arguments.contains("-storageRoot") && !arguments.contains("-skipLaunchAnimation")
     }
+    #endif
 
     /// True once per process; a second window starts with the library as it is.
     @MainActor static var isEnabled: Bool {
         let first = !claimed
         claimed = true
+        #if DEBUG
         return isEnabled(arguments: LaunchOptions.arguments, underTest: NSClassFromString("XCTestCase") != nil, firstScene: first)
+        #else
+        return first
+        #endif
     }
 }
 

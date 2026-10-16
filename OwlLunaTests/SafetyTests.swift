@@ -462,6 +462,19 @@ final class LibraryStoreSafetyTests: XCTestCase {
         XCTAssertEqual(store.searchText(for: copyID), "momentum and inertia")
     }
 
+    func testADuplicatesCardsAreCardsOfItsOwn() async throws {
+        let (store, root, _) = try makeStore()
+        let manifest = try await makeNotebook(store)
+        let cards = [Flashcard(front: CardSide(text: "Momentum?"), back: CardSide(text: "mv"))]
+        try CardFiles.write(CardFiles.Deck(cards: cards, removed: [UUID(): .now]), to: root.package(manifest.id))
+        let copyID = try await store.duplicate(try XCTUnwrap(store.record(manifest.id)))
+        let copied = CardFiles.read(root.package(copyID))
+        XCTAssertEqual(copied.cards.map(\.front.text), ["Momentum?"])
+        XCTAssertNotEqual(copied.cards.map(\.id), cards.map(\.id), "so a sitting over the whole library doesn't take them for the original's")
+        XCTAssertEqual(copied.removed, [:])
+        XCTAssertEqual(CardFiles.read(root.package(manifest.id)).cards.map(\.id), cards.map(\.id), "the original's are untouched")
+    }
+
     func testReadOnlyNotebooksIgnoreLibraryChanges() async throws {
         let (store, root, _) = try makeStore()
         let manifest = try await makeNotebook(store, schemaVersion: 9)

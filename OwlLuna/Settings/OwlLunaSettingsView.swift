@@ -161,7 +161,7 @@ struct OwlLunaSettingsView: View {
                 .accessibilityIdentifier("settings.journal.agenda")
                 .settingsRow()
             if journal != nil {
-                SettingsActionRow(title: "Stop Using Daily Journal", systemImage: "calendar.badge.minus") { journalID = "" }
+                SettingsActionRow(title: "Stop Using Daily Journal", systemImage: "calendar.badge.minus") { store.setDailyJournal(nil) }
             }
         }
         .notice("Calendar", isPresented: Binding(get: { agendaMessage != nil }, set: { if !$0 { agendaMessage = nil } }),
@@ -223,14 +223,27 @@ struct OwlLunaSettingsView: View {
                     }
                     .disabled(sync.isSyncing)
                     .accessibilityIdentifier("settings.sync.now")
+                    if let date = sync.lastSynced {
+                        let when = SyncCenter.formatted(date)
+                        // What a pass did is shown once one has finished since launch, and not beside an error.
+                        if let status = sync.status, sync.lastError == nil {
+                            Text("\(status). Last synced \(when).").syncStatusRow("settings.sync.status")
+                        } else {
+                            Text("Last synced \(when).").syncStatusRow("settings.sync.last")
+                        }
+                    }
                     if let error = sync.lastError {
-                        Text(error).font(.subheadline).foregroundStyle(Color.tomato).settingsRow()
-                    } else if let date = sync.lastSynced {
-                        Text("\(sync.lastReport?.summary ?? ""). Last synced \(date.formatted(date: .omitted, time: .shortened)).")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.textSecondary)
-                            .accessibilityIdentifier("settings.sync.status")
+                        Text(error).font(.subheadline).foregroundStyle(Color.tomato)
+                            .accessibilityIdentifier("settings.sync.error")
                             .settingsRow()
+                    }
+                    if let problem = sync.uploads.problem {
+                        Text(problem.message).font(.subheadline).foregroundStyle(Color.tomato)
+                            .accessibilityIdentifier("settings.sync.uploads")
+                            .settingsRow()
+                    }
+                    ForEach(sync.lastReport?.failed ?? [], id: \.id) { failure in
+                        SyncFailureRow(failure: failure, title: store.record(failure.id)?.title)
                     }
                 }
             }
@@ -328,7 +341,7 @@ struct OwlLunaSettingsView: View {
             do {
                 let summary = try await store.restoreBackup(from: url)
                 await activity.load()
-                await AppModel.shared.flashcards.loadNewNotebooks()
+                await AppModel.shared.flashcards.load()
                 backupMessage = summary.message
             } catch {
                 backupMessage = error.localizedDescription
@@ -427,5 +440,39 @@ struct AcknowledgementsView: View {
         .background(Color.paper)
         .navigationTitle("Acknowledgements")
         .barGround(.paper)
+    }
+}
+
+@MainActor private extension Text {
+    func syncStatusRow(_ identifier: String) -> some View {
+        font(.subheadline).foregroundStyle(Color.textSecondary).accessibilityIdentifier(identifier).settingsRow()
+    }
+}
+
+/// A notebook the last sync couldn't copy, and why.
+struct SyncFailureRow: View {
+    let failure: SyncFailure
+    let title: String?
+
+    private let tile = RoundedRectangle.plate
+
+    var body: some View {
+        HStack(spacing: Space.x3) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.tomato)
+                .frame(width: 30, height: 30)
+                .background(Color.well, in: tile)
+                .overlay { tile.strokeBorder(Color.hairline) }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(title ?? String(localized: "A notebook from iCloud")) didn't sync")
+                Text(failure.reason.message).font(.subheadline).foregroundStyle(Color.textSecondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .settingsRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("settings.sync.failed")
     }
 }

@@ -221,7 +221,7 @@ final class TagTests: XCTestCase {
         await LibraryIndex.refresh(root: root, context: context, full: true)
         XCTAssertEqual(record.tags, ["exam"], "and the first refresh reads them from the manifest")
         XCTAssertEqual(record.pageTags, ["mitosis"])
-        XCTAssertEqual(LibraryIndex.schemaNumber, 5)
+        XCTAssertGreaterThanOrEqual(LibraryIndex.schemaNumber, 5)
     }
 
     func testTheLibrarysTagsComeFromItsRecords() async throws {

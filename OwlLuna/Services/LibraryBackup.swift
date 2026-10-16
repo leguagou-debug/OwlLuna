@@ -2,6 +2,7 @@ import Foundation
 import AppleArchive
 import System
 import UniformTypeIdentifiers
+import os
 
 extension UTType {
     static let owlLunaBackup = UTType(exportedAs: "com.owais.owlluna.backup")
@@ -24,6 +25,8 @@ enum LibraryBackup {
         var copies = 0
         /// Notebooks the library already has exactly as they are in the backup.
         var unchanged = 0
+        /// Notebooks the library has with the same pages, which took cards, answers or deletions from the backup.
+        var cardsMerged = 0
         var unreadable = 0
         var folders = 0
         var stickers = 0
@@ -31,11 +34,13 @@ enum LibraryBackup {
         /// The notebook the backup's library used as its daily journal, if it was restored under its own ID.
         var journal: UUID?
 
-        var isEmpty: Bool { added + copies + folders + stickers + smartShelves == 0 }
+        var isEmpty: Bool { added + copies + cardsMerged + folders + stickers + smartShelves == 0 }
     }
 
-    enum Failure: LocalizedError {
-        case notABackup, newer, archive, needsPasscode
+    enum Failure: LocalizedError, Equatable {
+        case notABackup, newer, archive, needsPasscode, noRoom, unreadable, unverified
+        /// The titles of open notebooks whose latest changes couldn't be saved.
+        case unsaved([String])
 
         var errorDescription: String? {
             switch self {
@@ -43,7 +48,27 @@ enum LibraryBackup {
             case .newer: String(localized: "This backup was made by a newer version of OwlLuna. Update the app, then restore it.")
             case .archive: String(localized: "The backup couldn't be written.")
             case .needsPasscode: String(localized: "This library has locked notebooks. To back them up, set a passcode on this iPad in Settings first.")
+            case .noRoom: String(localized: "There isn't enough free space on this iPad. Free some up in Settings › General › iPad Storage, then try again.")
+            case .unreadable: String(localized: "This backup couldn't be read. It may be damaged or not fully downloaded yet.")
+            case .unverified: String(localized: "The finished backup didn't match your library when it was checked, so it wasn't kept. Try again.")
+            case .unsaved(let titles):
+                String(localized: "Your latest changes to \(Self.quoted(titles)) couldn't be saved, so the backup would be missing them. Try again once they're saved.")
             }
+        }
+
+        private static func quoted(_ titles: [String]) -> String {
+            titles.map { String(localized: "“\($0)”") }.formatted(.list(type: .and))
+        }
+
+        /// `.noRoom` for an error that comes down to a full disk, or else the error as it is.
+        static func explaining(_ error: Error) -> Error {
+            isOutOfSpace(error as NSError) ? Failure.noRoom : error
+        }
+
+        private static func isOutOfSpace(_ error: NSError) -> Bool {
+            (error.domain == NSCocoaErrorDomain && error.code == NSFileWriteOutOfSpaceError)
+                || (error.domain == NSPOSIXErrorDomain && error.code == Int(ENOSPC))
+                || (error.userInfo[NSUnderlyingErrorKey] as? NSError).map(isOutOfSpace) == true
         }
     }
 
@@ -56,28 +81,43 @@ enum LibraryBackup {
         return "OwlLuna Backup \(formatter.string(from: now)).\(fileExtension)"
     }
 
-    /// Writes a backup to a temporary file and returns it. Open notebooks should be saved first.
-    static func create(root: StorageRoot, journal: UUID? = nil, now: Date = .now) throws -> URL {
+    /// Writes a backup to a temporary file, reads it back, and returns it. Open notebooks should be saved first.
+    static func create(root: StorageRoot, journal: UUID? = nil, now: Date = .now,
+                       through disk: (ArchiveByteStream) -> ArchiveByteStream? = { $0 }) throws -> URL {
+        do {
+            return try write(root: root, journal: journal, now: now, through: disk)
+        } catch is ArchiveError {
+            throw Failure.archive
+        } catch {
+            throw Failure.explaining(error)
+        }
+    }
+
+    private static func write(root: StorageRoot, journal: UUID?, now: Date, through disk: (ArchiveByteStream) -> ArchiveByteStream?) throws -> URL {
         let fileManager = FileManager.default
         let directory = try ExportFolder.make(.backup)
         var written = false
         defer { if !written { try? fileManager.removeItem(at: directory) } }
         let staging = directory.appending(path: "info", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+        let ids = Set(root.packageIDs())
         var info: [String: JSONValue] = ["version": .number(Double(currentVersion)), "createdAt": ManifestCodec.encodeDate(now),
-                                         "notebooks": .number(Double(root.packageIDs().count))]
+                                         "notebooks": .number(Double(ids.count))]
         if let journal { info["journal"] = .string(journal.uuidString) }
         try JSONValue.object(info).serialized().write(to: staging.appending(path: infoFile))
 
         let destination = directory.appending(path: fileName(now: now))
+        // Encoder first, file last. Any still open are closed on the way out.
+        var streams: [() throws -> Void] = []
+        defer { for close in streams { try? close() } }
         guard let keys = ArchiveHeader.FieldKeySet("TYP,PAT,DAT,MOD,MTM"),
-              let file = ArchiveByteStream.fileStream(path: FilePath(destination.path(percentEncoded: false)), mode: .writeOnly,
-                                                      options: [.create, .truncate], permissions: FilePermissions(rawValue: 0o644)) else { throw Failure.archive }
-        defer { try? file.close() }
+              let file = ArchiveByteStream.fileStream(path: FilePath(destination.path(percentEncoded: false)), mode: .writeOnly, options: [.create, .truncate],
+                                                      permissions: FilePermissions(rawValue: 0o644)).flatMap(disk) else { throw Failure.archive }
+        streams.insert(file.close, at: 0)
         guard let compress = ArchiveByteStream.compressionStream(using: .lzfse, writingTo: file) else { throw Failure.archive }
-        defer { try? compress.close() }
+        streams.insert(compress.close, at: 0)
         guard let encode = ArchiveStream.encodeStream(writingTo: compress) else { throw Failure.archive }
-        defer { try? encode.close() }
+        streams.insert(encode.close, at: 0)
 
         // Thumbnails are a cache, and a half-deleted notebook isn't part of the library.
         let filter: ArchiveHeader.EntryFilter = { message, path, _ in
@@ -89,26 +129,59 @@ enum LibraryBackup {
             try encode.writeDirectoryContents(archiveFrom: FilePath(folder.deletingLastPathComponent().path(percentEncoded: false)),
                                               path: FilePath(folder.lastPathComponent), keySet: keys, selectUsing: filter)
         }
+        // The last compressed block is written as the streams close.
+        while !streams.isEmpty { try streams.removeFirst()() }
+        guard (try? notebooks(in: destination)) == ids else { throw Failure.unverified }
         written = true
         return destination
     }
 
+    /// The notebooks a finished backup holds, read through to its end.
+    private static func notebooks(in archive: URL) throws -> Set<UUID> {
+        guard let file = ArchiveByteStream.fileStream(path: FilePath(archive.path(percentEncoded: false)), mode: .readOnly, options: [],
+                                                      permissions: FilePermissions(rawValue: 0o644)) else { throw Failure.unverified }
+        defer { try? file.close() }
+        guard let decompress = ArchiveByteStream.decompressionStream(readingFrom: file) else { throw Failure.unverified }
+        defer { try? decompress.close() }
+        guard let decode = ArchiveStream.decodeStream(readingFrom: decompress) else { throw Failure.unverified }
+        defer { try? decode.close() }
+        let census = Census()
+        guard let sink = ArchiveStream.customStream(instance: census) else { throw Failure.unverified }
+        defer { try? sink.close() }
+        _ = try ArchiveStream.process(readingFrom: decode, writingTo: sink)
+        return census.notebooks
+    }
+
     private static func extract(_ archive: URL, to directory: URL) throws {
         guard let file = ArchiveByteStream.fileStream(path: FilePath(archive.path(percentEncoded: false)), mode: .readOnly, options: [],
-                                                      permissions: FilePermissions(rawValue: 0o644)) else { throw Failure.notABackup }
+                                                      permissions: FilePermissions(rawValue: 0o644)) else { throw Failure.unreadable }
         defer { try? file.close() }
         guard let decompress = ArchiveByteStream.decompressionStream(readingFrom: file) else { throw Failure.notABackup }
         defer { try? decompress.close() }
         guard let decode = ArchiveStream.decodeStream(readingFrom: decompress) else { throw Failure.notABackup }
         defer { try? decode.close() }
-        // Nothing is written outside the folder the backup is unpacked into.
-        let inside: ArchiveHeader.EntryFilter = { _, path, _ in
-            path.isAbsolute || path.components.contains { $0.string == ".." } ? .skip : .ok
+        // A file that can't be written, on a full disk or otherwise, is only reported here, from another thread.
+        let failed = OSAllocatedUnfairLock<Int32?>(initialState: nil)
+        let inside: ArchiveHeader.EntryFilter = { message, path, _ in
+            if message == .extractFail {
+                let code = errno
+                failed.withLock { $0 = $0 ?? code }
+                return .cancel
+            }
+            // Nothing is written outside the folder the backup is unpacked into.
+            return path.isAbsolute || path.components.contains { $0.string == ".." } ? .skip : .ok
         }
         guard let extract = ArchiveStream.extractStream(extractingTo: FilePath(directory.path(percentEncoded: false)), selectUsing: inside,
-                                                        flags: [.ignoreOperationNotPermitted]) else { throw Failure.notABackup }
-        defer { try? extract.close() }
-        do { _ = try ArchiveStream.process(readingFrom: decode, writingTo: extract) } catch { throw Failure.notABackup }
+                                                        flags: [.ignoreOperationNotPermitted]) else { throw CocoaError(.fileWriteUnknown) }
+        var finished = true
+        do { _ = try ArchiveStream.process(readingFrom: decode, writingTo: extract) } catch { finished = false }
+        do { try extract.close() } catch { finished = false }
+        if let code = failed.withLock({ $0 }) { throw code == ENOSPC ? Failure.noRoom : Failure.unreadable }
+        // Every backup starts with the compressed stream's mark; one that does and then can't be read is damaged, or not all there.
+        guard finished else {
+            let start = try? FileHandle(forReadingFrom: archive).read(upToCount: 3)
+            throw start == Data("pbz".utf8) ? Failure.unreadable : Failure.notABackup
+        }
         let links = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isSymbolicLinkKey])?
             .compactMap { $0 as? URL }.filter { (try? $0.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true } ?? []
         for link in links { try? FileManager.default.removeItem(at: link) }
@@ -118,6 +191,15 @@ enum LibraryBackup {
     /// state comes back beside it as a copy. The caller refreshes the index afterwards.
     static func restore(from archive: URL, into root: StorageRoot, keepsHistory: Bool = true, now: Date = .now,
                         beforeRewrite: @Sendable (NotebookPackage) async throws -> Void = { _ in }) async throws -> Summary {
+        do {
+            return try await restoring(from: archive, into: root, keepsHistory: keepsHistory, now: now, beforeRewrite: beforeRewrite)
+        } catch {
+            throw Failure.explaining(error)
+        }
+    }
+
+    private static func restoring(from archive: URL, into root: StorageRoot, keepsHistory: Bool, now: Date,
+                                  beforeRewrite: @Sendable (NotebookPackage) async throws -> Void) async throws -> Summary {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory.appending(path: "restore-\(UUID().uuidString)", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -157,7 +239,7 @@ enum LibraryBackup {
             }
             let current = try? await NotebookPackage(root: root, id: id).readManifest().manifest
             if let current, current.modifiedAt == incoming.modifiedAt, current.pages.map(\.id) == incoming.pages.map(\.id) {
-                summary.unchanged += 1
+                if try addCards(from: source, to: root.package(id)) { summary.cardsMerged += 1 } else { summary.unchanged += 1 }
                 continue
             }
             let copy = UUID()
@@ -165,11 +247,14 @@ enum LibraryBackup {
             try await LibraryStore.assemble(copy, in: root) { package in
                 try FileManager.default.moveItem(at: source, to: package.url)
                 try await beforeRewrite(package)
-                return try await package.updateManifest { manifest in
+                let manifest = try await package.updateManifest { manifest in
                     manifest.id = copy
                     manifest.title = title
                     manifest.library.deletedAt = nil
+                    manifest.library.isJournal = false
                 }
+                try CardFiles.renew(in: package.url)
+                return manifest
             }
             renamed[id] = copy
             summary.copies += 1
@@ -223,6 +308,45 @@ enum LibraryBackup {
     }
 }
 
+extension LibraryBackup {
+    /// The backup's cards go into the library's notebook card by card, as a sync would bring them, with their
+    /// clippings. Returns whether the library's cards changed.
+    fileprivate static func addCards(from backup: URL, to package: URL) throws -> Bool {
+        let fileManager = FileManager.default
+        let incoming = CardFiles.read(backup), current = CardFiles.read(package)
+        guard !incoming.isReadOnly, !current.isReadOnly else { return false }
+        let merged = current.merged(with: incoming)
+        guard merged != current else { return false }
+        for name in merged.clippings {
+            let source = CardFiles.imageURL(name, in: backup), target = CardFiles.imageURL(name, in: package)
+            guard !fileManager.fileExists(atPath: target.path(percentEncoded: false)), fileManager.fileExists(atPath: source.path(percentEncoded: false)) else { continue }
+            try fileManager.createDirectory(at: CardFiles.directory(in: package), withIntermediateDirectories: true)
+            try fileManager.moveItem(at: source, to: target)
+        }
+        try CardFiles.write(merged, to: package)
+        return true
+    }
+}
+
+/// Notes which notebooks a backup holds as it is read back, and lets everything else go by.
+private final class Census: ArchiveStreamProtocol {
+    private(set) var notebooks: Set<UUID> = []
+
+    func writeHeader(_ header: ArchiveHeader) throws {
+        guard case .string(_, let path) = header.field(forKey: ArchiveHeader.FieldKey("PAT")) else { return }
+        let parts = FilePath(path).components
+        guard parts.first?.string == "Library", let package = parts.dropFirst().first, package.extension == StorageRoot.packageExtension,
+              let id = UUID(uuidString: package.stem) else { return }
+        notebooks.insert(id)
+    }
+
+    func writeBlob(key: ArchiveHeader.FieldKey, from buffer: UnsafeRawBufferPointer) throws {}
+    func readHeader() throws -> ArchiveHeader? { nil }
+    func readBlob(key: ArchiveHeader.FieldKey, into buffer: UnsafeMutableRawBufferPointer) throws { throw ArchiveError.invalidValue }
+    func cancel() {}
+    func close() throws {}
+}
+
 extension LibraryBackup.Summary {
     /// "Restored 12 notebooks. 3 came back as copies because the library has newer versions."
     var message: String {
@@ -231,6 +355,7 @@ extension LibraryBackup.Summary {
         if trashed > 0 { parts.append(String(localized: "\(trashed) notebooks were in Recently Deleted in the backup, and are back there for another 30 days.")) }
         if copies > 0 { parts.append(String(localized: "\(copies) notebooks differ from the ones in your library, so they came back beside them as copies.")) }
         if unchanged > 0 { parts.append(String(localized: "\(unchanged) notebooks were already here.")) }
+        if cardsMerged > 0 { parts.append(String(localized: "\(cardsMerged) notebooks were already here, and took in flashcards and reviews from the backup.")) }
         if folders > 0 { parts.append(String(localized: "\(folders) folders were added.")) }
         if stickers > 0 { parts.append(String(localized: "\(stickers) stickers were added.")) }
         if smartShelves > 0 { parts.append(String(localized: "\(smartShelves) smart shelves were added.")) }

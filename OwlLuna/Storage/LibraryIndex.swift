@@ -227,10 +227,7 @@ enum LibraryIndexSchemaV4: VersionedSchema {
     }
 }
 
-/// The library index: a SwiftData cache of what's in the notebook manifests and `folders.json`,
-/// for fast sorting, filtering and search. It can always be rebuilt from those files.
-/// Search text has its own table, so the shelf's queries never read it. Folders name the folder they sit inside,
-/// and a notebook says whether it is locked and which tags it and its pages carry.
+/// The fifth index schema, kept so a store written by it can be migrated. Its notebooks didn't keep their manifest's date.
 enum LibraryIndexSchemaV5: VersionedSchema {
     static let versionIdentifier = Schema.Version(5, 0, 0)
     static var models: [any PersistentModel.Type] { [NotebookRecord.self, FolderRecord.self, NotebookSearchText.self] }
@@ -294,24 +291,97 @@ enum LibraryIndexSchemaV5: VersionedSchema {
     }
 }
 
-typealias NotebookRecord = LibraryIndexSchemaV5.NotebookRecord
-typealias FolderRecord = LibraryIndexSchemaV5.FolderRecord
-typealias NotebookSearchText = LibraryIndexSchemaV5.NotebookSearchText
+/// The library index: a SwiftData cache of what's in the notebook manifests and `folders.json`,
+/// for fast sorting, filtering and search. It can always be rebuilt from those files.
+/// Search text has its own table, so the shelf's queries never read it. Folders name the folder they sit inside,
+/// and a notebook says whether it is locked, which tags it and its pages carry, whether it is the daily journal, and
+/// which manifest it was read from.
+enum LibraryIndexSchemaV6: VersionedSchema {
+    static let versionIdentifier = Schema.Version(6, 0, 0)
+    static var models: [any PersistentModel.Type] { [NotebookRecord.self, FolderRecord.self, NotebookSearchText.self] }
+
+    @Model
+    final class NotebookRecord {
+        @Attribute(.unique) var id: UUID = UUID()
+        var title: String = ""
+        var createdAt: Date = Date()
+        var modifiedAt: Date = Date()
+        var lastOpenedAt: Date?
+        var pageCount: Int = 0
+        var currentPage: Int = 0
+        var isFavorite: Bool = false
+        var deletedAt: Date?
+        var folder: FolderRecord?
+        var coverStyleRaw: String = CoverStyle.cloth.rawValue
+        var clothRaw: String = ClothColor.slate.rawValue
+        var inksRaw: String = "teal,blue"
+        var coverSeed: Int = 0
+        var firstPageID: UUID?
+        var firstPageInkHash: String?
+        var firstPageThumbKey: String?
+        var firstPageIsPDF: Bool = false
+        var isReadOnly: Bool = false
+        var issueCount: Int = 0
+        var indexedAt: Date = Date.distantPast
+        var isLocked: Bool = false
+        /// The notebook's tags, one to a line.
+        var tagsRaw: String = ""
+        /// Every tag on any of its pages, one to a line.
+        var pageTagsRaw: String = ""
+        /// The modification date of the manifest file the record was last brought up to date with.
+        var manifestDate: Date?
+        var isJournal: Bool = false
+
+        init(id: UUID) { self.id = id }
+    }
+
+    @Model
+    final class FolderRecord {
+        @Attribute(.unique) var id: UUID = UUID()
+        var name: String = ""
+        var clothRaw: String = ClothColor.slate.rawValue
+        var createdAt: Date = Date()
+        var sortIndex: Int = 0
+        var parentID: UUID?
+        @Relationship(deleteRule: .nullify, inverse: \LibraryIndexSchemaV6.NotebookRecord.folder)
+        var notebooks: [NotebookRecord]? = []
+
+        init(id: UUID) { self.id = id }
+    }
+
+    /// Everything recognised, typed or read from PDFs in one notebook. Deliberately not a relationship of the record.
+    @Model
+    final class NotebookSearchText {
+        @Attribute(.unique) var notebookID: UUID = UUID()
+        var text: String = ""
+
+        init(notebookID: UUID, text: String) {
+            self.notebookID = notebookID
+            self.text = text
+        }
+    }
+}
+
+typealias NotebookRecord = LibraryIndexSchemaV6.NotebookRecord
+typealias FolderRecord = LibraryIndexSchemaV6.FolderRecord
+typealias NotebookSearchText = LibraryIndexSchemaV6.NotebookSearchText
 
 /// V1 to V2 drops the record's search text and adds the empty table; the next refresh reads the text back from the packages.
 /// V2 to V3 gives folders a parent, which the same refresh fills in from `folders.json`.
 /// V3 to V4 adds the lock, which starts off: the first refresh afterwards reads every manifest for it.
 /// V4 to V5 adds the tags, which start empty and are read by that same first refresh.
+/// V5 to V6 adds the manifest's date, which starts empty, so that first refresh reads every manifest once more, and with it the journal mark.
 enum LibraryIndexMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [LibraryIndexSchemaV1.self, LibraryIndexSchemaV2.self, LibraryIndexSchemaV3.self, LibraryIndexSchemaV4.self,
-         LibraryIndexSchemaV5.self]
+         LibraryIndexSchemaV5.self, LibraryIndexSchemaV6.self]
     }
     static var stages: [MigrationStage] {
         [.lightweight(fromVersion: LibraryIndexSchemaV1.self, toVersion: LibraryIndexSchemaV2.self),
          .lightweight(fromVersion: LibraryIndexSchemaV2.self, toVersion: LibraryIndexSchemaV3.self),
          .lightweight(fromVersion: LibraryIndexSchemaV3.self, toVersion: LibraryIndexSchemaV4.self),
-         .lightweight(fromVersion: LibraryIndexSchemaV4.self, toVersion: LibraryIndexSchemaV5.self)]
+         .lightweight(fromVersion: LibraryIndexSchemaV4.self, toVersion: LibraryIndexSchemaV5.self),
+         .lightweight(fromVersion: LibraryIndexSchemaV5.self, toVersion: LibraryIndexSchemaV6.self)]
     }
 }
 
@@ -347,6 +417,7 @@ extension NotebookRecord {
         set(\.isFavorite, manifest.library.isFavorite)
         set(\.deletedAt, manifest.library.deletedAt)
         set(\.isLocked, manifest.library.isLocked)
+        set(\.isJournal, manifest.library.isJournal)
         set(\.tagsRaw, Tags.joined(manifest.library.tags))
         set(\.pageTagsRaw, Tags.joined(manifest.pageTags))
         set(\.coverStyleRaw, manifest.cover.styleRaw)
@@ -387,11 +458,11 @@ extension FolderTree {
 @MainActor
 enum LibraryIndex {
     private static let log = Logger(subsystem: "com.owais.OwlLuna", category: "index")
-    static let schemaNumber = 5
+    static let schemaNumber = 6
 
     /// Opens the index. A store that can't be opened is set aside (never deleted) and a fresh one is rebuilt
     /// from the manifests; if even that fails, the app runs on an in-memory index for this launch.
-    static var schema: Schema { Schema(versionedSchema: LibraryIndexSchemaV5.self) }
+    static var schema: Schema { Schema(versionedSchema: LibraryIndexSchemaV6.self) }
 
     static func makeContainer(root: StorageRoot) -> (container: ModelContainer, recovered: Bool) {
         let schema = schema
@@ -424,25 +495,30 @@ enum LibraryIndex {
 
     struct Scanned: Sendable {
         var load: ManifestLoad
-        var searchText: String
+        /// Nil when it is the text the index already has.
+        var searchText: String?
         var issues: Int
+        var manifestDate: Date?
     }
 
-    /// Brings the index up to date with the packages on disk. Reads only manifests newer than their record,
-    /// unless `full` is set.
-    static func refresh(root: StorageRoot, context: ModelContext, full: Bool = false) async {
+    /// Brings the index up to date with the packages on disk. Reads a notebook only when its manifest isn't the file
+    /// its record was read from, or it is one of `rescanning`; reads every one when `full` is set. Returns those it read.
+    @discardableResult
+    static func refresh(root: StorageRoot, context: ModelContext, full: Bool = false, rescanning: Set<UUID> = []) async -> Set<UUID> {
         let stamps = await Task.detached(priority: .userInitiated) { manifestStamps(root: root) }.value
         let records = (try? context.fetch(FetchDescriptor<NotebookRecord>())) ?? []
         var byID = Dictionary(records.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let stale = stamps.filter { id, stamp in full || (byID[id]?.indexedAt ?? .distantPast) < stamp }.map(\.key)
-        let scanned = await Task.detached(priority: .userInitiated) { await scan(root: root, ids: stale) }.value
+        let stale = stamps.filter { id, stamp in full || rescanning.contains(id) || byID[id]?.manifestDate != stamp }.map(\.key)
+        let container = context.container
+        let scanned = await Task.detached(priority: .userInitiated) { await scan(root: root, ids: stale, comparingWith: container) }.value
 
         let folderFile = await Task.detached(priority: .userInitiated) { FolderFile.read(root) }.value
         var folders = Dictionary(((try? context.fetch(FetchDescriptor<FolderRecord>())) ?? []).map { ($0.id, $0) },
                                  uniquingKeysWith: { first, _ in first })
+        var arrived: Set<UUID> = []
         for entry in folderFile.folders {
             let record = folders[entry.id] ?? FolderRecord(id: entry.id)
-            if folders[entry.id] == nil { context.insert(record); folders[entry.id] = record }
+            if folders[entry.id] == nil { context.insert(record); folders[entry.id] = record; arrived.insert(entry.id) }
             record.apply(entry)
         }
         for (id, record) in folders where !folderFile.folders.contains(where: { $0.id == id }) {
@@ -454,11 +530,22 @@ enum LibraryIndex {
             let record = byID[id] ?? NotebookRecord(id: id)
             if byID[id] == nil { context.insert(record); byID[id] = record }
             record.apply(item.load.manifest, issues: item.issues)
-            setSearchText(item.searchText, for: id, in: context)
+            record.manifestDate = item.manifestDate
+            if let text = item.searchText { setSearchText(text, for: id, in: context) }
             record.folder = item.load.manifest.library.folderID.flatMap { folders[$0] }
         }
         for (id, record) in byID where stamps[id] == nil {
             context.delete(record)
+            byID[id] = nil
+        }
+
+        // A notebook that came before its folder (a sync, a restore) was left unfiled; the folder's arrival files it.
+        let unfiled = arrived.isEmpty ? [] : byID.filter { scanned[$0.key] == nil && $0.value.folder == nil }.map(\.key)
+        if !unfiled.isEmpty {
+            let filed = await Task.detached(priority: .userInitiated) {
+                unfiled.compactMap { id in LibrarySync.filing(ofPackage: root.package(id))?.folderID.map { (id, $0) } }
+            }.value
+            for (id, folderID) in filed where arrived.contains(folderID) { byID[id]?.folder = folders[folderID] }
         }
 
         // Notebooks with no search row yet (a migrated or rebuilt index) get theirs from the text already on disk.
@@ -477,6 +564,7 @@ enum LibraryIndex {
             for (id, text) in texts { setSearchText(text, for: id, in: context) }
         }
         do { try context.save() } catch { log.error("index save failed: \(error.localizedDescription)") }
+        return Set(scanned.keys)
     }
 
     static func searchRow(for id: UUID, in context: ModelContext) -> NotebookSearchText? {
@@ -509,29 +597,41 @@ enum LibraryIndex {
         return Set(byTitle).union(byText)
     }
 
+    nonisolated static func manifestDate(ofPackage url: URL) -> Date? {
+        (try? url.appending(path: "manifest.json").resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
     nonisolated static func manifestStamps(root: StorageRoot) -> [UUID: Date] {
         var result: [UUID: Date] = [:]
         for id in root.packageIDs() {
-            let package = root.package(id)
-            let manifest = package.appending(path: "manifest.json")
-            let date = (try? manifest.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            result[id] = date ?? .distantFuture
+            result[id] = manifestDate(ofPackage: root.package(id)) ?? .distantFuture
         }
         return result
     }
 
-    nonisolated static func scan(root: StorageRoot, ids: [UUID]) async -> [UUID: Scanned] {
+    /// Each manifest's date is taken before it is read, so a write in between leaves the notebook to be read again.
+    /// With `container`, text the index already has comes back as nil.
+    nonisolated static func scan(root: StorageRoot, ids: [UUID], comparingWith container: ModelContainer? = nil) async -> [UUID: Scanned] {
         var result: [UUID: Scanned] = [:]
         for id in ids {
             let package = NotebookPackage(root: root, id: id)
+            var date = manifestDate(ofPackage: package.url)
             guard let load = try? await package.readManifest() else { continue }
-            if load.needsSave, !load.isReadOnly {
-                try? await package.writeManifest(load.manifest)
+            if load.needsSave, !load.isReadOnly, (try? await package.writeManifest(load.manifest)) != nil {
+                date = manifestDate(ofPackage: package.url)
             }
             let issues = await package.quarantinedFiles().count + load.manifest.opaquePages.count
-            result[id] = Scanned(load: load, searchText: searchText(in: package.textDirectory), issues: issues)
+            let text = searchText(in: package.textDirectory)
+            let unchanged = container.map { indexedText(of: id, in: $0) == text } ?? false
+            result[id] = Scanned(load: load, searchText: unchanged ? nil : text, issues: issues, manifestDate: date)
         }
         return result
+    }
+
+    private nonisolated static func indexedText(of id: UUID, in container: ModelContainer) -> String? {
+        var descriptor = FetchDescriptor<NotebookSearchText>(predicate: #Predicate { $0.notebookID == id })
+        descriptor.fetchLimit = 1
+        return try? ModelContext(container).fetch(descriptor).first?.text
     }
 
     nonisolated static func searchText(in directory: URL) -> String {

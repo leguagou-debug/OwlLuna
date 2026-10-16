@@ -21,12 +21,14 @@ struct ShelfView: View {
     let isCovered: Bool
 
     @Environment(LibraryStore.self) private var store
+    @Environment(FlashcardLibrary.self) private var flashcards
     @Environment(\.modelContext) private var context
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.undoManager) private var undoManager
     @Environment(LibraryChangeCenter.self) private var changes
+    @Environment(AppModel.self) private var app: AppModel?
     @Query private var records: [NotebookRecord]
     @Query(sort: \FolderRecord.sortIndex) private var folders: [FolderRecord]
     @AppStorage(SettingsKey.librarySort) private var sort: LibrarySortOrder = .opened
@@ -207,9 +209,9 @@ struct ShelfView: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete All", role: .destructive) { store.deletePermanently(visible) }
         }
-        .notice("Something went wrong", isPresented: Binding(get: { errorMessage != nil || store.lastError != nil },
-                                                             set: { if !$0 { errorMessage = nil; store.clearError() } }),
-                message: Text(errorMessage ?? store.lastError ?? "")) {
+        .notice("Something went wrong", isPresented: Binding(get: { errorMessage != nil || store.lastError != nil || flashcards.lastError != nil },
+                                                             set: { if !$0 { errorMessage = nil; store.clearError(); flashcards.clearError() } }),
+                message: Text(errorMessage ?? store.lastError ?? flashcards.lastError ?? "")) {
             Button("OK", role: .cancel) {}
         }
         .onChange(of: scope) { _, _ in
@@ -527,6 +529,7 @@ struct ShelfView: View {
                     .accessibilityLabel(selection.isEmpty ? String(localized: "Done") : String(localized: "\(selection.count) selected, done"))
             } else {
                 HStack(spacing: Space.x2) {
+                    if let sync = app?.sync, !sync.news.isEmpty { SyncNoticeButton(sync: sync, onOpen: onOpen) }
                     if scope == .trash {
                         Button("Empty") { confirmingEmptyTrash = true }.disabled(visible.isEmpty)
                     } else {
@@ -620,7 +623,7 @@ struct ShelfView: View {
             Button { tagging = record } label: { Label("Tags…", systemImage: "tag") }
             Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
             Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
-            Toggle(isOn: Binding(get: { journalID == record.id.uuidString }, set: { journalID = $0 ? record.id.uuidString : "" })) {
+            Toggle(isOn: Binding(get: { journalID == record.id.uuidString }, set: { store.setDailyJournal($0 ? record.id : nil) })) {
                 Label("Use as Daily Journal", systemImage: "calendar")
             }
             Button { toggleLock(record) } label: {

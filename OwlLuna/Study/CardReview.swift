@@ -98,6 +98,10 @@ struct CardReview: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete Flashcard", role: .destructive, action: deleteCurrent)
         }
+        .notice("Something went wrong", isPresented: Binding(get: { library.lastError != nil }, set: { if !$0 { library.clearError() } }),
+                message: Text(library.lastError ?? "")) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
     // MARK: Header

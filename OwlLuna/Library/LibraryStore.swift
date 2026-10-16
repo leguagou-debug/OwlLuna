@@ -43,10 +43,15 @@ final class LibraryStore {
     @ObservationIgnored var onIndexSaved: (() -> Void)?
     /// Called when the words read from a notebook change.
     @ObservationIgnored var onSearchTextChanged: ((UUID) -> Void)?
+    /// Called with this device's journal when it gave way to one begun earlier on another device.
+    @ObservationIgnored var onJournalSetAside: ((UUID) -> Void)?
+    /// This device's settings, and which notebook it uses as the daily journal.
+    @ObservationIgnored let defaults: UserDefaults
 
-    init(root: StorageRoot, context: ModelContext) {
+    init(root: StorageRoot, context: ModelContext, defaults: UserDefaults = .standard) {
         self.root = root
         self.context = context
+        self.defaults = defaults
     }
 
     func record(_ id: UUID) -> NotebookRecord? {
@@ -102,7 +107,6 @@ final class LibraryStore {
 
     /// A notebook with the default paper from Settings, dated rather than named, created without the sheet.
     func createQuickNote(folder: FolderRecord?) async throws -> UUID {
-        let defaults = UserDefaults.standard
         let template = defaults.string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled
         let color = defaults.string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white
         let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
@@ -115,7 +119,7 @@ final class LibraryStore {
     /// A notebook that opens on a whiteboard, created without the sheet.
     func createWhiteboard(folder: FolderRecord?) async throws -> UUID {
         let starter = NotebookStarter.whiteboard, id = UUID()
-        let size = UserDefaults.standard.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
         return try await createNotebook(id: id, title: starter.notebookTitle, cover: starter.spec(for: id),
                                         defaults: PageDefaults(template: starter.template, paperColor: starter.paperColor, pageSize: size),
                                         folder: folder, startsWithBoard: true)
@@ -170,13 +174,17 @@ final class LibraryStore {
         let source = root.package(sourceID)
         let copy = try await assemble(newID) { package in
             let destination = package.url
-            try await Task.detached(priority: .userInitiated) { try FileManager.default.copyItem(at: source, to: destination) }.value
+            try await Task.detached(priority: .userInitiated) {
+                try FileManager.default.copyItem(at: source, to: destination)
+                try CardFiles.renew(in: destination)
+            }.value
             return try await package.updateManifest { manifest in
                 manifest.id = newID
                 manifest.title = String(localized: "\(manifest.title) Copy")
                 manifest.createdAt = .now
                 manifest.modifiedAt = .now
                 manifest.library.isFavorite = false
+                manifest.library.isJournal = false
                 manifest.library.lastOpenedAt = nil
             }
         }
@@ -235,7 +243,9 @@ final class LibraryStore {
     }
 
     func restore(_ records: [NotebookRecord]) {
+        let journal = records.contains(where: \.isJournal)
         changeLibraryState(records, index: { $0.deletedAt = nil }) { $0.deletedAt = nil }
+        if journal { Task { await settleJournal() } }
     }
 
     func move(_ records: [NotebookRecord], to folder: FolderRecord?) {
@@ -357,8 +367,9 @@ final class LibraryStore {
         let write = Task {
             await previous?.value
             await registry.whenReleased(id)
+            var written: NotebookManifest?
             do {
-                _ = try await package.updateManifest(change)
+                written = try await package.updateManifest(change)
             } catch {
                 lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
                 log.error("manifest update failed for \(id): \(error.localizedDescription)")
@@ -369,6 +380,8 @@ final class LibraryStore {
             if changesInFlight[id]?.isEmpty == true {
                 changesInFlight[id] = nil
                 manifestWrites[id] = nil
+                // The last write holds every change: the record takes it and its date, so the next launch doesn't read it again.
+                if let written, record(id) != nil, registry.document(for: id) == nil, !registry.isOpening(id) { index(written) }
             }
         }
         manifestWrites[id] = write
@@ -534,7 +547,8 @@ final class LibraryStore {
 
     // MARK: Index
 
-    /// Mirrors a manifest into the index, saving only when something the library shows changed.
+    /// Mirrors a manifest just written to disk into the index, saving only when something the library shows changed.
+    /// The record keeps the file's date, so a refresh knows it has already read it.
     func index(_ manifest: NotebookManifest) {
         let existing = self.record(manifest.id)
         let record = existing ?? {
@@ -550,7 +564,14 @@ final class LibraryStore {
             record.folder = folderID.flatMap { id in try? context.fetch(FetchDescriptor<FolderRecord>(predicate: #Predicate { $0.id == id })).first }
             changed = true
         }
-        if changed { saveIndex() }
+        let date = LibraryIndex.manifestDate(ofPackage: root.package(manifest.id))
+        let redated = record.manifestDate != date
+        if redated { record.manifestDate = date }
+        if changed {
+            saveIndex()
+        } else if redated {
+            do { try context.save() } catch { log.error("index save failed: \(error.localizedDescription)") }
+        }
     }
 
     /// Recognises handwriting and PDF text for pages whose text is out of date, in the background.
@@ -575,30 +596,95 @@ final class LibraryStore {
 
     // MARK: Daily journal
 
-    /// Nil once the journal has been deleted or moved to the bin.
+    /// Which notebook is the journal is marked in its manifest, which every device that syncs goes by; `settleJournal`
+    /// keeps this device's own note of it in step. Nil once the journal has been deleted or moved to the bin.
     var dailyJournal: NotebookRecord? {
-        guard let id = UserDefaults.standard.string(forKey: SettingsKey.dailyJournalID).flatMap(UUID.init(uuidString:)),
+        guard let id = defaults.string(forKey: SettingsKey.dailyJournalID).flatMap(UUID.init(uuidString:)),
               let journal = record(id), !journal.isTrashed else { return nil }
         return journal
     }
 
+    /// What ⌘T, the Today widget, the Control Center button and Siri open: the journal, started first if there isn't one.
+    func journalForToday() async throws -> UUID {
+        if let journal = dailyJournal { return journal.id }
+        return try await createDailyJournal()
+    }
+
     @discardableResult
     func createDailyJournal(id: UUID = UUID(), now: Date = .now, calendar: Calendar = .current) async throws -> UUID {
-        let size = UserDefaults.standard.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
-        let defaults = PageDefaults(template: NotebookStarter.journal.template, paperColor: NotebookStarter.journal.paperColor, pageSize: size)
-        var page = defaults.newPage()
+        let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let paper = PageDefaults(template: NotebookStarter.journal.template, paperColor: NotebookStarter.journal.paperColor, pageSize: size)
+        var page = paper.newPage()
         page.day = DailyJournal.dayKey(for: now, calendar: calendar)
         DailyJournal.print(await Agenda.forJournal(now: now, calendar: calendar), on: &page)
         var manifest = NotebookManifest(id: id, title: NotebookStarter.journal.title, createdAt: now,
-                                        cover: NotebookStarter.journal.spec(for: id), defaults: defaults, pages: [page])
+                                        cover: NotebookStarter.journal.spec(for: id), defaults: paper, pages: [page])
         manifest.library.lastOpenedAt = now
+        manifest.library.isJournal = true
+        manifest.library.setChangedAt(now, for: .journal)
         try await assemble(id) { package in
             try await package.create(manifest)
             return manifest
         }
         index(manifest)
-        UserDefaults.standard.set(id.uuidString, forKey: SettingsKey.dailyJournalID)
+        setDailyJournal(id)
         return id
+    }
+
+    /// Makes a notebook the daily journal on every device that syncs, or stops using one: the mark goes in its
+    /// manifest and comes off any other.
+    func setDailyJournal(_ id: UUID?) {
+        let others = journalMarks().filter { $0.id != id }
+        if !others.isEmpty { changeLibraryState(others, index: { $0.isJournal = false }) { $0.isJournal = false } }
+        if let record = id.flatMap(record), !record.isJournal {
+            changeLibraryState([record], index: { $0.isJournal = true }) { $0.isJournal = true }
+        }
+        if let id { defaults.set(id.uuidString, forKey: SettingsKey.dailyJournalID) } else { defaults.removeObject(forKey: SettingsKey.dailyJournalID) }
+    }
+
+    private func journalMarks() -> [NotebookRecord] {
+        (try? context.fetch(FetchDescriptor<NotebookRecord>(predicate: #Predicate { $0.isJournal == true }))) ?? []
+    }
+
+    /// Brings this device's journal into step with the marks a sync or a restore brought in. A device without one takes
+    /// the one marked. Where two are marked, as when two devices each started one before they synced, the one begun
+    /// first is the journal everywhere and the other stays as an ordinary notebook: nothing is merged or deleted. Returns
+    /// this device's own journal when it was the one that gave way; it is renamed if it shares the other's title.
+    @discardableResult
+    func settleJournal() async -> UUID? {
+        let chosenID = defaults.string(forKey: SettingsKey.dailyJournalID).flatMap(UUID.init(uuidString:))
+        var givenUp = false
+        if let chosenID, let chosen = record(chosenID), !chosen.isJournal, !chosen.isReadOnly {
+            let package = root.package(chosenID)
+            let filing = await Task.detached(priority: .userInitiated) { LibrarySync.filing(ofPackage: package) }.value
+            if let filing, !filing.isJournal, let chosen = record(chosenID), !chosen.isJournal {
+                // Never stamped, it was chosen before journals were marked: marked now, so the other devices hear of it.
+                // Stamped, the mark was taken off on another device.
+                if filing.changedAt(.journal) == nil {
+                    changeLibraryState([chosen], index: { $0.isJournal = true }) { $0.isJournal = true }
+                } else {
+                    givenUp = true
+                }
+            }
+        }
+        let chosen = chosenID.flatMap(record)
+        let marked = journalMarks()
+        guard let journal = marked.filter({ !$0.isTrashed }).min(by: { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }) else {
+            if givenUp { defaults.removeObject(forKey: SettingsKey.dailyJournalID) }
+            return nil
+        }
+        var setAside: UUID?
+        if let chosen, chosen.id != journal.id, chosen.isJournal, !chosen.isTrashed {
+            if chosen.title.localizedCaseInsensitiveCompare(journal.title) == .orderedSame {
+                rename(chosen, to: String(localized: "\(chosen.title) (started \(chosen.createdAt.formatted(date: .abbreviated, time: .omitted)))"))
+            }
+            setAside = chosen.id
+        }
+        let others = marked.filter { $0.id != journal.id }
+        if !others.isEmpty { changeLibraryState(others, index: { $0.isJournal = false }) { $0.isJournal = false } }
+        if chosenID != journal.id { defaults.set(journal.id.uuidString, forKey: SettingsKey.dailyJournalID) }
+        if let setAside { onJournalSetAside?(setAside) }
+        return setAside
     }
 
     /// Nil for read-only notebooks and ones still opening, which then open at their saved page.
@@ -646,9 +732,16 @@ extension LibraryStore {
         await smartShelfWrite?.value
     }
 
-    /// Saves what is open, then writes the whole library into one file.
+    /// Waits for changes to closed notebooks still being written to their manifests.
+    func finishWritingNotebooks() async {
+        for write in Array(manifestWrites.values) { await write.value }
+    }
+
+    /// Saves what is open, then writes the whole library into one file. Refused while an open notebook can't be saved.
     func makeBackup() async throws -> URL {
-        for document in DocumentRegistry.shared.openDocuments { await document.flush() }
+        var unsaved: [String] = []
+        for document in DocumentRegistry.shared.openDocuments where !(await document.flush()) { unsaved.append(document.title) }
+        guard unsaved.isEmpty else { throw LibraryBackup.Failure.unsaved(unsaved) }
         await finishWritingShelves()
         let root = root, journal = dailyJournal?.id, holdsLocked = hasLockedNotebooks
         let url = try await Task.detached(priority: .userInitiated) { try LibraryBackup.create(root: root, journal: journal) }.value
@@ -669,20 +762,23 @@ extension LibraryStore {
     }
 
     /// Notebooks, folders or stickers were changed on disk by something other than this store (a sync): read them again.
-    func reloadFromDisk() async {
+    /// The notebooks `report` brought in are read whatever their dates say; any other only if its manifest changed.
+    func reloadFromDisk(after report: SyncReport? = nil) async {
         await folderWrite?.value
         // A change still waiting to be written goes in first, or the index would take the file from before it.
-        for write in Array(manifestWrites.values) { await write.value }
-        await LibraryIndex.refresh(root: root, context: context, full: true)
+        await finishWritingNotebooks()
+        let named = report.map { Set($0.pulled + $0.stateReceived + $0.conflictCopies) } ?? []
+        await LibraryIndex.refresh(root: root, context: context, rescanning: named)
         await loadSmartShelves()
         searchVersion &+= 1
         indexVersion &+= 1
+        await settleJournal()
     }
 
     /// Adds a backup's notebooks, folders and stickers to the library, then brings the index up to date.
     func restoreBackup(from url: URL) async throws -> LibraryBackup.Summary {
         await finishWritingShelves()
-        let root = root, keepsHistory = UserDefaults.standard.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true
+        let root = root, keepsHistory = defaults.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true
         let summary = try await Task.detached(priority: .userInitiated) {
             try await LibraryBackup.restore(from: url, into: root, keepsHistory: keepsHistory)
         }.value
@@ -690,9 +786,9 @@ extension LibraryStore {
         await loadSmartShelves()
         searchVersion &+= 1
         indexVersion &+= 1
-        if dailyJournal == nil, let journal = summary.journal, record(journal) != nil {
-            UserDefaults.standard.set(journal.uuidString, forKey: SettingsKey.dailyJournalID)
-        }
+        // The library keeps the journal it has, or else takes the backup's, and only that one stays marked.
+        if let journal = dailyJournal?.id ?? summary.journal.flatMap({ record($0) == nil ? nil : $0 }) { setDailyJournal(journal) }
+        await settleJournal()
         return summary
     }
 }

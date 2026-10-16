@@ -361,7 +361,7 @@ enum StudySeed {
         let cards = [Flashcard(front: CardSide(text: "What makes ATP?"), back: CardSide(text: "Mitochondria"), pageID: page.id),
                      Flashcard(front: CardSide(text: "What do ribosomes build?"), back: CardSide(text: "Proteins, from amino acids"), pageID: page.id),
                      later]
-        try? CardFiles.write(cards, to: package.url)
+        try? CardFiles.write(CardFiles.Deck(cards: cards), to: package.url)
     }
 }
 

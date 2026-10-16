@@ -26,9 +26,16 @@ final class SyncCenter {
     private(set) var availability = Availability.checking
     private(set) var question: Question?
     private(set) var isSyncing = false
-    private(set) var lastSynced: Date?
+    /// When a pass last finished, kept across launches.
+    private(set) var lastSynced: Date? {
+        didSet { defaults.set(lastSynced, forKey: SettingsKey.lastSynced) }
+    }
     private(set) var lastError: String?
     private(set) var lastReport: SyncReport?
+    /// What iCloud still has to upload from the synced copy, as last looked at.
+    private(set) var uploads = CloudUploads()
+    /// What the library shows about sync: failures, and conflicted copies made since it was last put away.
+    private(set) var news = SyncNews()
     /// The switch in Settings. It can be set while iCloud is unavailable, and takes effect once it isn't.
     var isEnabled: Bool {
         didSet {
@@ -58,7 +65,20 @@ final class SyncCenter {
     @ObservationIgnored private var wantsAnotherPass = false
     @ObservationIgnored private var running: Task<SyncReport, Error>?
     @ObservationIgnored private var reviewing = 0
+    @ObservationIgnored private var uploadCheck: Task<Void, Never>?
+    @ObservationIgnored private var stopped: String?
+    /// Conflicted copies the library hasn't shown yet, kept across launches so a quit doesn't lose them.
+    @ObservationIgnored private var newCopies: [UUID] = [] {
+        didSet { defaults.set(newCopies.map(\.uuidString), forKey: SettingsKey.syncConflictCopies) }
+    }
+    /// This device's journals that gave way to one begun earlier on another device, not yet shown.
+    @ObservationIgnored private var setAsideJournals: [UUID] = [] {
+        didSet { defaults.set(setAsideJournals.map(\.uuidString), forKey: SettingsKey.syncSetAsideJournals) }
+    }
+    @ObservationIgnored private var putAway = SyncNews()
     @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "sync")
+    /// Reads what iCloud has still to upload. A test stands in for iCloud here.
+    @ObservationIgnored var readUploads: @Sendable (CloudFolder) -> CloudUploads = { $0.isUbiquitous ? CloudUploads.read($0) : CloudUploads() }
     /// Called after a sync that changed the library on this device, so the index can be brought up to date. A pass
     /// that stopped part-way is reported too, with what it had done by then.
     @ObservationIgnored var onLibraryChanged: (@MainActor (SyncReport) async -> Void)?
@@ -75,6 +95,18 @@ final class SyncCenter {
         // A device that synced before there was a question to answer has already been syncing: it carries on.
         hadSynced = FileManager.default.fileExists(atPath: SyncState.file(root).path(percentEncoded: false))
         isEnabled = defaults.object(forKey: SettingsKey.syncsWithICloud) == nil ? hadSynced : defaults.bool(forKey: SettingsKey.syncsWithICloud)
+        lastSynced = defaults.object(forKey: SettingsKey.lastSynced) as? Date
+        newCopies = defaults.stringArray(forKey: SettingsKey.syncConflictCopies)?.compactMap(UUID.init(uuidString:)) ?? []
+        setAsideJournals = defaults.stringArray(forKey: SettingsKey.syncSetAsideJournals)?.compactMap(UUID.init(uuidString:)) ?? []
+        news.conflictCopies = newCopies
+        news.journals = setAsideJournals
+    }
+
+    /// The library settled two journals that met, and this device's gave way: the notice says so until it is put away.
+    func noteJournalSetAside(_ id: UUID) {
+        guard !setAsideJournals.contains(id) else { return }
+        setAsideJournals.append(id)
+        refreshNews()
     }
 
     private var isDecided: Bool { hadSynced || defaults.object(forKey: SettingsKey.syncsWithICloud) != nil }
@@ -95,14 +127,14 @@ final class SyncCenter {
     func resolve() async {
         #if DEBUG
         if let name = LaunchOptions.value("-cloudFolder") {
-            let url = URL.applicationSupportDirectory.appending(path: "UITesting/cloud-\(name)", directoryHint: .isDirectory)
+            guard let url = LaunchOptions.testFolder(named: "cloud-\(name)") else { preconditionFailure("-cloudFolder takes a plain folder name, not \(name)") }
             if LaunchOptions.arguments.contains("-resetCloud") { try? FileManager.default.removeItem(at: url) }
             return await use(CloudFolder(url: url), account: LaunchOptions.value("-cloudAccount"))
         }
         #endif
         let signedOut = String(localized: "iCloud isn't available. Sign in to iCloud and turn on iCloud Drive in Settings; this copy of OwlLuna also has to be built with the iCloud capability.")
         // A test's storage root never syncs with real iCloud.
-        guard LaunchOptions.value("-storageRoot") == nil else { return leave(signedOut) }
+        guard !LaunchOptions.usesTestStorage else { return leave(signedOut) }
         if identityObserver == nil {
             identityObserver = NotificationCenter.default.addObserver(forName: .NSUbiquityIdentityDidChange, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.identityChanged() }
@@ -226,12 +258,15 @@ final class SyncCenter {
                 lastReport = done
                 lastSynced = .now
                 lastError = nil
+                stopped = nil
             }
+            newCopies += done?.conflictCopies ?? []
             // What a pass did before it stopped is on disk all the same, so the library hears of that as well.
             if let done, done.changedHere { await onLibraryChanged?(done) }
             switch failure {
             case nil:
                 if let done { await onSynced?(done) }
+                await checkUploads()
             case is CancellationError:
                 // Stopped part-way because sync was turned off or the copy moved. Whoever stopped it decides what follows.
                 break
@@ -239,8 +274,11 @@ final class SyncCenter {
                 identityChanged()
             case let error?:
                 lastError = error.localizedDescription
+                // Waiting for iCloud to finish a download isn't something the library needs to hear about.
+                stopped = error as? SyncError == .stillArriving ? nil : error.localizedDescription
                 log.error("sync failed: \(error.localizedDescription)")
             }
+            refreshNews()
         } while wantsAnotherPass
         if canSync { startWatching() }
     }
@@ -260,12 +298,14 @@ final class SyncCenter {
         return try await task.value
     }
 
-    /// Notebooks arriving from another device show up as changes to the container's files.
+    /// Notebooks, flashcards and stickers arriving from another device show up as changes to the container's files.
     private func startWatching() {
         guard query == nil, cloud?.isUbiquitous == true else { return }
         let query = NSMetadataQuery()
         query.searchScopes = [NSMetadataQueryUbiquitousDataScope]
-        query.predicate = NSPredicate(format: "%K == %@", NSMetadataItemFSNameKey, "manifest.json")
+        // Ink and pictures too, since a pull waits for files that come down after the manifest, and the package as one item, as iCloud may list it.
+        let kinds = ["*.\(StorageRoot.packageExtension)", "*.pkdrawing", "*.png", "*.jpg", "*.pdf"].map { NSPredicate(format: "%K LIKE %@", NSMetadataItemFSNameKey, $0) }
+        query.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [NSPredicate(format: "%K IN %@", NSMetadataItemFSNameKey, ["manifest.json", "cards.json"])] + kinds)
         for name in [Notification.Name.NSMetadataQueryDidUpdate, .NSMetadataQueryDidFinishGathering] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: query, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.schedule() }
@@ -275,10 +315,66 @@ final class SyncCenter {
         self.query = query
     }
 
+    /// Looks at what iCloud still has to upload, and again a little later while anything is left.
+    private func checkUploads() async {
+        uploadCheck?.cancel()
+        guard let cloud else { return }
+        let read = readUploads
+        uploads = await Task.detached(priority: .utility) { read(cloud) }.value
+        refreshNews()
+        guard !uploads.isClear else { return }
+        uploadCheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            await self?.checkUploads()
+        }
+    }
+
+    /// Whether the last pass finished with nothing left behind, and iCloud holds everything it sent.
+    var isUpToDate: Bool {
+        lastError == nil && lastReport?.waiting.isEmpty == true && uploads.isClear
+    }
+
+    /// "15 Oct, 14:05": the day as well as the time, since the last sync may be days ago.
+    nonisolated static func formatted(_ date: Date, now: Date = .now) -> String {
+        let style = Date.FormatStyle.dateTime.day().month(.abbreviated).hour().minute()
+        return date.formatted(Calendar.current.isDate(date, equalTo: now, toGranularity: .year) ? style : style.year())
+    }
+
+    /// The Settings line for the last pass: what it did, what it left, and what iCloud still has to upload.
+    var status: String? {
+        guard let lastReport else { return nil }
+        let parts = lastReport.parts + uploads.parts
+        return parts.isEmpty ? String(localized: "Everything is up to date") : parts.joined(separator: ", ")
+    }
+
+    /// What is shown now, less what was put away and hasn't changed since.
+    private func refreshNews() {
+        let failed = lastReport?.failed ?? []
+        putAway.failed.removeAll { !failed.contains($0) }
+        if putAway.uploadProblem != uploads.problem { putAway.uploadProblem = nil }
+        if putAway.stopped != stopped { putAway.stopped = nil }
+        let fresh = SyncNews(failed: failed.filter { !putAway.failed.contains($0) }, conflictCopies: newCopies, journals: setAsideJournals,
+                             uploadProblem: uploads.problem == putAway.uploadProblem ? nil : uploads.problem,
+                             stopped: stopped == putAway.stopped ? nil : stopped)
+        if fresh != news { news = fresh }
+    }
+
+    /// The library's notice was closed: what it said stays away until it changes.
+    func putAwayNews() {
+        putAway.failed += news.failed
+        putAway.uploadProblem = uploads.problem
+        putAway.stopped = stopped
+        newCopies = []
+        setAsideJournals = []
+        refreshNews()
+    }
+
     /// Stops watching the container, and a pass that is part-way.
     private func halt() {
         pending?.cancel()
         running?.cancel()
+        uploadCheck?.cancel()
         query?.stop()
         query = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -323,16 +419,143 @@ enum SyncQuestion {
 }
 
 extension SyncReport {
-    /// "3 notebooks sent, 1 received." for the Settings row. A notebook whose lock or folder alone was carried counts too.
-    var summary: String {
+    /// What the pass did and left, a phrase each, a notebook whose lock, folder or cards alone went counted too.
+    var parts: [String] {
         var parts: [String] = []
-        let sent = Set(pushed).union(stateSent).count, received = Set(pulled).union(stateReceived).count
+        let sent = Set(pushed).union(stateSent).union(cardsSent).count, received = Set(pulled).union(stateReceived).union(cardsReceived).count
         let deletions = removedHere.count + removedThere.count
         if sent > 0 { parts.append(String(localized: "\(sent) notebooks sent")) }
         if received > 0 { parts.append(String(localized: "\(received) notebooks received")) }
         if deletions > 0 { parts.append(String(localized: "\(deletions) deletions carried over")) }
         if conflictCopies.count > 0 { parts.append(String(localized: "\(conflictCopies.count) conflicted copies kept")) }
-        if waiting.count > 0 { parts.append(String(localized: "\(waiting.count) notebooks waiting until they're closed")) }
-        return parts.isEmpty ? String(localized: "Everything is up to date") : parts.joined(separator: ", ")
+        if open.count > 0 { parts.append(String(localized: "\(open.count) notebooks waiting until they're closed")) }
+        if arriving.count > 0 { parts.append(String(localized: "\(arriving.count) notebooks still downloading from iCloud")) }
+        if failed.count > 0 { parts.append(String(localized: "\(failed.count) notebooks didn't sync")) }
+        return parts
+    }
+
+    var summary: String { parts.isEmpty ? String(localized: "Everything is up to date") : parts.joined(separator: ", ") }
+}
+
+extension SyncFailure.Reason {
+    var message: String {
+        switch self {
+        case .noRoom: String(localized: "There isn't enough room on this iPad.")
+        case .unreadable(inICloud: true): String(localized: "Its copy in iCloud can't be read.")
+        case .unreadable(inICloud: false): String(localized: "Its copy on this iPad can't be read.")
+        case .newerVersion: String(localized: "It was saved by a newer version of OwlLuna. Update OwlLuna on this iPad to sync it.")
+        case .coordination(let detail): String(localized: "iCloud Drive didn't let OwlLuna reach its files: \(detail)")
+        case .other(let detail): detail
+        }
+    }
+}
+
+/// What iCloud still has to upload from the synced copy, and what is stopping it.
+struct CloudUploads: Sendable, Equatable {
+    enum Problem: Sendable, Equatable {
+        case full
+        case unreachable
+        case other(String)
+
+        var message: String {
+            switch self {
+            case .full:
+                String(localized: "Your iCloud storage is full, so changes made on this iPad can't be uploaded. Free up space, or choose a bigger plan in Settings › your name › iCloud.")
+            case .unreachable: String(localized: "iCloud can't be reached right now. Changes made on this iPad will upload when it's back.")
+            case .other(let detail): String(localized: "iCloud couldn't upload some files: \(detail)")
+            }
+        }
+    }
+
+    /// Notebooks with a file iCloud hasn't uploaded yet.
+    var pending: Set<UUID> = []
+    /// Folders, stickers or deletions iCloud hasn't uploaded yet.
+    var othersPending = false
+    var problem: Problem?
+
+    var isClear: Bool { pending.isEmpty && !othersPending && problem == nil }
+
+    var parts: [String] {
+        if !pending.isEmpty {
+            return [problem == nil ? String(localized: "\(pending.count) notebooks still uploading to iCloud")
+                                   : String(localized: "\(pending.count) notebooks not uploaded to iCloud")]
+        }
+        return othersPending ? [String(localized: "Still uploading to iCloud")] : []
+    }
+
+    /// Looks at every file in the synced copy. `values` stands in for iCloud's word on one file in tests.
+    static func read(_ cloud: CloudFolder, values: (URL) -> (uploaded: Bool?, error: (any Error)?) = uploadValues) -> CloudUploads {
+        var result = CloudUploads()
+        let base = cloud.url.standardizedFileURL.path(percentEncoded: false)
+        let keys: [URLResourceKey] = [.isRegularFileKey, .ubiquitousItemIsUploadedKey, .ubiquitousItemUploadingErrorKey]
+        let enumerator = FileManager.default.enumerator(at: cloud.url, includingPropertiesForKeys: keys)
+        while let url = enumerator?.nextObject() as? URL {
+            let name = url.lastPathComponent
+            // A placeholder stands for a file that is in iCloud already; an upload under way is assembled before it counts.
+            if name.hasSuffix(".icloud") || name.hasSuffix(".part") || name.hasSuffix(".\(CloudFolder.uploadExtension)") {
+                enumerator?.skipDescendants()
+                continue
+            }
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
+            let (uploaded, error) = values(url)
+            if let error { result.problem = worse(result.problem, Problem(error)) }
+            guard uploaded == false || error != nil else { continue }
+            let path = url.standardizedFileURL.path(percentEncoded: false).dropFirst(base.count).split(separator: "/")
+            if path.count > 2, path[0] == "Library", path[1].hasSuffix(".\(StorageRoot.packageExtension)"),
+               let id = UUID(uuidString: String(path[1].dropLast(StorageRoot.packageExtension.count + 1))) {
+                result.pending.insert(id)
+            } else {
+                result.othersPending = true
+            }
+        }
+        return result
+    }
+
+    static func uploadValues(_ url: URL) -> (uploaded: Bool?, error: (any Error)?) {
+        let values = try? url.resourceValues(forKeys: [.ubiquitousItemIsUploadedKey, .ubiquitousItemUploadingErrorKey])
+        return (values?.ubiquitousItemIsUploaded, values?.ubiquitousItemUploadingError)
+    }
+
+    private static func worse(_ a: Problem?, _ b: Problem) -> Problem {
+        switch (a, b) {
+        case (.full?, _), (_, .full): .full
+        case (.unreachable?, _), (_, .unreachable): .unreachable
+        default: a ?? b
+        }
+    }
+}
+
+extension CloudUploads.Problem {
+    init(_ error: any Error) {
+        let error = error as NSError
+        switch (error.domain, error.code) {
+        case (NSCocoaErrorDomain, NSUbiquitousFileNotUploadedDueToQuotaError): self = .full
+        case (NSCocoaErrorDomain, NSUbiquitousFileUbiquityServerNotAvailable): self = .unreachable
+        default: self = .other(error.localizedDescription)
+        }
+    }
+}
+
+/// What the library shows about sync until it is put away.
+struct SyncNews: Equatable {
+    var failed: [SyncFailure] = []
+    /// Conflicted copies made since the notice was last put away.
+    var conflictCopies: [UUID] = []
+    /// This device's journals that gave way to one begun earlier on another device.
+    var journals: [UUID] = []
+    var uploadProblem: CloudUploads.Problem?
+    /// Why the last pass stopped part-way.
+    var stopped: String?
+
+    var isEmpty: Bool { failed.isEmpty && conflictCopies.isEmpty && journals.isEmpty && uploadProblem == nil && stopped == nil }
+    /// Something went wrong, as opposed to a conflicted copy, which is only worth knowing about.
+    var isTrouble: Bool { !failed.isEmpty || uploadProblem != nil || stopped != nil }
+    var count: Int { failed.count + conflictCopies.count + journals.count + (uploadProblem == nil ? 0 : 1) + (stopped == nil ? 0 : 1) }
+
+    func keeping(copies kept: (UUID) -> Bool) -> SyncNews {
+        var news = self
+        news.conflictCopies.removeAll { !kept($0) }
+        news.journals.removeAll { !kept($0) }
+        return news
     }
 }

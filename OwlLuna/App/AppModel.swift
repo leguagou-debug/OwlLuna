@@ -18,6 +18,7 @@ final class AppModel {
     let sync: SyncCenter
     let spotlight: SpotlightIndexer
     private let trash: TrashPurge
+    private let shortcutParameters = ShortcutParameters()
     private(set) var phase: Phase = .starting
     /// Set by a shortcut; the front window's library takes it and carries it out.
     var pendingAction: AppAction?
@@ -44,8 +45,8 @@ final class AppModel {
         sync.take = { DocumentRegistry.shared.take($0) }
         sync.release = { DocumentRegistry.shared.release($0) }
         // What a sync brought in (a lock, a deletion) reaches Spotlight and the widgets as a change made here would.
-        sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] _ in
-            await library.reloadFromDisk()
+        sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] report in
+            await library.reloadFromDisk(after: report)
             await flashcards.load()
             spotlight.schedule(library, after: .zero)
             if let self { await WidgetBridge.update(self) }
@@ -56,6 +57,8 @@ final class AppModel {
             if let library { spotlight.schedule(library) }
         }
         library.onSearchTextChanged = { [spotlight] in spotlight.noteTextChanged($0) }
+        library.onJournalSetAside = { [sync] in sync.noteJournalSetAside($0) }
+        flashcards.onSaved = { [sync] in sync.schedule() }
     }
 
     /// A Control Center button was pressed: what it asked for becomes the pending action.
@@ -98,11 +101,13 @@ final class AppModel {
         let indexSchema = UserDefaults.standard.integer(forKey: SettingsKey.indexSchema)
         await LibraryIndex.refresh(root: root, context: container.mainContext, full: indexWasRecovered || indexSchema < LibraryIndex.schemaNumber)
         if indexSchema != LibraryIndex.schemaNumber { UserDefaults.standard.set(LibraryIndex.schemaNumber, forKey: SettingsKey.indexSchema) }
+        await library.settleJournal()
         await library.loadSmartShelves()
         await activity.load()
         await flashcards.load()
         phase = .ready
         spotlight.schedule(library)
+        shortcutParameters.start(library)
         Task {
             await sweep.value
             await sync.resolve()
@@ -133,7 +138,9 @@ final class AppModel {
     }
 }
 
+/// Test-only launch arguments. A Release build reads none of them.
 enum LaunchOptions {
+    #if DEBUG
     static let arguments = ProcessInfo.processInfo.arguments
 
     static func value(_ key: String) -> String? {
@@ -141,12 +148,27 @@ enum LaunchOptions {
         return arguments[index + 1]
     }
 
+    /// UI-test libraries never reach the widgets, Spotlight or iCloud.
+    static let usesTestStorage = value("-storageRoot") != nil
+
     /// `-storageRoot <name>` keeps UI tests in their own folder; `-resetStorage` empties it first.
     static let storageRoot: StorageRoot = {
         guard let name = value("-storageRoot") else { return .live }
-        let url = URL.applicationSupportDirectory.appending(path: "UITesting/\(name)", directoryHint: .isDirectory)
+        guard let url = testFolder(named: name) else { preconditionFailure("-storageRoot takes a plain folder name, not \(name)") }
         if arguments.contains("-resetStorage") { try? FileManager.default.removeItem(at: url) }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return StorageRoot(url: url)
     }()
+
+    static let testingDirectory = URL.applicationSupportDirectory.appending(path: "UITesting", directoryHint: .isDirectory)
+
+    /// The folder a test names for itself, always directly inside `base`; nil for a name that could reach anywhere else.
+    static func testFolder(named name: String, in base: URL = testingDirectory) -> URL? {
+        guard !name.isEmpty, name != ".", !name.contains(".."), !name.contains("/") else { return nil }
+        return base.appending(path: name, directoryHint: .isDirectory)
+    }
+    #else
+    static let usesTestStorage = false
+    static let storageRoot = StorageRoot.live
+    #endif
 }

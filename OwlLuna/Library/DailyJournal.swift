@@ -102,6 +102,7 @@ enum DailyJournal {
                                         cover: NotebookStarter.journal.spec(for: id), defaults: paper, pages: pages)
         manifest.modifiedAt = days[days.count - 1]
         manifest.library.currentPage = pages.count - 1
+        manifest.library.isJournal = true
         let package = NotebookPackage(root: root, id: id)
         do {
             try await package.create(manifest)

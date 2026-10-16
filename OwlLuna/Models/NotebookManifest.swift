@@ -146,9 +146,15 @@ extension LibraryState {
         set { extra["locked"] = newValue ? .bool(true) : nil }
     }
 
+    /// The daily journal, marked in its own manifest so that every device that syncs uses the same one. Older builds keep it as an unknown key.
+    var isJournal: Bool {
+        get { extra["journal"]?.boolValue ?? false }
+        set { extra["journal"] = newValue ? .bool(true) : nil }
+    }
+
     /// What follows a notebook to other devices without counting as writing in it.
     enum Filing: String, CaseIterable, Sendable {
-        case favorite, locked, folder, tags, deleted
+        case favorite, locked, folder, tags, deleted, journal
     }
 
     /// When each of those was last changed here. Sync settles them one by one and apart from the pages, so a lock is
@@ -169,6 +175,7 @@ extension LibraryState {
         case .locked: isLocked == other.isLocked
         case .folder: folderID == other.folderID
         case .tags: tags == other.tags
+        case .journal: isJournal == other.isJournal
         case .deleted:
             // Dates are kept to the millisecond.
             if let deletedAt, let theirs = other.deletedAt { abs(deletedAt.timeIntervalSince(theirs)) < 0.0005 } else { deletedAt == other.deletedAt }

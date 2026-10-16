@@ -87,6 +87,16 @@ final class StorageTests: XCTestCase {
         try? FileManager.default.createDirectory(at: root.library, withIntermediateDirectories: true)
         XCTAssertEqual(root.adoptLegacyPackages(), [])
     }
+
+    /// `-storageRoot` names one folder inside the test area, so `-resetStorage` can't delete anything outside it.
+    func testATestStorageNameStaysInsideTheTestArea() {
+        let base = URL(filePath: "/tmp/UITesting", directoryHint: .isDirectory)
+        XCTAssertEqual(LaunchOptions.testFolder(named: "whiteboard", in: base)?.path(percentEncoded: false), "/tmp/UITesting/whiteboard/")
+        for name in ["..", "a/b", "", "/tmp/elsewhere", ".", "../..", "notes/../.."] {
+            XCTAssertNil(LaunchOptions.testFolder(named: name, in: base), "\"\(name)\" is turned away")
+        }
+        XCTAssertEqual(LaunchOptions.testingDirectory.lastPathComponent, "UITesting")
+    }
 }
 
 final class ManifestCodecTests: XCTestCase {

@@ -86,6 +86,10 @@ struct StudyGuideSheet: View {
             savedCards = false
             write()
         }
+        .notice("Something went wrong", isPresented: Binding(get: { library.lastError != nil }, set: { if !$0 { library.clearError() } }),
+                message: Text(library.lastError ?? "")) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
     // MARK: What to read

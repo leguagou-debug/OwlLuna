@@ -37,7 +37,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
     private let log = Logger(subsystem: "com.owais.OwlLuna", category: "spotlight")
 
     /// UI-test libraries never reach Spotlight.
-    init(container: ModelContainer, isLive: Bool = LaunchOptions.value("-storageRoot") == nil) {
+    init(container: ModelContainer, isLive: Bool = !LaunchOptions.usesTestStorage) {
         self.container = container
         self.isLive = isLive && CSSearchableIndex.isIndexingAvailable()
         super.init()

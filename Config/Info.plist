@@ -43,6 +43,24 @@
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
+				<string>com.apple.package</string>
+				<string>public.composite-content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>OwlLuna notebook</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.owais.owlluna.notebook</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>owlluna</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>

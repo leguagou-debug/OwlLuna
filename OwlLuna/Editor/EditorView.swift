@@ -899,9 +899,9 @@ fileprivate struct EditorContent: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { document.rename(titleText) }
         }
-        .notice("Something went wrong", isPresented: Binding(get: { errorMessage != nil || session.recorder.errorMessage != nil },
-                                                             set: { if !$0 { errorMessage = nil; session.recorder.errorMessage = nil } }),
-                message: Text(errorMessage ?? session.recorder.errorMessage ?? "")) {
+        .notice("Something went wrong", isPresented: Binding(get: { errorMessage != nil || session.recorder.errorMessage != nil || flashcards.lastError != nil },
+                                                             set: { if !$0 { errorMessage = nil; session.recorder.errorMessage = nil; flashcards.clearError() } }),
+                message: Text(errorMessage ?? session.recorder.errorMessage ?? flashcards.lastError ?? "")) {
             Button("OK", role: .cancel) {}
         }
         .onChange(of: isPresentingModal) { _, presenting in session.canvas?.setModalShowing(presenting) }

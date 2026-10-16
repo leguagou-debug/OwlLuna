@@ -1,6 +1,7 @@
 import XCTest
 import PencilKit
 import SwiftData
+import os
 @testable import OwlLuna
 
 /// What sync asks before it copies anything: once on a device that has never synced, and again when the Apple Account changes.
@@ -568,5 +569,147 @@ final class SyncCenterTests: XCTestCase {
         XCTAssertEqual(one?.count, 64, "a digest, not the token")
         XCTAssertNil(SyncCenter.marker(for: nil))
         XCTAssertEqual(SyncCenter.marker(for: "account" as NSString), SyncCenter.marker(for: "account" as NSString), "a token of another kind is archived first")
+    }
+
+    // MARK: What Settings and the library are told
+
+    func testTheLastSyncSurvivesARelaunchAndShowsItsDay() async throws {
+        try await makeNotebook("Physics", on: root)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        let synced = try XCTUnwrap(center.lastSynced)
+
+        let relaunched = SyncCenter(root: root, defaults: defaults)
+        XCTAssertEqual(relaunched.lastSynced, synced, "it is known before the new launch has synced")
+        XCTAssertNil(relaunched.status, "what that pass did isn't")
+
+        let day = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 14, minute: 5)))
+        let shown = SyncCenter.formatted(day, now: day)
+        XCTAssertTrue(shown.contains(day.formatted(.dateTime.month(.abbreviated))), "the day is shown, not the time alone")
+        XCTAssertTrue(shown.contains(day.formatted(date: .omitted, time: .shortened)))
+        XCTAssertFalse(shown.contains("2026"))
+        XCTAssertTrue(SyncCenter.formatted(day, now: day.addingTimeInterval(400 * 86_400)).contains("2026"), "and the year once it isn't this one")
+    }
+
+    func testAFailedNotebookIsListedWithWhyAndThePassIsNotUpToDate() async throws {
+        let id = try await makeNotebook("Physics", on: root)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        let synced = cloud.package(id).appending(path: "manifest.json")
+        let whole = try Data(contentsOf: synced)
+        try Data("{".utf8).write(to: synced)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        let failure = SyncFailure(id: id, reason: .unreadable(inICloud: true))
+        XCTAssertEqual(center.lastReport?.failed, [failure])
+        XCTAssertEqual(center.lastReport?.open, [])
+        XCTAssertEqual(center.lastReport?.arriving, [], "a copy that is there and won't read isn't waited for")
+        XCTAssertFalse(center.isUpToDate)
+        XCTAssertEqual(center.status, "1 notebook didn't sync")
+        XCTAssertEqual(center.news.failed, [failure], "the library hears of it too")
+
+        center.putAwayNews()
+        XCTAssertTrue(center.news.isEmpty)
+        await center.syncNow()
+        XCTAssertTrue(center.news.isEmpty, "once put away, the same failure isn't shown again")
+
+        try whole.write(to: synced)
+        await center.syncNow()
+        XCTAssertTrue(center.isUpToDate)
+        XCTAssertEqual(center.status, "Everything is up to date")
+        try Data("{".utf8).write(to: synced)
+        await center.syncNow()
+        XCTAssertEqual(center.news.failed, [failure], "after it has synced, failing again is news again")
+    }
+
+    func testANotebookNotYetUploadedOrAnUploadErrorIsNotUpToDate() async throws {
+        let id = try await makeNotebook("Physics", on: root)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        let uploads = OSAllocatedUnfairLock(initialState: CloudUploads(pending: [id]))
+        center.readUploads = { _ in uploads.withLock { $0 } }
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        XCTAssertEqual(center.lastReport?.pushed, [id])
+        XCTAssertFalse(center.isUpToDate, "copied into the container isn't the same as in iCloud")
+        XCTAssertEqual(center.status, "1 notebook sent, 1 notebook still uploading to iCloud")
+        XCTAssertTrue(center.news.isEmpty, "still uploading isn't a failure")
+
+        uploads.withLock { $0 = CloudUploads(pending: [id], problem: .full) }
+        await center.syncNow()
+        XCTAssertFalse(center.isUpToDate)
+        XCTAssertEqual(center.status, "1 notebook not uploaded to iCloud")
+        XCTAssertEqual(center.uploads.problem, .full)
+        XCTAssertTrue(CloudUploads.Problem.full.message.contains("iCloud storage is full"), "it says plainly that iCloud is full")
+        XCTAssertEqual(center.news.uploadProblem, .full)
+
+        uploads.withLock { $0 = CloudUploads() }
+        await center.syncNow()
+        XCTAssertTrue(center.isUpToDate)
+        XCTAssertEqual(center.status, "Everything is up to date")
+        XCTAssertNil(center.news.uploadProblem)
+    }
+
+    func testWhatIsStillToUploadIsReadFromEveryFileInTheSyncedCopy() async throws {
+        let id = try await makeNotebook("Physics", on: root), other = try await makeNotebook("Chemistry", on: root)
+        var folders = FolderFile()
+        folders.folders = [FolderEntry(id: UUID(), name: "Science", clothRaw: "jade", createdAt: .now, sortIndex: 0)]
+        try folders.write(root)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        try Data().write(to: cloud.package(other).appending(path: ".page.json.icloud"))
+        let notUploaded = cloud.package(id).appending(path: "manifest.json").standardizedFileURL
+        func read(_ word: (URL) -> (uploaded: Bool?, error: (any Error)?)) -> CloudUploads { CloudUploads.read(cloud, values: word) }
+
+        XCTAssertEqual(read { _ in (nil, nil) }, CloudUploads(), "a plain folder has nothing to upload")
+        XCTAssertEqual(read { _ in (true, nil) }, CloudUploads())
+        XCTAssertEqual(read { ($0.standardizedFileURL == notUploaded ? false : true, nil) }, CloudUploads(pending: [id]))
+        let full = NSError(domain: NSCocoaErrorDomain, code: NSUbiquitousFileNotUploadedDueToQuotaError)
+        XCTAssertEqual(read { $0.standardizedFileURL == notUploaded ? (false, full) : (true, nil) }, CloudUploads(pending: [id], problem: .full))
+        let away = NSError(domain: NSCocoaErrorDomain, code: NSUbiquitousFileUbiquityServerNotAvailable)
+        XCTAssertEqual(read { $0.lastPathComponent == "folders.json" ? (false, away) : (true, nil) }, CloudUploads(othersPending: true, problem: .unreachable))
+        XCTAssertEqual(read { $0.lastPathComponent.hasSuffix(".icloud") ? (false, full) : (true, nil) }, CloudUploads(), "a placeholder stands for a file iCloud has")
+    }
+
+    func testAConflictedCopyIsNewsForTheLibraryUntilPutAway() async throws {
+        let id = try await makeNotebook("Notes", on: root), there = temporaryRoot(self)
+        _ = try await LibrarySync.run(root: root, cloud: cloud)
+        _ = try await LibrarySync.run(root: there, cloud: cloud)
+        _ = try await NotebookPackage(root: root, id: id).updateManifest { $0.modifiedAt = $0.modifiedAt.addingTimeInterval(60) }
+        _ = try await NotebookPackage(root: there, id: id).updateManifest { $0.modifiedAt = $0.modifiedAt.addingTimeInterval(120) }
+        _ = try await LibrarySync.run(root: there, cloud: cloud)
+        defaults.set(true, forKey: SettingsKey.syncsWithICloud)
+        let center = SyncCenter(root: root, defaults: defaults)
+        await center.use(cloud, account: nil)
+        await center.syncNow()
+        let copy = try XCTUnwrap(center.lastReport?.conflictCopies.first)
+        XCTAssertEqual(center.news.conflictCopies, [copy])
+        XCTAssertTrue(center.news.failed.isEmpty)
+
+        await center.syncNow()
+        XCTAssertEqual(center.news.conflictCopies, [copy], "a pass with nothing new doesn't take it down")
+        XCTAssertEqual(SyncCenter(root: root, defaults: defaults).news.conflictCopies, [copy], "nor does quitting before it was seen")
+        center.putAwayNews()
+        XCTAssertTrue(center.news.isEmpty)
+        await center.syncNow()
+        XCTAssertTrue(center.news.isEmpty)
+        XCTAssertTrue(SyncCenter(root: root, defaults: defaults).news.isEmpty)
+    }
+
+    func testAJournalThatGaveWayIsSaidOnceUntilPutAway() async throws {
+        let id = try await makeNotebook("Journal", on: root)
+        let center = SyncCenter(root: root, defaults: defaults)
+        center.noteJournalSetAside(id)
+        center.noteJournalSetAside(id)
+        XCTAssertEqual(center.news.journals, [id], "said once")
+        XCTAssertEqual(center.news.count, 1)
+        XCTAssertFalse(center.news.isTrouble, "it is worth knowing, not something wrong")
+        XCTAssertEqual(SyncCenter(root: root, defaults: defaults).news.journals, [id], "a quit before it was seen doesn't lose it")
+        XCTAssertTrue(center.news.keeping { $0 != id }.isEmpty, "a notebook deleted since has nothing to show")
+        center.putAwayNews()
+        XCTAssertTrue(center.news.isEmpty)
+        XCTAssertTrue(SyncCenter(root: root, defaults: defaults).news.isEmpty)
     }
 }

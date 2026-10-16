@@ -58,8 +58,9 @@ struct DeckSheet: View {
                 if let index = session.document.index(of: page) { session.go(to: index) }
             }
         }
-        .notice("Something went wrong", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                message: Text(failure ?? "")) {
+        .notice("Something went wrong", isPresented: Binding(get: { failure != nil || library.lastError != nil },
+                                                             set: { if !$0 { failure = nil; library.clearError() } }),
+                message: Text(failure ?? library.lastError ?? "")) {
             Button("OK", role: .cancel) {}
         }
     }

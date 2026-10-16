@@ -89,7 +89,80 @@ final class FlashcardTests: XCTestCase {
 
         reread.remove(Set(cards.map(\.id)), from: manifest.id)
         await reread.flush()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path(percentEncoded: false)), "a notebook with no cards has no cards file")
+        let left = CardFiles.read(root.package(manifest.id))
+        XCTAssertEqual(left.cards, [])
+        XCTAssertEqual(Set(left.removed.keys), Set(cards.map(\.id)), "what is left says they were deleted, so another iPad's copy doesn't bring them back")
+    }
+
+    func testTwoCopiesOfADeckAreSettledCardByCard() {
+        let base = [card("One", "1"), card("Two", "2"), card("Three", "3"), card("Four", "4")]
+        let minute = monday.addingTimeInterval(60)
+        var mine = CardFiles.Deck(cards: base), theirs = CardFiles.Deck(cards: base)
+        mine.cards[0] = CardSchedule.graded(base[0], .good, now: minute, calendar: calendar)
+        mine.cards.removeAll { $0.id == base[2].id || $0.id == base[3].id }
+        mine.removed = [base[2].id: minute, base[3].id: minute]
+        mine.cards.append(card("Five", "5"))
+        theirs.cards[0] = CardSchedule.graded(base[0], .easy, now: minute.addingTimeInterval(60), calendar: calendar)
+        theirs.cards[1] = CardSchedule.graded(base[1], .good, now: minute, calendar: calendar)
+        theirs.cards[3].back.text = "Four, rewritten"
+        theirs.cards[3].changedAt = minute.addingTimeInterval(120)
+
+        let merged = mine.merged(with: theirs)
+        XCTAssertEqual(merged.cards.map(\.front.text), ["One", "Two", "Five", "Four"], "this copy's order, then what only the other has")
+        XCTAssertEqual(merged.cards[0], theirs.cards[0], "the later answer stands")
+        XCTAssertEqual(merged.cards[1].reviews, 1, "answers given on either side are kept")
+        XCTAssertEqual(merged.cards[3].back.text, "Four, rewritten", "a card changed after it was deleted elsewhere comes back, as writing does")
+        XCTAssertEqual(Set(merged.removed.keys), [base[2].id, base[3].id])
+        let other = theirs.merged(with: mine)
+        XCTAssertEqual(other.cards.sorted { $0.front.text < $1.front.text }, merged.cards.sorted { $0.front.text < $1.front.text }, "both sides come to the same cards")
+        XCTAssertEqual(mine.merged(with: mine), mine)
+    }
+
+    func testAWriteAndALoadKeepCardsFromBothTheFileAndThisIPad() async throws {
+        let root = temporaryRoot(self)
+        let manifest = try await makeNotebook(root)
+        let library = FlashcardLibrary(root: root)
+        await library.load()
+        let one = card("One", "1"), two = card("Two", "2")
+        library.add([one, two], to: manifest.id)
+        await library.flush()
+        // A sync brings in a card made on another iPad.
+        var file = CardFiles.read(root.package(manifest.id))
+        file.cards.append(card("From the other iPad", "3"))
+        try CardFiles.write(file, to: root.package(manifest.id))
+
+        library.grade(one.id, in: manifest.id, .good)
+        library.remove([two.id], from: manifest.id)
+        await library.flush()
+        let written = CardFiles.read(root.package(manifest.id)).cards
+        XCTAssertEqual(written.map(\.front.text), ["One", "From the other iPad"], "a write changes only what was changed here")
+        XCTAssertEqual(written.first?.reviews, 1)
+
+        library.grade(one.id, in: manifest.id, .good)
+        await library.load()
+        XCTAssertEqual(library.cards(in: manifest.id).map(\.front.text), ["One", "From the other iPad"], "a load brings in what arrived")
+        XCTAssertEqual(library.cards(in: manifest.id).first?.reviews, 2, "and keeps an answer that may not be written yet")
+        await library.flush()
+    }
+
+    func testACardWriteThatFailsIsShownAndGoesWithTheNextChange() async throws {
+        let root = temporaryRoot(self)
+        let manifest = try await makeNotebook(root)
+        let library = FlashcardLibrary(root: root)
+        await library.load()
+        let package = root.package(manifest.id).path(percentEncoded: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: package)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package) }
+
+        library.add([card("Lost?", "No")], to: manifest.id)
+        await library.flush()
+        XCTAssertEqual(library.lastError?.hasPrefix("Flashcards couldn't be saved"), true, library.lastError ?? "nothing was said")
+        library.clearError()
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package)
+        library.add([card("Next", "Card")], to: manifest.id)
+        await library.flush()
+        XCTAssertNil(library.lastError)
+        XCTAssertEqual(CardFiles.read(root.package(manifest.id)).cards.map(\.front.text), ["Lost?", "Next"])
     }
 
     func testCardsLeaveWithADeletedNotebookAndNeverBringItBack() async throws {
@@ -103,6 +176,7 @@ final class FlashcardTests: XCTestCase {
         library.grade(library.cards(in: manifest.id)[0].id, in: manifest.id, .good)
         await library.flush()
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.package(manifest.id).path(percentEncoded: false)))
+        XCTAssertNil(library.lastError, "a notebook deleted meanwhile isn't a failure to save")
         library.forget(notebooks: [manifest.id])
         XCTAssertTrue(library.cards(in: manifest.id).isEmpty)
     }

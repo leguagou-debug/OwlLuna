@@ -4,6 +4,28 @@
     "" : {
 
     },
+    "%@ didn't sync" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wurde nicht synchronisiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no se sincronizó"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’a pas été synchronisé"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "de" : {
@@ -276,6 +298,386 @@
         }
       }
     },
+    "%lld notebooks still downloading from iCloud" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch wird noch aus iCloud geladen"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher werden noch aus iCloud geladen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook still downloading from iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks still downloading from iCloud"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno aún descargándose de iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos aún descargándose de iCloud"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet encore en téléchargement depuis iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets encore en téléchargement depuis iCloud"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notebooks didn't sync" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch wurde nicht synchronisiert"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher wurden nicht synchronisiert"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook didn't sync"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks didn't sync"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno no se sincronizó"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos no se sincronizaron"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet n’a pas été synchronisé"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets n’ont pas été synchronisés"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notebooks still uploading to iCloud" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch wird noch in iCloud hochgeladen"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher werden noch in iCloud hochgeladen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook still uploading to iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks still uploading to iCloud"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno aún subiéndose a iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos aún subiéndose a iCloud"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet encore en cours d’envoi vers iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets encore en cours d’envoi vers iCloud"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notebooks not uploaded to iCloud" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch nicht in iCloud hochgeladen"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher nicht in iCloud hochgeladen"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook not uploaded to iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks not uploaded to iCloud"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno sin subir a iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos sin subir a iCloud"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet non envoyé vers iCloud"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets non envoyés vers iCloud"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notices" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Hinweis"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Hinweise"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notice"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notices"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld aviso"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avisos"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avis"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avis"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld strips of tape have no card yet" : {
       "localizations" : {
         "de" : {
@@ -424,6 +826,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "“%@”" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "« %@ »"
           }
         }
       }
@@ -640,6 +1064,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ (de la sauvegarde)"
+          }
+        }
+      }
+    },
+    "%@ (started %@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (begonnen am %2$@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (empezado el %2$@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (commencé le %2$@)"
           }
         }
       }
@@ -1503,7 +1949,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@. Zuletzt synchronisiert um %2$@."
+            "value" : "%1$@. Zuletzt synchronisiert: %2$@."
           }
         },
         "en" : {
@@ -2507,6 +2953,82 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld carnets en attente de fermeture"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notebooks were already here, and took in flashcards and reviews from the backup." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbuch war bereits vorhanden und hat Karteikarten und Wiederholungen aus dem Backup übernommen."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Notizbücher waren bereits vorhanden und haben Karteikarten und Wiederholungen aus dem Backup übernommen."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebook was already here, and took in flashcards and reviews from the backup."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notebooks were already here, and took in flashcards and reviews from the backup."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuaderno ya estaba aquí y recibió tarjetas y repasos de la copia de seguridad."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cuadernos ya estaban aquí y recibieron tarjetas y repasos de la copia de seguridad."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnet était déjà présent et a repris des cartes et des révisions de la sauvegarde."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld carnets étaient déjà présents et ont repris des cartes et des révisions de la sauvegarde."
                 }
               }
             }
@@ -4420,6 +4942,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il y a un mois"
+          }
+        }
+      }
+    },
+    "A notebook from iCloud" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Notizbuch aus iCloud"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un cuaderno de iCloud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un carnet d’iCloud"
           }
         }
       }
@@ -6549,6 +7093,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modifier la largeur"
+          }
+        }
+      }
+    },
+    "Changed on two devices before they could sync. The older version was kept as this copy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf zwei Geräten geändert, bevor sie synchronisieren konnten. Die ältere Version wurde als diese Kopie behalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se cambió en dos dispositivos antes de que pudieran sincronizarse. La versión anterior se guardó como esta copia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifié sur deux appareils avant qu’ils aient pu se synchroniser. L’ancienne version a été conservée sous forme de cette copie."
           }
         }
       }
@@ -10080,6 +10646,28 @@
         }
       }
     },
+    "Flashcards couldn't be saved: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karteikarten konnten nicht gesichert werden: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar las tarjetas: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les cartes n’ont pas pu être enregistrées : %@"
+          }
+        }
+      }
+    },
     "Flashcards: %lld cards to review" : {
       "localizations" : {
         "de" : {
@@ -11200,6 +11788,94 @@
         }
       }
     },
+    "iCloud can't be reached" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud ist nicht erreichbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede conectar con iCloud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud est injoignable"
+          }
+        }
+      }
+    },
+    "iCloud Drive didn't let OwlLuna reach its files: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud Drive hat OwlLuna nicht an seine Dateien gelassen: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud Drive no dejó que OwlLuna accediera a sus archivos: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud Drive n’a pas laissé OwlLuna accéder à ses fichiers : %@"
+          }
+        }
+      }
+    },
+    "iCloud can't be reached right now. Changes made on this iPad will upload when it's back." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud ist gerade nicht erreichbar. Änderungen auf diesem iPad werden hochgeladen, sobald es wieder erreichbar ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede conectar con iCloud ahora. Los cambios hechos en este iPad se subirán cuando vuelva a estar disponible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud est injoignable pour le moment. Les modifications faites sur cet iPad seront envoyées dès son retour."
+          }
+        }
+      }
+    },
+    "iCloud couldn't upload some files: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud konnte einige Dateien nicht hochladen: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud no pudo subir algunos archivos: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud n’a pas pu envoyer certains fichiers : %@"
+          }
+        }
+      }
+    },
     "iCloud is still downloading your library. Sync will try again shortly." : {
       "localizations" : {
         "de" : {
@@ -11240,6 +11916,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iCloud n’est pas disponible. Connectez-vous à iCloud et activez iCloud Drive dans Réglages ; cette copie d’OwlLuna doit aussi être compilée avec la fonctionnalité iCloud."
+          }
+        }
+      }
+    },
+    "iCloud storage is full" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud-Speicher ist voll"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El almacenamiento de iCloud está lleno"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le stockage iCloud est plein"
           }
         }
       }
@@ -11792,6 +12490,72 @@
         }
       }
     },
+    "Its copy in iCloud can't be read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seine Kopie in iCloud kann nicht gelesen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su copia en iCloud no se puede leer."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sa copie dans iCloud est illisible."
+          }
+        }
+      }
+    },
+    "Its copy on this iPad can't be read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seine Kopie auf diesem iPad kann nicht gelesen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su copia en este iPad no se puede leer."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sa copie sur cet iPad est illisible."
+          }
+        }
+      }
+    },
+    "It was saved by a newer version of OwlLuna. Update OwlLuna on this iPad to sync it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es wurde mit einer neueren Version von OwlLuna gesichert. Aktualisiere OwlLuna auf diesem iPad, um es zu synchronisieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se guardó con una versión más reciente de OwlLuna. Actualiza OwlLuna en este iPad para sincronizarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il a été enregistré par une version plus récente d’OwlLuna. Mettez à jour OwlLuna sur cet iPad pour le synchroniser."
+          }
+        }
+      }
+    },
     "Ivory" : {
       "localizations" : {
         "de" : {
@@ -12184,6 +12948,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dernière page"
+          }
+        }
+      }
+    },
+    "Last synced %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt synchronisiert: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última sincronización: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière synchronisation : %@."
           }
         }
       }
@@ -21030,6 +21816,28 @@
         }
       }
     },
+    "Some files didn't upload" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Dateien wurden nicht hochgeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos archivos no se subieron"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains fichiers n’ont pas été envoyés"
+          }
+        }
+      }
+    },
     "Something went wrong" : {
       "localizations" : {
         "de" : {
@@ -21576,6 +22384,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les autocollants se placent sous votre encre : vous pouvez donc écrire sur une note ou une étiquette. Maintenez le doigt sur un autocollant de la page pour le déplacer, le redimensionner ou le retirer."
+          }
+        }
+      }
+    },
+    "Still uploading to iCloud" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird noch in iCloud hochgeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún subiéndose a iCloud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoi vers iCloud en cours"
           }
         }
       }
@@ -22350,6 +23180,28 @@
         }
       }
     },
+    "Sync stopped" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierung angehalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronización detenida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation interrompue"
+          }
+        }
+      }
+    },
     "Sync with iCloud" : {
       "localizations" : {
         "de" : {
@@ -23120,6 +23972,28 @@
         }
       }
     },
+    "The finished backup didn't match your library when it was checked, so it wasn't kept. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das fertige Backup stimmte bei der Prüfung nicht mit deiner Bibliothek überein und wurde deshalb nicht behalten. Versuche es noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al comprobarla, la copia de seguridad no coincidía con tu biblioteca, así que no se ha conservado. Vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une fois vérifiée, la sauvegarde ne correspondait pas à votre bibliothèque : elle n’a donc pas été conservée. Réessayez."
+          }
+        }
+      }
+    },
     "The handwriting recogniser didn't answer. Try again in a moment." : {
       "localizations" : {
         "de" : {
@@ -23720,6 +24594,50 @@
         }
       }
     },
+    "There isn't enough free space on this iPad. Free some up in Settings › General › iPad Storage, then try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem iPad ist nicht genug Speicherplatz frei. Gib unter Einstellungen › Allgemein › iPad-Speicher etwas frei und versuche es dann noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay suficiente espacio libre en este iPad. Libera espacio en Ajustes › General › Almacenamiento del iPad y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il n’y a pas assez d’espace libre sur cet iPad. Libérez-en dans Réglages › Général › Stockage iPad, puis réessayez."
+          }
+        }
+      }
+    },
+    "There isn't enough room on this iPad." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem iPad ist nicht genug Platz."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay suficiente espacio en este iPad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il n’y a pas assez d’espace sur cet iPad."
+          }
+        }
+      }
+    },
     "There isn't enough writing here to study from yet." : {
       "localizations" : {
         "de" : {
@@ -23760,6 +24678,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ces notes sont trop longues pour que le modèle de cet iPad les lise d'un coup."
+          }
+        }
+      }
+    },
+    "This backup couldn't be read. It may be damaged or not fully downloaded yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Backup konnte nicht gelesen werden. Vielleicht ist es beschädigt oder noch nicht vollständig geladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo leer esta copia de seguridad. Puede que esté dañada o que aún no se haya descargado del todo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette sauvegarde n’a pas pu être lue. Elle est peut-être endommagée ou pas encore entièrement téléchargée."
           }
         }
       }
@@ -25364,6 +26304,28 @@
         }
       }
     },
+    "Two devices each had a daily journal. The one begun first is now the journal on every device, and this one, which this iPad was using, is kept as an ordinary notebook." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwei Geräte hatten jeweils ein Tagebuch. Das zuerst begonnene ist jetzt auf allen Geräten das Tagebuch, und dieses hier, das dieses iPad verwendet hat, bleibt als gewöhnliches Notizbuch erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dos dispositivos tenían cada uno un diario. El que se empezó primero es ahora el diario en todos los dispositivos, y este, que usaba este iPad, se conserva como un cuaderno normal."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deux appareils avaient chacun un journal. Celui commencé en premier est désormais le journal sur tous les appareils, et celui-ci, qu’utilisait cet iPad, est conservé comme un carnet ordinaire."
+          }
+        }
+      }
+    },
     "Undo" : {
       "localizations" : {
         "de" : {
@@ -26606,6 +27568,28 @@
         }
       }
     },
+    "Your iCloud storage is full, so changes made on this iPad can't be uploaded. Free up space, or choose a bigger plan in Settings › your name › iCloud." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iCloud-Speicher ist voll, deshalb können Änderungen auf diesem iPad nicht hochgeladen werden. Gib Speicher frei oder wähle einen größeren Tarif unter Einstellungen › dein Name › iCloud."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu almacenamiento de iCloud está lleno, así que los cambios hechos en este iPad no se pueden subir. Libera espacio o elige un plan mayor en Ajustes › tu nombre › iCloud."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre stockage iCloud est plein : les modifications faites sur cet iPad ne peuvent pas être envoyées. Libérez de l’espace ou choisissez un forfait plus grand dans Réglages › votre nom › iCloud."
+          }
+        }
+      }
+    },
     "Your image is ready." : {
       "localizations" : {
         "de" : {
@@ -26646,6 +27630,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vos dernières modifications ne sont pas encore enregistrées"
+          }
+        }
+      }
+    },
+    "Your latest changes to %@ couldn't be saved, so the backup would be missing them. Try again once they're saved." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine letzten Änderungen an %@ konnten nicht gespeichert werden und würden deshalb im Backup fehlen. Versuche es noch einmal, sobald sie gespeichert sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus últimos cambios en %@, así que faltarían en la copia de seguridad. Vuelve a intentarlo cuando se hayan guardado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos dernières modifications de %@ n’ont pas pu être enregistrées, elles manqueraient donc dans la sauvegarde. Réessayez une fois qu’elles le seront."
           }
         }
       }

@@ -179,6 +179,64 @@ final class AppActionTests: XCTestCase {
         XCTAssertNil(WidgetSnapshot.read(from: directory.appending(path: "missing")))
     }
 
+    func testSiriIsOfferedNeitherLockedNorDeletedNotebooks() async throws {
+        let store = try makeStore()
+        let biology = try await makeNotebook("Biology", in: store, opened: .now)
+        let untitled = try await makeNotebook("", in: store, opened: .now.addingTimeInterval(-3_600))
+        let diary = try await makeNotebook("Diary", in: store, opened: .now)
+        let binned = try await makeNotebook("Binned", in: store, opened: .now)
+        store.setLocked(true, for: [try XCTUnwrap(store.record(diary))])
+        store.moveToTrash([try XCTUnwrap(store.record(binned))])
+
+        let suggested = NotebookQuery.suggested(store)
+        XCTAssertEqual(suggested.map(\.id), [biology, untitled])
+        XCTAssertEqual(suggested.map(\.title), ["Biology", "Untitled"])
+        XCTAssertEqual(Set(NotebookQuery.identified([biology, diary, binned], in: store).map(\.id)), [biology, diary],
+                       "a shortcut made before its notebook was locked still finds it, but not one in Recently Deleted")
+    }
+
+    func testSiriLearnsTheNotebookNamesOnceAfterStartThenOncePerChangeToThem() async throws {
+        let store = try makeStore()
+        let biologyID = try await makeNotebook("Biology", in: store, opened: .now)
+        let chemistryID = try await makeNotebook("Chemistry", in: store, opened: nil)
+        let physics = try await makeNotebook("Physics", in: store, opened: nil)
+        let biology = try XCTUnwrap(store.record(biologyID)), chemistry = try XCTUnwrap(store.record(chemistryID))
+        var updates = 0
+        let parameters = ShortcutParameters(isLive: true, delay: .milliseconds(20)) { updates += 1 }
+        func settle() async throws { try await Task.sleep(for: .milliseconds(200)) }
+
+        parameters.start(store)
+        XCTAssertEqual(updates, 1, "once the library is ready")
+        parameters.start(store)
+        XCTAssertEqual(updates, 1)
+
+        store.setTags(["exam"], for: [biology])
+        store.setCover(CoverSpec(style: .cloth, cloth: .plum, inks: (.teal, .pink), seed: 2), for: chemistry)
+        try await settle()
+        XCTAssertEqual(updates, 1, "a save that leaves the names alone isn't passed on")
+
+        store.rename(biology, to: "Cell Biology")
+        store.rename(chemistry, to: "Organic Chemistry")
+        store.setLocked(true, for: [biology])
+        try await settle()
+        XCTAssertEqual(updates, 2, "changes made together are told once")
+
+        store.moveToTrash([chemistry])
+        try await settle()
+        XCTAssertEqual(updates, 3)
+
+        try await Task.sleep(for: .milliseconds(20))
+        _ = try await NotebookPackage(root: store.root, id: physics).updateManifest { $0.title = "Astrophysics"; $0.modifiedAt = .now }
+        await store.reloadFromDisk()
+        try await settle()
+        XCTAssertEqual(updates, 4, "a name changed on another device")
+        XCTAssertEqual(NotebookQuery.suggested(store).map(\.title), ["Astrophysics"])
+
+        await store.reloadFromDisk()
+        try await settle()
+        XCTAssertEqual(updates, 4, "a sync that changed nothing")
+    }
+
     func testAWindowRemembersWhatItHasOpenUntilItIsGone() {
         let scene = "test-\(UUID().uuidString)", other = "test-\(UUID().uuidString)"
         let notebook = UUID(), beside = UUID()

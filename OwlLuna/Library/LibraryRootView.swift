@@ -219,7 +219,7 @@ struct LibraryRootView: View {
             var page: UUID?
             switch action {
             case .today:
-                if let journal = store.dailyJournal { id = journal.id } else { id = try await store.createDailyJournal() }
+                id = try await store.journalForToday()
                 page = await store.prepareTodayPage(id)
             case .quickNote:
                 id = try await store.createQuickNote(folder: nil)
@@ -259,9 +259,7 @@ struct LibraryRootView: View {
         Task {
             defer { openingToday = false }
             do {
-                var id = store.dailyJournal?.id
-                if id == nil { id = try await store.createDailyJournal() }
-                guard let id else { return }
+                let id = try await store.journalForToday()
                 let page = await store.prepareTodayPage(id)
                 openNotebook(id, pageID: page, zoomSource: scope == .all ? "today-\(id.uuidString)" : nil)
             } catch {

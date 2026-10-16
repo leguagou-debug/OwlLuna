@@ -182,7 +182,12 @@ struct EditorPanes: View {
     /// Narrower than this a pane's bar keeps to the essentials, and a window has no room for a second pane.
     static let narrowWidth: CGFloat = 620
     /// `-splitSideBySide` lets a test see the narrow panes of a landscape window while the simulator stays upright.
-    private var stacked: Bool { size.height > size.width && !LaunchOptions.arguments.contains("-splitSideBySide") }
+    private var stacked: Bool {
+        #if DEBUG
+        if LaunchOptions.arguments.contains("-splitSideBySide") { return false }
+        #endif
+        return size.height > size.width
+    }
 
     /// The tab on show; a notebook on its own is the one the library opened. On the way out it is still the notebook that was on show.
     private var current: OpenNotebook { leaving ?? window.tabs.first { $0.id == window.selected } ?? primary }

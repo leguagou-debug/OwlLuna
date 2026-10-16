@@ -25,9 +25,11 @@ struct StorageRoot: Sendable, Hashable {
     static let legacyPackageExtension = "scribe"
 
     static let live: StorageRoot = {
+        #if DEBUG
         if let override = ProcessInfo.processInfo.environment["OWLLUNA_STORAGE_ROOT"] {
             return StorageRoot(url: URL(filePath: override, directoryHint: .isDirectory))
         }
+        #endif
         return StorageRoot(url: URL.applicationSupportDirectory)
     }()
 

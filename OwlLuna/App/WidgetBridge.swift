@@ -52,7 +52,7 @@ enum WidgetBridge {
 
     /// UI-test libraries never reach the widgets.
     static func update(_ app: AppModel) async {
-        guard app.phase == .ready, LaunchOptions.value("-storageRoot") == nil, let directory = WidgetSnapshot.directory else { return }
+        guard app.phase == .ready, !LaunchOptions.usesTestStorage, let directory = WidgetSnapshot.directory else { return }
         let snapshot = await snapshot(library: app.library, activity: app.activity)
         let coverChanged = await writeCover(of: app.library.lastOpenedNotebook(includingLocked: false), root: app.root, to: directory)
         guard snapshot != lastWritten || coverChanged else { return }
