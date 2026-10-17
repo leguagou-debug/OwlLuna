@@ -57,9 +57,9 @@ export function Sidebar() {
       <p className={`meta ${styles.head}`}>Shelves</p>
       <ul className={styles.rows}>
         <li>
-          <button type="button" className={`${styles.row} ${styles.folder}`} aria-expanded={open} aria-controls={list} aria-label="University, folder, 12 notebooks" onClick={toggle}>
+          <button type="button" className={`${styles.row} ${styles.folder}`} aria-expanded={open} aria-controls={list} aria-label="University, 12 notebooks, folder" onClick={toggle}>
             <Spine cloth="navy" />
-            <span className={styles.name}>University</span>
+            <span className={styles.name}>University</span>{' '}
             <span className={styles.count}>12</span>
             <motion.svg className={styles.chevron} viewBox="0 0 14 14" aria-hidden="true" initial={false} animate={{ rotate: open ? 0 : -90 }} transition={fold}>
               <path {...stroke} strokeWidth="2" d="M3 5l4 4 4-4" />

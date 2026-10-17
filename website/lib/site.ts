@@ -3,7 +3,7 @@ const repo = 'https://github.com/owaisazmal/OwlLuna'
 export const site = {
   name: 'OwlLuna',
   description:
-    'A free, open-source handwritten notes app for iPad. No subscriptions, no ads, no accounts and no tracking.',
+    'A free, open-source alternative to Goodnotes and Notability for iPad. Handwritten notes with no subscriptions, no ads, no accounts and no tracking.',
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://owaisazmal.github.io/OwlLuna',
   repo,
   issues: `${repo}/issues`,
@@ -33,6 +33,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 export function asset(path: string): string {
   return `${basePath}${path.startsWith('/') ? path : `/${path}`}`
 }
+
+/** The owl icon in `public/`, sized for the nav's and footer's slots at up to 3×. */
+export const iconSet = [32, 64, 96, 132].map((width) => `${asset(`/owlluna-icon-${width}.webp`)} ${width}w`).join(', ')
 
 export function formatDate(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number)

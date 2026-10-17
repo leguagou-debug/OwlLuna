@@ -27,6 +27,9 @@ jobs:
     defaults:
       run:
         working-directory: website
+    env:
+      BASE_PATH: /OwlLuna
+      NEXT_PUBLIC_SITE_URL: https://owaisazmal.github.io/OwlLuna
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -37,8 +40,11 @@ jobs:
           cache-dependency-path: website/package-lock.json
 
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run check:links
+      - run: npm run check:a11y
 
   build:
     name: Build

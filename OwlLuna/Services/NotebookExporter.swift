@@ -14,6 +14,7 @@ enum NotebookExporter {
         var pages: [NotebookPage]
         var inMemoryInk: [UUID: PKDrawing]
         var package: NotebookPackage
+        var recordings: [RecordingEntry] = []
     }
 
     /// The open document, with its unsaved ink, if the notebook is being edited, otherwise its saved pages.
@@ -22,7 +23,7 @@ enum NotebookExporter {
         if let document = DocumentRegistry.shared.document(for: id) { return Input(document: document) }
         let package = NotebookPackage(root: root, id: id)
         let manifest = try await package.readManifest().manifest
-        return Input(title: manifest.title, pages: manifest.pages, inMemoryInk: [:], package: package)
+        return Input(title: manifest.title, pages: manifest.pages, inMemoryInk: [:], package: package, recordings: manifest.recordings)
     }
 
     /// Streams pages to disk one at a time: each page's ink is read, drawn and released before the next,
@@ -171,6 +172,8 @@ final class ExportJob: Identifiable {
     enum State: Equatable { case running, finished([URL]), failed(String), cancelled }
     /// One PDF, a PNG for every page, or a film of one page being written.
     enum Format: Sendable { case pdf, images, timelapse }
+    /// The PDF zipped with the notebook's recordings, once that has been asked for.
+    enum Bundle: Equatable { case making, made(URL), failed(String) }
 
     let id = UUID()
     let format: Format
@@ -181,7 +184,13 @@ final class ExportJob: Identifiable {
     private let inputCount: Int
     private(set) var progress: Double = 0
     private(set) var state: State = .running
+    /// The recordings that can go with a single notebook's PDF; none for any other export.
+    let recordingCount: Int
+    private(set) var includesRecordings = false
+    private(set) var bundle: Bundle?
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private let withRecordings: NotebookExporter.Input?
+    @ObservationIgnored private var bundling: Task<Void, Never>?
 
     /// `pages` narrows the export to some of the notebook's pages; nil exports them all.
     convenience init(document: NotebookDocument, format: Format = .pdf, pages: [NotebookPage]? = nil) {
@@ -218,6 +227,8 @@ final class ExportJob: Identifiable {
         self.format = format
         self.skipped = skipped
         inputCount = inputs.count
+        withRecordings = format == .pdf && inputs.count == 1 && skipped == 0 ? inputs.first.flatMap { $0.recordings.isEmpty ? nil : $0 } : nil
+        recordingCount = withRecordings?.recordings.count ?? 0
         shape = inputs.first?.pages.first.map { $0.size.width / max($0.size.height, 1) } ?? 0.77
         let count = Double(max(inputs.count, 1))
         task = Task { [weak self] in
@@ -255,6 +266,32 @@ final class ExportJob: Identifiable {
 
     var isSeveral: Bool { inputCount + skipped > 1 }
 
+    /// What Share hands over: the PDF, or the zip that holds it with the recordings once they are included.
+    var shared: [URL] {
+        guard case .finished(let urls) = state else { return [] }
+        if includesRecordings { if case .made(let zip) = bundle { return [zip] } else { return [] } }
+        return urls
+    }
+
+    /// Off until asked for each time: recordings of people talking only leave with the notes when someone means them to.
+    func includeRecordings(_ include: Bool) {
+        includesRecordings = include
+        guard include, bundling == nil, case .finished(let urls) = state, let pdf = urls.first, let input = withRecordings else { return }
+        bundle = .making
+        bundling = Task { [weak self] in
+            let work = Task.detached(priority: .userInitiated) { try NotebookExporter.bundle(pdf, with: input) }
+            do {
+                let zip = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+                self?.bundle = .made(zip)
+            } catch is CancellationError {
+                self?.bundle = nil
+            } catch {
+                self?.bundle = .failed(error.localizedDescription)
+                self?.bundling = nil
+            }
+        }
+    }
+
     func cancel() {
         task?.cancel()
         state = .cancelled
@@ -263,6 +300,7 @@ final class ExportJob: Identifiable {
     /// Its sheet has closed: a running export stops, and the files go once nothing is sharing or printing them.
     func close() {
         if state == .running { cancel() }
+        bundling?.cancel()
         if case .finished(let urls) = state { ExportFolder.discard(urls) }
     }
 }
@@ -296,16 +334,18 @@ struct ExportSheet: View {
                     if !urls.isEmpty {
                         Label(readyText(urls.count), systemImage: "checkmark.circle").font(.headline)
                             .accessibilityIdentifier("export.ready")
+                        if job.recordingCount > 0 { recordingsToggle }
                         HStack(spacing: Space.x3) {
                             Button { sharing = true } label: { Label("Share", systemImage: "square.and.arrow.up") }
                                 .prominentButton()
+                                .disabled(job.shared.isEmpty)
                                 .accessibilityIdentifier("export.share")
                             if job.format != .timelapse {
                                 Button { print(urls) } label: { Label(String(localized: "export.print", defaultValue: "Print"), systemImage: "printer") }
                                     .buttonStyle(.owlLuna)
                             }
                         }
-                        .sheet(isPresented: $sharing) { ShareSheet(items: urls).presentationCornerRadius(Radius.sheet) }
+                        .sheet(isPresented: $sharing) { ShareSheet(items: job.shared).presentationCornerRadius(Radius.sheet) }
                     }
                     if job.skipped > 0 {
                         Label(String(localized: "\(job.skipped) locked notebooks were left out. Unlock them to export them."), systemImage: "lock")
@@ -339,6 +379,31 @@ struct ExportSheet: View {
         .onDisappear { job.close() }
     }
 
+    private var recordingsToggle: some View {
+        VStack(alignment: .leading, spacing: Space.x2) {
+            Toggle(isOn: Binding(get: { job.includesRecordings }, set: { job.includeRecordings($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Include Recordings").foregroundStyle(Color.ink)
+                    Text(job.recordingCount == 1 ? String(localized: "The recording and any transcript go in a zip with the PDF.")
+                                                 : String(localized: "The \(job.recordingCount) recordings and any transcripts go in a zip with the PDF."))
+                        .font(.footnote)
+                        .foregroundStyle(Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.owlLuna)
+            .accessibilityIdentifier("export.recordings")
+            if job.includesRecordings {
+                switch job.bundle {
+                case .making?: ProgressView { Text("Adding recordings…").font(.footnote).foregroundStyle(Color.textSecondary) }
+                case .failed(let message)?: Label(message, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Color.tomato)
+                default: EmptyView()
+                }
+            }
+        }
+        .frame(maxWidth: 380)
+    }
+
     private func readyText(_ count: Int) -> String {
         switch job.format {
         case .pdf: count == 1 ? String(localized: "Your PDF is ready.") : String(localized: "Your \(count) PDFs are ready.")
@@ -367,7 +432,7 @@ extension NotebookExporter.Input {
         let pages = pages ?? document.pages
         var inMemory: [UUID: PKDrawing] = [:]
         for page in pages { if let ink = document.loadedInk(page.id) { inMemory[page.id] = ink } }
-        self.init(title: document.title, pages: pages, inMemoryInk: inMemory, package: document.package)
+        self.init(title: document.title, pages: pages, inMemoryInk: inMemory, package: document.package, recordings: document.manifest.recordings)
     }
 }
 

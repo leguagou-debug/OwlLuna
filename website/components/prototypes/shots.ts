@@ -425,3 +425,17 @@ const suffix: Record<Size, string> = { full: '', medium: '-m', thumb: '-t' }
 export function source(shot: Shot, size: Size): string {
   return asset(`/prototypes/${shot.name}${suffix[size]}.webp`)
 }
+
+/** The box each size was fitted inside, never enlarged. */
+const boxes: Record<Size, [number, number]> = { full: [2400, 3200], medium: [1100, 1500], thumb: [640, 480] }
+
+function widthAt(shot: Shot, size: Size): number {
+  const [width, height] = boxes[size]
+  return Math.round(shot.width * Math.min(1, width / shot.width, height / shot.height))
+}
+
+/** The thumb and medium files for `srcset`; a shot too small to have a smaller thumb gives the medium alone. */
+export function sourceSet(shot: Shot): string {
+  const sizes = widthAt(shot, 'thumb') < widthAt(shot, 'medium') ? (['thumb', 'medium'] as const) : (['medium'] as const)
+  return sizes.map((size) => `${source(shot, size)} ${widthAt(shot, size)}w`).join(', ')
+}

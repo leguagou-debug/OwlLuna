@@ -18,6 +18,22 @@ npm run dev
 
 `npm run build` writes the finished site to `website/out`.
 
+## Checks
+
+A pull request that touches `website/` runs lint, the typecheck, a build under `/OwlLuna` as on GitHub Pages, a link check and an accessibility pass. To run the last three the same way:
+
+```bash
+export BASE_PATH=/OwlLuna NEXT_PUBLIC_SITE_URL=https://owaisazmal.github.io/OwlLuna
+```
+
+```bash
+npm run build && npm run check:links && npm run check:a11y
+```
+
+- `npm run lint`: ESLint with Next's rules and the jsx-a11y recommended set. typescript-eslint cannot read TypeScript 7 yet, so lint parses with TypeScript 6 (`typescript6` in `package.json`); the typecheck and the build use 7. Keep `typescript6` on 6.0 until typescript-eslint supports 7.
+- `npm run check:links`: serves `out/` under the base path and follows every link, picture, stylesheet, font and anchor in it, so one that leaves out `/OwlLuna` fails. Links off the site are not checked.
+- `npm run check:a11y`: opens each page in Google Chrome, light and dark, with Reduce Motion on, and fails on serious or critical [axe](https://github.com/dequelabs/axe-core) findings. It needs Chrome installed.
+
 ## What to change when
 
 Everything that varies is in [lib/site.ts](lib/site.ts):

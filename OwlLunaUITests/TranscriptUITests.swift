@@ -65,7 +65,7 @@ final class TranscriptUITests: XCTestCase {
         XCTAssertTrue(notebook.waitForExistence(timeout: 20))
         let field = app.openLibrarySearch()
         field.typeText("membrane")
-        let hit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lecture Replay, recording 1'")).firstMatch
+        let hit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lecture Replay, recording '")).firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 15), "search finds what was said")
         attach(app, "transcript-search")
     }

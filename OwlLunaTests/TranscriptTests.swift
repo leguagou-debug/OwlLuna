@@ -98,9 +98,9 @@ final class TranscriptTests: XCTestCase {
 
         let hits = await PageSearch.hits(for: "membrane", in: [manifest.id], root: root)
         let hit = try XCTUnwrap(hits[manifest.id]?.first)
-        XCTAssertEqual(hit.recording, 1)
+        XCTAssertEqual(hit.recording?.id, entry.id)
         XCTAssertEqual(hit.index, 1, "it opens the page that was written on during the recording")
-        XCTAssertEqual(hit.place, "Recording 1")
+        XCTAssertEqual(hit.place, entry.name, "named after the recording, not its place in the list")
         XCTAssertTrue(hit.snippet.contains("membrane"))
 
         recorder.removeTranscript(transcribed)

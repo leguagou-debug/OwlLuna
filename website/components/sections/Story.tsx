@@ -28,8 +28,9 @@ export function Story() {
               <div className={`display-text ${styles.body}`}>
                 <p>
                   When I was a student, there were only a handful of really good apps for taking notes by hand on an
-                  iPad. Every one of them wanted money: a subscription, or a one-time fee if you were lucky. I used to
-                  wonder whether a free app could ever be as good as the paid ones.
+                  iPad, Goodnotes and Notability among them. Every one of them wanted money: a subscription, or a
+                  one-time fee if you were lucky. I used to wonder whether a free app could ever be as good as the paid
+                  ones.
                 </p>
                 <p className={styles.noted}>
                   Then I graduated, and started working, and the question came with me. It sat in the back of my head

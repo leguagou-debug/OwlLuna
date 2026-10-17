@@ -1,6 +1,20 @@
 import AVFoundation
 import Observation
 
+/// How fast recordings play. One speed for every notebook, kept from one playback to the next.
+enum PlaybackSpeed {
+    static let choices: [Double] = [0.75, 1, 1.25, 1.5, 2]
+
+    static func saved(in defaults: UserDefaults) -> Double {
+        let speed = defaults.double(forKey: SettingsKey.playbackSpeed)
+        return choices.contains(speed) ? speed : 1
+    }
+
+    static func label(_ speed: Double) -> String {
+        speed.formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+}
+
 /// Records and plays audio attached to a notebook. Files go into the package's `assets/`; entries into the manifest.
 @MainActor
 @Observable
@@ -9,10 +23,10 @@ final class NotebookRecorder: NSObject {
     /// Whole seconds recorded, all the record button shows, so it is redrawn once a second.
     private(set) var elapsed: TimeInterval = 0
     private(set) var playingID: UUID?
-    private(set) var playbackProgress: Double = 0
     /// How far into the recording playback is, and whether it is waiting there.
     private(set) var currentTime: TimeInterval = 0
     private(set) var isPaused = false
+    private(set) var speed: Double
     var errorMessage: String?
     /// Called as playback moves, about ten times a second, and when it is moved by hand.
     @ObservationIgnored var onPlaybackTime: ((TimeInterval) -> Void)?
@@ -21,6 +35,7 @@ final class NotebookRecorder: NSObject {
     @ObservationIgnored private var inkedPages: Set<UUID> = []
 
     @ObservationIgnored private let document: NotebookDocument
+    @ObservationIgnored var defaults: UserDefaults
     @ObservationIgnored private var recorder: AVAudioRecorder?
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var currentFile: String?
@@ -37,8 +52,10 @@ final class NotebookRecorder: NSObject {
     @ObservationIgnored private var transcriptTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var transcripts: [String: Transcript] = [:]
 
-    init(document: NotebookDocument) {
+    init(document: NotebookDocument, defaults: UserDefaults = .standard) {
         self.document = document
+        self.defaults = defaults
+        speed = PlaybackSpeed.saved(in: defaults)
         super.init()
         document.recorder = self
         NotificationCenter.default.addObserver(self, selector: #selector(sessionInterrupted), name: AVAudioSession.interruptionNotification, object: nil)
@@ -133,6 +150,8 @@ final class NotebookRecorder: NSObject {
     @concurrent
     private nonisolated static func readyPlayer(for url: URL) async throws -> AVAudioPlayer {
         let player = try AVAudioPlayer(contentsOf: url)
+        // A player only takes a rate if it was asked to before getting ready.
+        player.enableRate = true
         player.prepareToPlay()
         return player
     }
@@ -158,6 +177,8 @@ final class NotebookRecorder: NSObject {
             guard startingPlayback == request, !isRecording else { return false }
             startingPlayback = nil
             player.delegate = self
+            speed = PlaybackSpeed.saved(in: defaults)
+            player.rate = Float(speed)
             player.play()
             self.player = player
             playingID = recording.id
@@ -191,6 +212,17 @@ final class NotebookRecorder: NSObject {
         isPaused = false
     }
 
+    /// Playback goes on at `speed` from where it is; the position stays in the recording's own time.
+    func setSpeed(_ speed: Double) {
+        guard PlaybackSpeed.choices.contains(speed) else { return }
+        self.speed = speed
+        player?.rate = Float(speed)
+        defaults.set(speed, forKey: SettingsKey.playbackSpeed)
+    }
+
+    /// The rate the sound is playing at, nil when nothing is.
+    var playerRate: Float? { player?.rate }
+
     func seek(to time: TimeInterval) {
         guard let player else { return }
         let target = min(max(time, 0), player.duration)
@@ -200,7 +232,6 @@ final class NotebookRecorder: NSObject {
 
     private func report(_ time: TimeInterval) {
         currentTime = time
-        if let player, player.duration > 0 { playbackProgress = time / player.duration }
         onPlaybackTime?(time)
     }
 
@@ -209,7 +240,6 @@ final class NotebookRecorder: NSObject {
         player = nil
         startingPlayback = nil
         playingID = nil
-        playbackProgress = 0
         currentTime = 0
         isPaused = false
         holdsAtEnd = false
@@ -233,6 +263,32 @@ final class NotebookRecorder: NSObject {
             await package.removeTranscriptText(id)
             self?.onTranscriptChange?()
         }
+    }
+
+    /// Nothing, or only spaces, takes it back to being named after when it began.
+    func rename(_ recording: RecordingEntry, to title: String) {
+        document.renameRecording(recording.id, to: title)
+    }
+
+    enum Part: Sendable { case audio, transcript }
+
+    /// Writes the recording, or what was said in it, into an export folder of its own for sharing. A locked notebook
+    /// has to be unlocked first; nil when it stays locked or there is no transcript.
+    func files(sharing part: Part, of recording: RecordingEntry) async throws -> [URL]? {
+        if document.manifest.library.isLocked, !(await NotebookLock.shared.unlock(document.id, title: document.title)) { return nil }
+        let transcript = part == .transcript ? transcript(for: recording) : nil
+        guard part == .audio || transcript?.isEmpty == false else { return nil }
+        let package = document.package, name = RecordingExport.fileStem(of: recording)
+        return try await Task.detached(priority: .userInitiated) {
+            let folder = try ExportFolder.make(.export)
+            do {
+                if let transcript { return [try RecordingExport.write(transcript, named: name, into: folder)] }
+                return [try RecordingExport.copyAudio(of: recording, from: package, named: name, into: folder)]
+            } catch {
+                try? FileManager.default.removeItem(at: folder)
+                throw error
+            }
+        }.value
     }
 
     func shutdown() {

@@ -183,7 +183,7 @@ Key design decisions (details and measurements in [docs/ARCHITECTURE.md](docs/AR
 
 ## Roadmap
 
-Contributions toward any of these are very welcome:
+The checks that still need a real iPad are written up step by step in [docs/DEVICE-CHECKS.md](docs/DEVICE-CHECKS.md). Contributions toward any of these are very welcome:
 
 - [ ] Try iCloud sync on two real devices (it has only run against a stand-in folder), then sync a notebook while it is open
 - [ ] Try transcription on a real iPad, with real speech and a long recording (the simulator can't recognise speech on the device)

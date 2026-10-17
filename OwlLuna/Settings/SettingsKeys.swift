@@ -60,4 +60,5 @@ enum SettingsKey {
     static let appearance = "appearance"
     static let leftHanded = "leftHanded"
     static let trashLength = "trashLength"
+    static let playbackSpeed = "playbackSpeed"
 }

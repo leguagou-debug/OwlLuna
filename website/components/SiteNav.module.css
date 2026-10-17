@@ -114,6 +114,23 @@
   border-radius: var(--radius-plate);
   overflow: hidden;
   transform-origin: top right;
+  /* The quick spring of lib/motion.ts, sampled for CSS. */
+  --quick: linear(0, 0.134, 0.396, 0.651, 0.844, 0.964, 1.024, 1.045, 1.043, 1.032, 1.02, 1.01, 1.003, 1, 0.998, 0.998, 0.998, 1, 1);
+  transition: opacity 0.35s var(--quick), transform 0.35s var(--quick), display 0.35s;
+  transition-behavior: allow-discrete;
+}
+
+.card[hidden] {
+  display: none;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+@starting-style {
+  .card {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
 }
 
 .cardBand {
@@ -150,6 +167,12 @@
 .cardRow[aria-current='page'] {
   font-weight: 600;
   box-shadow: inset 4px 0 0 var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition-property: opacity, display;
+  }
 }
 
 @media (max-width: 760px) {

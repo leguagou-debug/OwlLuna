@@ -9,11 +9,13 @@ import { Prototypes } from '@/components/sections/Prototypes'
 import { Story } from '@/components/sections/Story'
 import { Study } from '@/components/sections/Study'
 import { Writing } from '@/components/sections/Writing'
+import { FontPreload } from '@/lib/fonts'
 
 export default function Home() {
   return (
     <>
       <AppStructuredData />
+      <FontPreload font="archivo" />
       <BentoHero />
       <Pledge />
       <div id="features">

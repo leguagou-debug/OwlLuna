@@ -6,15 +6,11 @@ struct TranscriptLines: View {
     var current: Int?
     let select: (Transcript.Line) -> Void
 
-    static func clock(_ seconds: TimeInterval) -> String {
-        Duration.seconds(Int(seconds.rounded(.down))).formatted(.time(pattern: seconds >= 3600 ? .hourMinuteSecond : .minuteSecond))
-    }
-
     var body: some View {
         ForEach(lines) { line in
             Button { select(line) } label: {
                 HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
-                    Text(Self.clock(line.start))
+                    Text(Transcript.clock(line.start))
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(Color.textSecondary)
                     Text(line.text)
@@ -37,7 +33,7 @@ struct TranscriptLines: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("\(Self.clock(line.start)), \(line.text)"))
+            .accessibilityLabel(Text("\(Transcript.clock(line.start)), \(line.text)"))
             .accessibilityAddTraits(line.id == current ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("transcript.line.\(line.id + 1)")
         }
@@ -56,7 +52,6 @@ struct TranscriptView: View {
     @State private var copied = false
 
     private var recording: RecordingEntry? { recorder.recordings.first { $0.id == recordingID } }
-    private var number: Int { (recorder.recordings.firstIndex { $0.id == recordingID } ?? 0) + 1 }
     private var locale: Locale { languages.first { $0.identifier(.bcp47) == language } ?? languages[0] }
 
     var body: some View {
@@ -72,7 +67,7 @@ struct TranscriptView: View {
             }
         }
         .background(Color.surface)
-        .navigationTitle("Recording \(number)")
+        .navigationTitle(recording?.name ?? "")
         .barGround(.surface)
         .navigationBarTitleDisplayMode(.inline)
     }

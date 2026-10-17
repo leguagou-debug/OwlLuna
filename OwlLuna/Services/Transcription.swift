@@ -24,10 +24,22 @@ struct Transcript: Codable, Sendable, Equatable {
 
     var locale: String
     var words: [Word]
+    /// Set when the recogniser gave no times and the words were spread evenly over the recording.
+    var untimed: Bool?
 
     var isEmpty: Bool { words.isEmpty }
 
     var text: String { lines.map(\.text).joined(separator: "\n") }
+
+    /// What a shared transcript file holds: the lines Copy Transcript gives, each after when it was said if that is known.
+    var fileText: String {
+        guard untimed != true else { return text }
+        return lines.map { "[\(Self.clock($0.start))] \($0.text)" }.joined(separator: "\n")
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        Duration.seconds(Int(seconds.rounded(.down))).formatted(.time(pattern: seconds >= 3600 ? .hourMinuteSecond : .minuteSecond))
+    }
 
     /// A new line begins after the end of a sentence, after a pause of a second, or after sixteen words.
     var lines: [Line] {
@@ -161,12 +173,12 @@ struct DeviceTranscriber: SpeechTranscribing {
             }
         }
 
-        /// The words gathered, the first time it is asked; nil after that.
-        func finish(duration: TimeInterval) -> [Transcript.Word]? {
+        /// The words gathered and whether they came with their times, the first time it is asked; nil after that.
+        func finish(duration: TimeInterval) -> (words: [Transcript.Word], timed: Bool)? {
             lock.withLock {
                 guard !finished else { return nil }
                 finished = true
-                return transcript.words.isEmpty ? Transcript.spread(loose, over: duration) : transcript.words
+                return transcript.words.isEmpty ? (Transcript.spread(loose, over: duration), false) : (transcript.words, true)
             }
         }
     }
@@ -185,7 +197,7 @@ struct DeviceTranscriber: SpeechTranscribing {
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
         let run = Run()
-        let words: [Transcript.Word] = try await withTaskCancellationHandler {
+        let (words, timed): ([Transcript.Word], Bool) = try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let task = recognizer.recognitionTask(with: request) { result, error in
                     if let result {
@@ -196,12 +208,12 @@ struct DeviceTranscriber: SpeechTranscribing {
                             ? segments.map { Transcript.Word(text: $0.substring, start: $0.timestamp, duration: $0.duration) } : []
                         let reached = run.add(words, loose: result.isFinal ? segments.map(\.substring) : [])
                         if duration > 0 { progress(min(reached / duration, 1)) }
-                        guard result.isFinal, let words = run.finish(duration: duration) else { return }
-                        continuation.resume(returning: words)
-                    } else if let words = run.finish(duration: duration) {
+                        guard result.isFinal, let heard = run.finish(duration: duration) else { return }
+                        continuation.resume(returning: heard)
+                    } else if let heard = run.finish(duration: duration) {
                         // The recogniser ends a recording that trails off into silence with an error; what it heard still counts.
-                        if words.isEmpty, let error { continuation.resume(throwing: TranscriptionError.failed(error.localizedDescription)) }
-                        else { continuation.resume(returning: words) }
+                        if heard.words.isEmpty, let error { continuation.resume(throwing: TranscriptionError.failed(error.localizedDescription)) }
+                        else { continuation.resume(returning: heard) }
                     }
                 }
                 run.hold(task)
@@ -211,7 +223,7 @@ struct DeviceTranscriber: SpeechTranscribing {
         }
         try Task.checkCancellation()
         guard !words.isEmpty else { throw TranscriptionError.nothingHeard }
-        return Transcript(locale: locale.identifier(.bcp47), words: words)
+        return Transcript(locale: locale.identifier(.bcp47), words: words, untimed: timed ? nil : true)
     }
 }
 

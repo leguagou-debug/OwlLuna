@@ -5,25 +5,30 @@ struct PageHit: Identifiable, Hashable, Sendable {
     let page: NotebookPage
     let index: Int
     let snippet: String
-    /// Set when the match is in what was said in a recording: which recording, counting from one.
-    var recording: Int?
+    /// Set when the match is in what was said in a recording.
+    var recording: Recording?
     /// Set when the page is listed for its tags, not for a match.
     var tags: [String] = []
-    var id: String { "\(notebookID.uuidString)-\(page.id.uuidString)-\(recording ?? 0)" }
+    var id: String { "\(notebookID.uuidString)-\(page.id.uuidString)-\(recording?.id.uuidString ?? "")" }
 
-    /// "Page 3", or "Recording 2" for a match in a transcript.
+    struct Recording: Hashable, Sendable {
+        let id: UUID
+        let name: String
+    }
+
+    /// "Page 3", or the recording's name for a match in a transcript.
     var place: String {
-        recording.map { String(localized: "Recording \($0)") } ?? String(localized: "Page \(index + 1)")
+        recording?.name ?? String(localized: "Page \(index + 1)")
     }
 
     func title(in notebook: String) -> String {
-        recording.map { String(localized: "\(notebook), recording \($0)") } ?? String(localized: "\(notebook), page \(index + 1)")
+        recording.map { String(localized: "\(notebook), recording \($0.name)") } ?? String(localized: "\(notebook), page \(index + 1)")
     }
 
     /// What VoiceOver reads for the hit: where it is, then the words round the match.
     func label(in notebook: String) -> String {
         if !tags.isEmpty { return String(localized: "\(notebook), page \(index + 1), tagged \(tags.formatted(.list(type: .and)))") }
-        return recording.map { String(localized: "\(notebook), recording \($0): \(snippet)") } ?? String(localized: "\(notebook), page \(index + 1): \(snippet)")
+        return recording.map { String(localized: "\(notebook), recording \($0.name): \(snippet)") } ?? String(localized: "\(notebook), page \(index + 1): \(snippet)")
     }
 }
 
@@ -44,12 +49,13 @@ enum PageSearch {
                 guard let text = await package.readText(page.id), let snippet = snippet(in: text, for: query) else { continue }
                 hits.append(PageHit(notebookID: id, page: page, index: index, snippet: snippet))
             }
-            for (number, recording) in manifest.recordings.enumerated() where recording.transcriptFile != nil && hits.count < limitPerNotebook && total + hits.count < limit {
+            for recording in manifest.recordings where recording.transcriptFile != nil && hits.count < limitPerNotebook && total + hits.count < limit {
                 guard let text = try? String(contentsOf: package.transcriptTextURL(recording.id), encoding: .utf8),
                       let snippet = snippet(in: text, for: query) else { continue }
                 let index = recording.inkedPages?.compactMap { id in pages.firstIndex { $0.id == id } }.min() ?? 0
                 guard pages.indices.contains(index) else { continue }
-                hits.append(PageHit(notebookID: id, page: pages[index], index: index, snippet: snippet, recording: number + 1))
+                hits.append(PageHit(notebookID: id, page: pages[index], index: index, snippet: snippet,
+                                    recording: PageHit.Recording(id: recording.id, name: recording.name)))
             }
             if !hits.isEmpty { result[id] = hits }
             total += hits.count
@@ -142,7 +148,11 @@ private struct PageHitCard: View {
                 .frame(width: 56)
                 .overlay { Rectangle().strokeBorder(Color.hairline, lineWidth: 1) }
                 VStack(alignment: .leading, spacing: Space.x1) {
-                    Text(hit.place).metaStyle(.caption)
+                    if hit.recording != nil {
+                        Label(hit.place, systemImage: "waveform").metaStyle(.caption)
+                    } else {
+                        Text(hit.place).metaStyle(.caption)
+                    }
                     Text(PageSearch.highlighted(hit.snippet, query: query))
                         .font(.subheadline)
                         .foregroundStyle(Color.ink)

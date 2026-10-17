@@ -2,10 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
-import { asset, site } from '@/lib/site'
-import { quick } from '@/lib/motion'
+import { asset, iconSet, site } from '@/lib/site'
 import { Away, Button } from './ui/Button'
 import styles from './SiteNav.module.css'
 
@@ -49,7 +47,7 @@ export function SiteNav() {
     <header className={styles.bar}>
       <div className={`wrap ${styles.inner}`}>
         <Link href="/" className={styles.brand} aria-label="OwlLuna, home">
-          <img src={asset('/owlluna-icon.png')} alt="" width={32} height={32} className={styles.icon} />
+          <img src={asset('/owlluna-icon-32.webp')} srcSet={iconSet} sizes="32px" alt="" width={32} height={32} className={styles.icon} />
           <span className={styles.name}>OwlLuna</span>
         </Link>
 
@@ -90,36 +88,25 @@ export function SiteNav() {
             >
               Menu
             </button>
-            <AnimatePresence>
-              {open ? (
-                <motion.div
-                  id="site-menu"
-                  className={styles.card}
-                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={quick}
-                >
-                  <div className={`cloth ${styles.cardBand}`}>Menu</div>
-                  <nav aria-label="Site">
-                    <ul>
-                      {links.map((link) => (
-                        <li key={link.href}>
-                          <Link
-                            href={link.href}
-                            className={styles.cardRow}
-                            aria-current={current(link.href) ? 'page' : undefined}
-                            onClick={() => setOpen(false)}
-                          >
-                            {link.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </nav>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+            <div id="site-menu" className={styles.card} hidden={!open}>
+              <div className={`cloth ${styles.cardBand}`}>Menu</div>
+              <nav aria-label="Site">
+                <ul>
+                  {links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className={styles.cardRow}
+                        aria-current={current(link.href) ? 'page' : undefined}
+                        onClick={() => setOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
           </div>
         </div>
       </div>

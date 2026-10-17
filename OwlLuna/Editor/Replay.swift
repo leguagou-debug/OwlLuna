@@ -19,6 +19,15 @@ extension RecordingEntry {
         get { extra["transcript"]?.stringValue }
         set { extra["transcript"] = newValue.map(JSONValue.string) }
     }
+
+    /// The name it was given. Older builds keep it as an unknown key.
+    var title: String? {
+        get { extra["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+        set { extra["title"] = newValue.flatMap { $0.isEmpty ? nil : .string($0) } }
+    }
+
+    /// Its title, or when it began, which stays the same when another recording is deleted.
+    var name: String { title ?? startedAt.formatted(date: .abbreviated, time: .shortened) }
 }
 
 /// When each stroke written during a recording was begun, measured from the start of the recording.
@@ -160,14 +169,10 @@ struct ReplayBar: View {
     var toggleTranscript: () -> Void = {}
     let done: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// A finger is on the slider. A move without one, from VoiceOver, goes straight to its moment.
-    @State private var dragging = false
 
     private var recorder: NotebookRecorder { session.recorder }
 
-    private func clock(_ seconds: TimeInterval) -> String {
-        Duration.seconds(Int(seconds.rounded(.down))).formatted(.time(pattern: .minuteSecond))
-    }
+    private func clock(_ seconds: TimeInterval) -> String { PlaybackScrubber.clock(seconds) }
 
     var body: some View {
         let duration = max(session.replay?.duration ?? 0, 0.1), time = min(session.scrubbing ?? recorder.currentTime, duration)
@@ -180,18 +185,14 @@ struct ReplayBar: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Text(clock(time)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Color.ink)
             }
-            Slider(value: Binding(get: { time }, set: { dragging ? session.scrubReplay(to: $0) : session.seekReplay(to: $0) }),
-                   in: 0...duration) { editing in
-                dragging = editing
-                if !editing, let scrubbing = session.scrubbing { session.seekReplay(to: scrubbing) }
-            }
-            .frame(minWidth: 140, idealWidth: 260, maxWidth: 320)
-            .accessibilityLabel(Text("Position"))
-            .accessibilityValue(Text("\(clock(time)) of \(clock(duration))"))
-            .accessibilityIdentifier("editor.replay.position")
+            PlaybackScrubber(time: time, duration: duration, scrub: session.scrubReplay(to:), seek: session.seekReplay(to:))
+                .frame(minWidth: 140, idealWidth: 260, maxWidth: 320)
+                .accessibilityIdentifier("editor.replay.position")
             if !dynamicTypeSize.isAccessibilitySize {
                 Text(clock(duration)).font(.subheadline.monospacedDigit()).foregroundStyle(Color.textSecondary)
             }
+            PlaybackSpeedMenu(recorder: recorder)
+                .accessibilityIdentifier("editor.replay.speed")
             if let transcript {
                 Button(action: toggleTranscript) {
                     Label("Transcript", systemImage: "quote.bubble").symbolVariant(transcript ? .fill : .none)
@@ -210,5 +211,70 @@ struct ReplayBar: View {
         .accessibilityValue(Text(total == 0 ? String(localized: "No ink was written during this recording")
                                             : String(localized: "\(written) of \(total) strokes written")))
         .accessibilityIdentifier("editor.replay.bar")
+    }
+}
+
+/// Where playback is in a recording. Under a finger it holds where it is dragged, for `scrub` to show, and seeks there
+/// once let go; a move without one, from VoiceOver, goes straight to its moment.
+struct PlaybackScrubber: View {
+    let time: TimeInterval
+    let duration: TimeInterval
+    var scrub: (TimeInterval) -> Void = { _ in }
+    let seek: (TimeInterval) -> Void
+    @State private var dragging = false
+    @State private var held: TimeInterval?
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        Duration.seconds(Int(seconds.rounded(.down))).formatted(.time(pattern: .minuteSecond))
+    }
+
+    /// What one swipe up or down moves it by: ten seconds, less in a short recording.
+    static func step(in duration: TimeInterval) -> TimeInterval { min(10, max(duration / 10, 1)) }
+
+    var body: some View {
+        let length = max(duration, 0.1), shown = min(max(held ?? time, 0), length)
+        Slider(value: Binding(get: { shown }, set: { value in
+            if dragging {
+                held = value
+                scrub(value)
+            } else {
+                seek(value)
+            }
+        }), in: 0...length) { editing in
+            dragging = editing
+            if !editing, let held {
+                self.held = nil
+                seek(held)
+            }
+        }
+        .accessibilityLabel(Text("Position"))
+        .accessibilityValue(Text("\(Self.clock(shown)) of \(Self.clock(length))"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: seek(min(shown + Self.step(in: length), length))
+            case .decrement: seek(max(shown - Self.step(in: length), 0))
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// The speed recordings play at, named on a plate that opens a card of the speeds.
+struct PlaybackSpeedMenu: View {
+    let recorder: NotebookRecorder
+
+    var body: some View {
+        let label = PlaybackSpeed.label(recorder.speed)
+        OwlLunaMenu(Text("Playback Speed")) {
+            OwlLunaPicker(selection: Binding(get: { recorder.speed }, set: { recorder.setSpeed($0) })) {
+                ForEach(PlaybackSpeed.choices, id: \.self) { Text(PlaybackSpeed.label($0)).tag($0) }
+            }
+        } label: {
+            Text(label).monospacedDigit().frame(minWidth: 40)
+        }
+        .buttonStyle(.owlLuna(.secondary, compact: true))
+        .fixedSize()
+        .accessibilityLabel(Text("Playback speed"))
+        .accessibilityValue(Text(label))
     }
 }

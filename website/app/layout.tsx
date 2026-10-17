@@ -1,12 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
-import '@fontsource-variable/fraunces/full.css'
-import '@fontsource-variable/archivo/wdth.css'
-import '@fontsource-variable/bricolage-grotesque/wdth.css'
+import './fonts.css'
 import './globals.css'
 import { Providers } from '@/components/Providers'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
+import { FontPreload } from '@/lib/fonts'
 import { site } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -45,6 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>
+        <FontPreload font="fraunces" />
         <a href="#main" className="skip-link">
           Skip to content
         </a>

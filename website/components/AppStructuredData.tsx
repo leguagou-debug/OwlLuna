@@ -10,7 +10,7 @@ export function AppStructuredData() {
     operatingSystem: 'iPadOS 18 or later',
     description: site.description,
     url: `${site.url}/`,
-    image: `${site.url}/icon.png`,
+    image: `${site.url}/owlluna-icon.png`,
     license: site.license,
     offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
     ...(downloadUrl ? { downloadUrl } : {}),

@@ -50,9 +50,9 @@
 
 /* Begin PBXFileReference section */
 		57A1DE700000000000000001 /* OwlLunaWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OwlLunaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		57A1DE70000000000000000F /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Signing.xcconfig; path = Config/Signing.xcconfig; sourceTree = "<group>"; };
 		96D9BDAF2C13E3AC00726199 /* OwlLuna.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OwlLuna.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		96D9BDBF2C13E3B100726199 /* OwlLunaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OwlLunaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		57A1DE70000000000000000F /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Signing.xcconfig; path = Config/Signing.xcconfig; sourceTree = "<group>"; };
 		96D9BDC92C13E3B100726199 /* OwlLunaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OwlLunaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 

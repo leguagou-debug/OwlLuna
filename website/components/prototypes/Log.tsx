@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from 'react'
 import { Reveal } from '@/components/ui/Reveal'
 import { Print } from './Print'
 import { Viewer } from './Viewer'
-import { entries, sequence, type Entry } from './shots'
+import { entries, sequence, type Column, type Entry } from './shots'
 import styles from './Log.module.css'
 
 const placed = new Map(sequence.map((shot) => [shot.name, shot]))
@@ -40,10 +40,10 @@ export function Log() {
             <div className={styles.board}>
               {entry.bands.map((band, index) => (
                 <div key={index} className={styles.band} style={{ '--columns': band.map(([share]) => `${share}fr`).join(' ') } as CSSProperties}>
-                  {band.map(([, ...names], column) => (
+                  {band.map(([share, ...names], column) => (
                     <div key={names[0]} className={styles.column}>
                       {names.map((name, row) => (
-                        <Print key={name} shot={placed.get(name)!} onOpen={setOpen} delay={column * 0.07 + row * 0.05} />
+                        <Print key={name} shot={placed.get(name)!} share={share / across(band)} onOpen={setOpen} delay={column * 0.07 + row * 0.05} />
                       ))}
                     </div>
                   ))}
@@ -66,6 +66,10 @@ function Leaf({ part }: { part: number }) {
       <span className={styles.figure}>{String(part).padStart(2, '0')}</span>
     </p>
   )
+}
+
+function across(band: Column[]): number {
+  return band.reduce((sum, [share]) => sum + share, 0)
 }
 
 function span(entry: Entry): string {

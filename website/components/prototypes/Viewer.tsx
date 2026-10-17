@@ -59,6 +59,7 @@ export function Viewer({ open, onChange }: Props) {
   }
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- A click on the backdrop closes it; Escape and Close do the same.
     <dialog
       ref={dialog}
       className={styles.viewer}
@@ -81,6 +82,7 @@ export function Viewer({ open, onChange }: Props) {
             </Button>
           </header>
 
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- The same backdrop click, around the picture. */}
           <div className={styles.stage} onClick={onBackdrop}>
             <motion.img
               key={shot.name}

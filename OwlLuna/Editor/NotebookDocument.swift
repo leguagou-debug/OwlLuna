@@ -532,6 +532,18 @@ final class NotebookDocument {
         structureChanged()
     }
 
+    /// One undo step. Nothing, or only spaces, takes the name off.
+    func renameRecording(_ id: UUID, to title: String?) {
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmed?.isEmpty == false ? trimmed : nil
+        guard !isReadOnly, let index = manifest.recordings.firstIndex(where: { $0.id == id }), manifest.recordings[index].title != title else { return }
+        let before = manifest.recordings[index].title
+        manifest.recordings[index].title = title
+        structureChanged()
+        undoManager.registerUndo(withTarget: self) { $0.renameRecording(id, to: before) }
+        undoManager.setActionName(String(localized: "Rename Recording"))
+    }
+
     func setTranscript(_ file: String?, forRecording id: UUID) {
         guard !isReadOnly, let index = manifest.recordings.firstIndex(where: { $0.id == id }) else { return }
         manifest.recordings[index].transcriptFile = file

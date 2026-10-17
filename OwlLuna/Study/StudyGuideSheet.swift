@@ -99,8 +99,8 @@ struct StudyGuideSheet: View {
             OwlLunaPicker(selection: $scope) {
                 Text("Whole Notebook").tag(StudyScope.notebook)
                 if let page = currentPage { Text("Page \(session.currentPage + 1)").tag(StudyScope.page(page.id)) }
-                ForEach(Array(session.recorder.recordings.enumerated()), id: \.element.id) { index, recording in
-                    if recording.transcriptFile != nil { Text("Recording \(index + 1)").tag(StudyScope.recording(recording.id)) }
+                ForEach(session.recorder.recordings) { recording in
+                    if recording.transcriptFile != nil { Text(recording.name).tag(StudyScope.recording(recording.id)) }
                 }
             }
         } label: {
@@ -118,7 +118,7 @@ struct StudyGuideSheet: View {
         switch scope {
         case .notebook: String(localized: "Whole Notebook")
         case .page(let id): String(localized: "Page \((document.index(of: id) ?? 0) + 1)")
-        case .recording(let id): String(localized: "Recording \((session.recorder.recordings.firstIndex { $0.id == id } ?? 0) + 1)")
+        case .recording(let id): session.recorder.recordings.first { $0.id == id }?.name ?? ""
         }
     }
 

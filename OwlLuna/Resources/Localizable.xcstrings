@@ -48,6 +48,50 @@
         }
       }
     },
+    "%@, recording %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, Aufnahme %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, grabación %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, enregistrement %2$@"
+          }
+        }
+      }
+    },
+    "%@, recording %@: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, Aufnahme %2$@: %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, grabación %2$@: %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, enregistrement %2$@ : %3$@"
+          }
+        }
+      }
+    },
     "%@, ticked" : {
       "localizations" : {
         "de" : {
@@ -1102,6 +1146,28 @@
         }
       }
     },
+    "Adding recordings…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahmen werden hinzugefügt …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadiendo grabaciones…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout des enregistrements…"
+          }
+        }
+      }
+    },
     "Adds this tag to every notebook" : {
       "localizations" : {
         "de" : {
@@ -1364,6 +1430,28 @@
         }
       }
     },
+    "Include Recordings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahmen einschließen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incluir grabaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inclure les enregistrements"
+          }
+        }
+      }
+    },
     "Italic" : {
       "localizations" : {
         "de" : {
@@ -1470,6 +1558,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "derniers ouverts en dernier"
+          }
+        }
+      }
+    },
+    "Leave it empty to name it after when it was recorded." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leer lassen, um sie nach dem Zeitpunkt der Aufnahme zu benennen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjalo vacío para que tome el nombre de cuándo se grabó."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laissez vide pour le nommer d’après le moment où il a été enregistré."
           }
         }
       }
@@ -1814,6 +1924,72 @@
         }
       }
     },
+    "Playback Speed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiedergabegeschwindigkeit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad de reproducción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse de lecture"
+          }
+        }
+      }
+    },
+    "Playback speed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiedergabegeschwindigkeit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad de reproducción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse de lecture"
+          }
+        }
+      }
+    },
+    "Recording Options" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahmeoptionen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones de grabación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Options d’enregistrement"
+          }
+        }
+      }
+    },
     "Remove from All" : {
       "localizations" : {
         "de" : {
@@ -1832,6 +2008,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retirer de tous"
+          }
+        }
+      }
+    },
+    "Rename Recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme umbenennen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renombrar grabación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer l’enregistrement"
           }
         }
       }
@@ -1876,6 +2074,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serif"
+          }
+        }
+      }
+    },
+    "Share Audio…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio teilen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir audio…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager l’audio…"
+          }
+        }
+      }
+    },
+    "Share Transcript…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transkript teilen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir transcripción…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager la transcription…"
           }
         }
       }
@@ -1942,6 +2184,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couleur du texte"
+          }
+        }
+      }
+    },
+    "The %lld recordings and any transcripts go in a zip with the PDF." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die %lld Aufnahmen und ihre Transkripte, falls vorhanden, kommen mit dem PDF in ein ZIP-Archiv."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las %lld grabaciones y sus transcripciones, si las tienen, van en un zip con el PDF."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les %lld enregistrements et leurs transcriptions éventuelles vont dans un zip avec le PDF."
+          }
+        }
+      }
+    },
+    "The recording and any transcript go in a zip with the PDF." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufnahme und ihr Transkript, falls vorhanden, kommen mit dem PDF in ein ZIP-Archiv."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación y su transcripción, si la tiene, van en un zip con el PDF."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’enregistrement et sa transcription éventuelle vont dans un zip avec le PDF."
           }
         }
       }
@@ -3080,62 +3366,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, page %2$lld : %3$@"
-          }
-        }
-      }
-    },
-    "%@, recording %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, Aufnahme %2$lld"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, recording %2$lld"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, grabación %2$lld"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, enregistrement %2$lld"
-          }
-        }
-      }
-    },
-    "%@, recording %lld: %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, Aufnahme %2$lld: %3$@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, recording %2$lld: %3$@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, grabación %2$lld: %3$@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, enregistrement %2$lld : %3$@"
           }
         }
       }
@@ -21188,28 +21418,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrer l’audio"
-          }
-        }
-      }
-    },
-    "Recording %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aufnahme %lld"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Grabación %lld"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistrement %lld"
           }
         }
       }

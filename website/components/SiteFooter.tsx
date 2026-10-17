@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { asset, site } from '@/lib/site'
+import { asset, iconSet, site } from '@/lib/site'
 import styles from './SiteFooter.module.css'
 
 export function SiteFooter() {
@@ -8,7 +8,16 @@ export function SiteFooter() {
       <div className={`wrap ${styles.inner}`}>
         <div className={styles.colophon}>
           <div className={styles.brand}>
-            <img src={asset('/owlluna-icon.png')} alt="" width={44} height={44} className={styles.icon} />
+            <img
+              src={asset('/owlluna-icon-64.webp')}
+              srcSet={iconSet}
+              sizes="44px"
+              alt=""
+              width={44}
+              height={44}
+              loading="lazy"
+              className={styles.icon}
+            />
             <span className={styles.name}>OwlLuna</span>
           </div>
           <p className={styles.line}>Free and open source. No ads, no subscriptions, no tracking.</p>
