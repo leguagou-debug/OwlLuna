@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in OwlLuna doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Look through the [existing issues](https://github.com/owaisazmal/OwlLuna/issues) first, in case yours is already known.
+
+        **Issues are public.** Anyone can read what you post here, so leave out anything private, such as a page from your notebook. A security problem, or a privacy question about your own notes, goes in a private report instead: [SECURITY.md](https://github.com/owaisazmal/OwlLuna/blob/main/SECURITY.md) says how.
+
+  - type: input
+    id: ipad-model
+    attributes:
+      label: iPad model
+      description: In the iPad's Settings › General › About, under Model Name.
+      placeholder: iPad Air 11-inch (M2)
+    validations:
+      required: true
+
+  - type: input
+    id: ipados-version
+    attributes:
+      label: iPadOS version
+      description: In the iPad's Settings › General › About, under iPadOS Version.
+      placeholder: "18.6"
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version and build
+      description: The version is in Settings › About in the app. If you test with TestFlight, the TestFlight app shows the build in brackets after the version.
+      placeholder: 1.0 (12)
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps, one per line, so the problem can be made to happen again.
+      placeholder: |
+        1. Opened a notebook with a PDF in it
+        2. Chose ⋯ › Select PDF Text
+        3. Dragged across a line of text
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened
+      description: And what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: drawing-with
+    attributes:
+      label: For a drawing problem, were you using the Apple Pencil or a finger?
+      description: Skip this if the problem isn't about drawing.
+      options:
+        - Apple Pencil
+        - A finger
+        - Both
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or a screen recording
+      description: "Optional. Drag them in here. They are public too: crop out any notes you don't want others to read, or show the problem in a new notebook."
+    validations:
+      required: false

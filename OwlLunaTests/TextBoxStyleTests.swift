@@ -488,6 +488,25 @@ final class TextBoxStyleTests: XCTestCase {
             }
         }
     }
+
+    func testZoomedInTypingWrapsWhereTheBoxIsDrawn() {
+        var boxes = styled
+        for (name, size) in [("small", 13), ("title", 34)] as [(String, CGFloat)] {
+            var box = TextBox(string: "Write up the titration and its error bars\nReturn the burette")
+            box.fontSize = size
+            boxes.append((name, box))
+        }
+        func lines(_ height: CGFloat, _ font: UIFont) -> Int { Int((height / font.lineHeight).rounded()) }
+        for (name, box) in boxes {
+            for width in stride(from: 120, through: 300, by: 30) as StrideThrough<CGFloat> {
+                let drawn = lines(box.height(width: width), box.font())
+                for scale in [1, 1.5, 2.25] as [CGFloat] {
+                    let typed = UITextView.typeset(box, width: width * scale, scale: scale)
+                    XCTAssertEqual(lines(typed.height, box.font(scale: scale)), drawn, "\(name), \(Int(width)) pt wide, at \(scale)× wraps as drawn")
+                }
+            }
+        }
+    }
 }
 
 private extension UIView {

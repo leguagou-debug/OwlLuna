@@ -1,6 +1,6 @@
 # Contributing to OwlLuna
 
-Thanks for helping make a great free notes app.
+Thanks for helping make a great free notes app. Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Workflow
 
@@ -24,4 +24,6 @@ OwlLuna collects no data. Please don't add analytics, tracking, ads, or network 
 
 ## Reporting bugs
 
-Include your device, iPadOS version, steps to reproduce, and what you expected versus what happened. For drawing bugs, say whether you were using Apple Pencil or a finger.
+Use the bug report form in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues/new/choose). Include your iPad model, iPadOS version, the app's version and build, steps to reproduce, and what you expected versus what happened. For drawing bugs, say whether you were using Apple Pencil or a finger.
+
+Issues are public. Report a security problem, or a privacy question about your own notes, privately instead: see [SECURITY.md](SECURITY.md).

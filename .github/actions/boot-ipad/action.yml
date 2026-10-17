@@ -1,0 +1,47 @@
+name: Boot an iPad simulator
+description: Boots an iPad on the newest iOS runtime, or on the newest runtime of one iOS version, and sets SIMULATOR_UDID.
+
+inputs:
+  ios:
+    description: An iOS major version, or "latest".
+    default: latest
+
+outputs:
+  udid:
+    description: The booted simulator; empty when the runner has no matching runtime.
+    value: ${{ steps.boot.outputs.udid }}
+
+runs:
+  using: composite
+  steps:
+    - id: boot
+      shell: bash
+      env:
+        IOS: ${{ inputs.ios }}
+      run: |
+        runtime=$(xcrun simctl list runtimes available --json | jq -r --arg ios "$IOS" '
+          [.runtimes[] | select(.platform == "iOS" and ($ios == "latest" or (.version | startswith($ios + "."))))]
+          | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty')
+        if [ -z "$runtime" ]; then
+          echo "udid=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        udid=$(xcrun simctl list devices available --json | jq -r --arg runtime "$runtime" '
+          .devices[$runtime] // []
+          | (map(select(.name | startswith("iPad Pro 11"))) + map(select(.name | startswith("iPad"))))
+          | first | .udid // empty')
+        if [ -z "$udid" ]; then
+          type=$(xcrun simctl list runtimes --json | jq -r --arg runtime "$runtime" '
+            .runtimes[] | select(.identifier == $runtime) | .supportedDeviceTypes
+            | (map(select(.name | startswith("iPad Pro 11"))) + map(select(.productFamily == "iPad")))
+            | first | .identifier // empty')
+          if [ -z "$type" ]; then
+            echo "::error::$runtime has no iPad device type."
+            exit 1
+          fi
+          udid=$(xcrun simctl create "CI iPad" "$type" "$runtime")
+        fi
+        echo "Booting $(xcrun simctl list devices --json | jq -r --arg udid "$udid" '.devices[][] | select(.udid == $udid) | .name') on $runtime"
+        xcrun simctl boot "$udid"
+        echo "udid=$udid" >> "$GITHUB_OUTPUT"
+        echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"

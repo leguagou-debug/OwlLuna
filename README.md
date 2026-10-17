@@ -194,7 +194,7 @@ The app's site, with its Privacy Policy and Support page, is in [`website/`](web
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests go in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature requests go in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues). Security problems are reported privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 

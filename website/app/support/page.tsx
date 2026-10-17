@@ -60,6 +60,11 @@ export default function Support() {
                   private, such as a page from your notebook.
                   {email ? ' If a report needs something private, send it by email.' : null}
                 </p>
+                <p>
+                  A security problem, or a privacy question about your own notes, goes in a private report on GitHub
+                  instead, which only the developer can read. <a href={site.security}>SECURITY.md</a> says how to send
+                  one.
+                </p>
               </div>
             </Stamp>
           </div>

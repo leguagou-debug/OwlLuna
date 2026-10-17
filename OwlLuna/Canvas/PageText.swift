@@ -103,15 +103,19 @@ extension TextBox {
         (String(localized: "Small"), 13), (String(localized: "Body"), 17), (String(localized: "Large"), 24), (String(localized: "Title"), 34),
     ]
 
+    /// At a `scale`, the type size's own cut and spacing enlarged, so zoomed-in typing wraps where the page does.
     func font(scale: CGFloat = 1) -> UIFont {
-        let size = fontSize * scale, weight: UIFont.Weight = isBold ? .bold : .regular
+        let size = fontSize, weight: UIFont.Weight = isBold ? .bold : .regular
         let upright: UIFont = switch face {
         case .system: .systemFont(ofSize: size, weight: weight)
         case .serif: Self.system(.serif, size: size, weight: weight)
         case .mono: Self.system(.monospaced, size: size, weight: weight)
         case .fraunces: OwlLunaFonts.text(size: size, bold: isBold) as UIFont
         }
-        return isItalic ? Self.italic(upright, ownCut: face != .fraunces) : upright
+        let font = isItalic ? Self.italic(upright, ownCut: face != .fraunces) : upright
+        guard scale != 1 else { return font }
+        let pinned = font.fontDescriptor.addingAttributes([.init(rawValue: kCTFontOpticalSizeAttribute as String): size])
+        return UIFont(descriptor: pinned, size: size * scale)
     }
 
     private static func system(_ design: UIFontDescriptor.SystemDesign, size: CGFloat, weight: UIFont.Weight) -> UIFont {

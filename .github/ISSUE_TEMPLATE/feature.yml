@@ -1,0 +1,26 @@
+name: Feature request
+description: Ask for something OwlLuna doesn't do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Look through the [existing issues](https://github.com/owaisazmal/OwlLuna/issues) first, in case someone has asked already.
+
+        **Issues are public.** Leave out anything private, such as a page from your notebook.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What do you want to do?
+      description: The task you're trying to get done, rather than the button you'd add. That leaves room for a better way to do it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: In OwlLuna, in another app or on paper, and what gets in the way. If you can't do it at all yet, say so.
+    validations:
+      required: true

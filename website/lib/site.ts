@@ -11,6 +11,7 @@ export const site = {
   license: `${repo}/blob/main/LICENSE`,
   fontLicenses: `${repo}/tree/main/OwlLuna/Resources/Fonts`,
   contributing: `${repo}/blob/main/CONTRIBUTING.md`,
+  security: `${repo}/blob/main/SECURITY.md`,
   author: { name: 'Owais Khan', url: 'https://github.com/owaisazmal' },
   /** Who designed the owl of the app's icon. */
   logoDesigner: { name: 'Safiya Sulaiman', url: 'https://www.linkedin.com/in/safiya-sulaiman-53920932a/' },

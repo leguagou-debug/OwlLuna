@@ -1,0 +1,6 @@
+# Blank issues stay on for what neither form fits, such as a correction to a translation.
+blank_issues_enabled: true
+contact_links:
+  - name: Support and common questions
+    url: https://owaisazmal.github.io/OwlLuna/support/
+    about: Answers about getting started, your notes and iCloud, privacy and troubleshooting.
