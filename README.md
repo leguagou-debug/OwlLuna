@@ -126,7 +126,15 @@ git clone https://github.com/owaisazmal/OwlLuna.git
 open OwlLuna/OwlLuna.xcodeproj
 ```
 
-Select an iPad simulator and run. To run on a device, choose your team for both the `OwlLuna` and `OwlLunaWidgets` targets; they share the App Group `group.com.owais.OwlLuna`, which you may need to rename to one your team owns (it's set in `Config/*.entitlements` and `Shared/WidgetSnapshot.swift`). iCloud sync needs the iCloud capability, so the OwlLuna target is signed with `Config/OwlLuna-iCloud.entitlements`; rename its container `iCloud.com.owais.OwlLuna` to one your team owns. A free developer account can't sign that capability: set the target's `CODE_SIGN_ENTITLEMENTS` to `Config/OwlLuna.entitlements` instead, and the app builds and runs as before with Settings saying sync is unavailable. Only the Apple Pencil draws until you choose otherwise: **⋯ → Draw With → Pencil and Finger** lets a finger draw, and the mouse in the simulator.
+Select an iPad simulator and run. Only the Apple Pencil draws until you choose otherwise: **⋯ → Draw With → Pencil and Finger** lets a finger draw, and the mouse in the simulator.
+
+To run on a device, the one file to edit is your own copy of the signing settings, which git ignores:
+
+```bash
+cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
+```
+
+Put your team ID and a bundle ID prefix you own in it. The bundle IDs, the App Group the app shares with its widgets and the iCloud container all follow the prefix (`<prefix>.OwlLuna`, `group.<prefix>.OwlLuna`, `iCloud.<prefix>.OwlLuna`); set `APP_GROUP` or `ICLOUD_CONTAINER` there too if yours are named differently. Choose the team there rather than in Signing & Capabilities, which writes it into the project. A free developer account can't sign the iCloud capability: uncomment `APP_ENTITLEMENTS` in the same file, and the app builds and runs as before with Settings saying sync is unavailable.
 
 Run the tests with ⌘U or from Terminal. Any iPad simulator works; this lists the ones you have:
 

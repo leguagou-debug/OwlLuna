@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the app hands its widgets, written to the shared container when the library changes.
 struct WidgetSnapshot: Codable, Equatable, Sendable {
@@ -17,11 +18,20 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The day this was written, keyed the same way, when that day's page in the daily journal had writing on it.
     var journalWrittenDay: String?
 
-    static let appGroup = "group.com.owais.OwlLuna"
+    static let appGroup = appGroup(in: .main)
     static let coverFile = "widget-cover.png"
 
+    /// The App Group named in Config/Signing.xcconfig, which the build writes into Info.plist as `OwlLunaAppGroup`.
+    static func appGroup(in bundle: Bundle) -> String? {
+        guard let group = bundle.object(forInfoDictionaryKey: "OwlLunaAppGroup") as? String, !group.isEmpty, !group.contains("$(") else {
+            Logger(subsystem: "com.owais.OwlLuna", category: "widgets").fault("OwlLunaAppGroup is missing from \(bundle.bundleIdentifier ?? "this bundle", privacy: .public)'s Info.plist, so the app and its widgets share nothing")
+            return nil
+        }
+        return group
+    }
+
     static var directory: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+        appGroup.flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     }
 
     static func read(from directory: URL? = WidgetSnapshot.directory) -> WidgetSnapshot? {

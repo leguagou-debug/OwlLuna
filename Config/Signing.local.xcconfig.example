@@ -1,0 +1,10 @@
+// Copy to Signing.local.xcconfig (git ignores it) and put in your own team and prefix.
+DEVELOPMENT_TEAM = ABCDE12345
+BUNDLE_ID_PREFIX = com.example
+
+// The App Group and iCloud container follow the prefix. Name them here only if yours are called something else.
+// APP_GROUP = group.com.example.OwlLuna
+// ICLOUD_CONTAINER = iCloud.com.example.OwlLuna
+
+// A free developer account can't sign iCloud. Sign without it, and Settings says sync is unavailable.
+// APP_ENTITLEMENTS = Config/OwlLuna.entitlements

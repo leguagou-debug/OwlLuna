@@ -12,8 +12,8 @@ final class SyncCenterTests: XCTestCase {
     private var cloud: CloudFolder!
     private var defaults: UserDefaults!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         root = temporaryRoot(self)
         cloud = CloudFolder(url: temporaryRoot(self).url)
         let suite = "owlluna-tests-\(UUID().uuidString)"

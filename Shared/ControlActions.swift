@@ -5,7 +5,7 @@ import Foundation
 enum ControlRelay {
     static let key = "pendingControlAction"
 
-    static var defaults: UserDefaults? { UserDefaults(suiteName: WidgetSnapshot.appGroup) }
+    static var defaults: UserDefaults? { WidgetSnapshot.appGroup.flatMap { UserDefaults(suiteName: $0) } }
 
     static func post(_ action: String, to defaults: UserDefaults? = ControlRelay.defaults) {
         defaults?.set(action, forKey: key)

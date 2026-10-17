@@ -1,0 +1,8 @@
+// Signing for the app, its widgets and the tests. Put your own values in Signing.local.xcconfig, copied from Signing.local.xcconfig.example.
+DEVELOPMENT_TEAM = 7QU5DP6N9B
+BUNDLE_ID_PREFIX = com.owais
+APP_GROUP = group.$(BUNDLE_ID_PREFIX).OwlLuna
+ICLOUD_CONTAINER = iCloud.$(BUNDLE_ID_PREFIX).OwlLuna
+APP_ENTITLEMENTS = Config/OwlLuna-iCloud.entitlements
+
+#include? "Signing.local.xcconfig"

@@ -179,6 +179,13 @@ final class AppActionTests: XCTestCase {
         XCTAssertNil(WidgetSnapshot.read(from: directory.appending(path: "missing")))
     }
 
+    func testTheAppGroupComesFromTheSigningSettings() throws {
+        let group = try XCTUnwrap(WidgetSnapshot.appGroup, "the app's Info.plist names its App Group")
+        XCTAssertTrue(group.hasPrefix("group."), group)
+        XCTAssertFalse(group.contains("$("), "the build filled in APP_GROUP")
+        XCTAssertNil(WidgetSnapshot.appGroup(in: Bundle(for: Self.self)), "a bundle without the key gets no group, not a made-up one")
+    }
+
     func testSiriIsOfferedNeitherLockedNorDeletedNotebooks() async throws {
         let store = try makeStore()
         let biology = try await makeNotebook("Biology", in: store, opened: .now)

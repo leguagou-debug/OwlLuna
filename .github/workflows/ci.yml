@@ -72,6 +72,8 @@ jobs:
             -project OwlLuna.xcodeproj \
             -scheme OwlLuna \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            GCC_TREAT_WARNINGS_AS_ERRORS=YES \
             2>&1 | tee "$RUNNER_TEMP/build.log" \
             | xcbeautify --renderer github-actions
 
@@ -179,6 +181,8 @@ jobs:
             -project OwlLuna.xcodeproj \
             -scheme OwlLuna \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            GCC_TREAT_WARNINGS_AS_ERRORS=YES \
             2>&1 | tee "$RUNNER_TEMP/build.log" \
             | xcbeautify --renderer github-actions
 

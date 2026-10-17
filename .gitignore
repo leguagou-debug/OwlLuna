@@ -8,3 +8,4 @@ build/
 *.dSYM
 .swiftpm/
 .build/
+Config/Signing.local.xcconfig
