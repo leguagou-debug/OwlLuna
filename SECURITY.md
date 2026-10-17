@@ -26,7 +26,7 @@ Posting needs a free GitHub account. Only you and the developer can read the rep
 
 These are not security problems:
 
-- A lock doesn't encrypt a notebook's files beyond what iPadOS does for every app, and a backup or an iCloud copy holds a locked notebook like any other. That's by design, and the [Support page](https://owaisazmal.github.io/OwlLuna/support/) says so.
+- A lock doesn't encrypt a notebook's files beyond what iPadOS does for every app, and a backup or an iCloud copy holds a locked notebook like any other. That's by design, and the [Support page](https://owaisazmal.github.io/OwlLuna/support/#locks) says so.
 - Problems in iPadOS, iCloud or Face ID themselves go to [Apple](https://security.apple.com).
 - Crashes and other bugs that don't expose your notes go in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues), with the bug report form.
 

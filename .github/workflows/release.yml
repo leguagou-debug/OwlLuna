@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    name: Release archive
+    # Unsigned on purpose; RELEASING.md says what a signed upload from here would need.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcodebuild archive \
+            -project OwlLuna.xcodeproj \
+            -scheme OwlLuna \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/OwlLuna.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/archive.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Check the version
+        run: |
+          app="$RUNNER_TEMP/OwlLuna.xcarchive/Products/Applications/OwlLuna.app"
+          for key in CFBundleShortVersionString CFBundleVersion; do
+            mine=$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/Info.plist")
+            widgets=$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/PlugIns/OwlLunaWidgets.appex/Info.plist")
+            if [ "$mine" != "$widgets" ]; then
+              echo "::error::The widgets' $key is $widgets, but the app's is $mine. Set both targets to the same."
+              exit 1
+            fi
+          done
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")
+          build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")
+          IFS=. read -r major minor patch <<< "$version"
+          tag="v$major.${minor:-0}.${patch:-0}"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::The app's version is $version, so its tag is $tag, not $GITHUB_REF_NAME."
+            exit 1
+          fi
+          echo "OwlLuna $version (build $build) archived from ${GITHUB_SHA:0:7}." >> "$GITHUB_STEP_SUMMARY"
+          echo "ARTIFACT=OwlLuna-$version-build-$build-${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+
+      - name: Zip the archive
+        run: ditto -c -k --keepParent "$RUNNER_TEMP/OwlLuna.xcarchive" "$RUNNER_TEMP/OwlLuna.xcarchive.zip"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ runner.temp }}/OwlLuna.xcarchive.zip
+          compression-level: 0
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: archive-log
+          path: ${{ runner.temp }}/archive.log
