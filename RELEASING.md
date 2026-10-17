@@ -75,7 +75,7 @@ gh auth login
 Take the version's section of the changelog as the notes:
 
 ```bash
-awk '/^## \[1\.0\.1\]/{on=1; next} on && /^## \[/{exit} on' CHANGELOG.md > "$TMPDIR/notes.md"
+awk '/^## \[1\.0\.1\]/{on=1; next} on && /^(## )?\[/{exit} on' CHANGELOG.md > "$TMPDIR/notes.md"
 ```
 
 ```bash
