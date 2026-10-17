@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Crop a picture on the page: choose Crop, then drag an edge or a corner. Reset Crop brings the whole picture back, and exports keep only the part you kept.
 - Settings › Appearance: follow the iPad's Light or Dark, or always use one of them, in every window.
 - Settings › Input › Left-Handed moves the page ribbon, the zoom window's buttons and the panels beside the page to the left.
-- Settings › Recently Deleted: empty it after 7, 30 or 90 days. Each iPad keeps its own length, and with sync on a notebook stays on an iPad that keeps it longer.
+- Settings › Recently Deleted: empty it after 7, 30 or 90 days. Each iPad keeps to its own length, and sync leaves a notebook on an iPad that keeps it longer.
 - Settings › Pen Tray puts the tray back to the pens it started with.
 - Settings › Recordings sets the language transcripts use. Each recording can still pick another.
 - A list view for the library. Switch between Shelf and List in the library's bar. The list shows tags, folder, pages and last changed as room allows, and a column heading sorts by it.

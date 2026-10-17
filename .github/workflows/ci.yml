@@ -55,7 +55,7 @@ jobs:
         if: steps.simulator.outputs.udid == ''
         run: |
           xcodebuild -version
-          runtimes=$(xcrun simctl list runtimes available | grep '^iOS' | cut -d' ' -f1-2 | paste -sd, - | sed 's/,/, /g')
+          runtimes=$(xcrun simctl list runtimes available | grep '^iOS' | cut -d' ' -f1-2 | paste -sd, - | sed 's/,/, /g' || true)
           if [ "${{ matrix.ios }}" = latest ]; then
             echo "::error::No iOS simulator runtime is available on this runner."
             exit 1
