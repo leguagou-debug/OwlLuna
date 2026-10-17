@@ -1,7 +1,7 @@
 'use client'
 
-import { motion } from 'motion/react'
-import { useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from 'react'
+import { motion, useDragControls } from 'motion/react'
+import { useRef, useState, type CSSProperties, type PointerEvent, type RefObject } from 'react'
 import { useArrival } from '@/components/ui/useArrival'
 import { landing } from '@/lib/motion'
 import { Viewer } from './Viewer'
@@ -52,13 +52,7 @@ const lies = sequence.map((_, index) => ({ turn: Math.round((turn() - 0.5) * 150
 
 const percent = (value: number) => `${Math.round(value * 100) / 100}%`
 
-const pointer = '(hover: hover) and (pointer: fine)'
-
-function subscribe(changed: () => void) {
-  const media = window.matchMedia(pointer)
-  media.addEventListener('change', changed)
-  return () => media.removeEventListener('change', changed)
-}
+const said = { kept: 'Kept', dropped: 'Dropped' }
 
 /** Every screenshot loose on a desk: drag one aside with a mouse, select one to look at it closely. */
 export function Pile() {
@@ -66,30 +60,29 @@ export function Pile() {
   const top = useRef(sequence.length + 1)
   const { arrived } = useArrival(desk, { amount: 0.15 })
   const [open, setOpen] = useState<number | null>(null)
-  const fine = useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(pointer).matches,
-    () => false,
-  )
 
   return (
     <>
-      <div ref={desk} className={styles.desk} aria-hidden="true">
-        {sequence.map((shot, index) => (
-          <Loose
-            key={shot.name}
-            shot={shot}
-            index={index}
-            desk={desk}
-            dealt={arrived}
-            draggable={fine}
-            raise={() => (top.current += 1)}
-            onOpen={setOpen}
-          />
-        ))}
+      <div ref={desk} className={styles.desk}>
+        <a href="#past-the-desk" className="skip-link">
+          Skip past the screenshots
+        </a>
+        <ol className={styles.prints} role="list" aria-label="The screenshots on the desk">
+          {sequence.map((shot, index) => (
+            <Loose
+              key={shot.name}
+              shot={shot}
+              index={index}
+              desk={desk}
+              dealt={arrived}
+              raise={() => (top.current += 1)}
+              onOpen={setOpen}
+            />
+          ))}
+        </ol>
       </div>
-      <p className={styles.hint}>
-        <span className={styles.byMouse}>Drag them about, or select one for a closer look.</span>
+      <p id="past-the-desk" className={styles.hint}>
+        <span className={styles.byMouse}>Drag them about with a mouse, or select one for a closer look.</span>
         <span className={styles.byTouch}>Tap one for a closer look.</span>
       </p>
       <Viewer open={open} onChange={setOpen} />
@@ -102,14 +95,15 @@ type LooseProps = {
   index: number
   desk: RefObject<HTMLDivElement | null>
   dealt: boolean
-  draggable: boolean
   raise: () => number
   onOpen: (number: number) => void
 }
 
-function Loose({ shot, index, desk, dealt, draggable, raise, onOpen }: LooseProps) {
+function Loose({ shot, index, desk, dealt, raise, onOpen }: LooseProps) {
   const lie = lies[index]
   const [layer, setLayer] = useState(lie.layer)
+  const controls = useDragControls()
+  const dragged = useRef(false)
   const place = {
     '--x': percent(wide[index].x),
     '--y': percent(wide[index].y),
@@ -120,41 +114,58 @@ function Loose({ shot, index, desk, dealt, draggable, raise, onOpen }: LooseProp
     '--nx': percent(narrow[index].x),
     '--ny': percent(narrow[index].y),
     '--nw': percent(narrow[index].w),
-    zIndex: layer,
+    '--layer': layer,
   } as CSSProperties
 
+  /** Only a mouse picks a print up; a finger or a pen on one scrolls the page as anywhere else. */
+  const press = (event: PointerEvent) => {
+    dragged.current = false
+    if (event.pointerType !== 'mouse') return
+    setLayer(raise())
+    controls.start(event)
+  }
+
   return (
-    <div className={styles.spot} style={place}>
+    <li className={styles.spot} style={place}>
       <motion.div
         initial={false}
         animate={dealt ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: -48, scale: 1.18 }}
         transition={dealt ? { ...landing, delay: 0.05 + index * 0.02 } : { duration: 0 }}
       >
-        <motion.div
+        <motion.button
+          type="button"
           className={`print ${styles.print}`}
           initial={false}
           animate={{ rotate: lie.turn }}
-          drag={draggable}
+          drag
+          dragControls={controls}
+          dragListener={false}
           dragConstraints={desk}
           dragElastic={0.1}
           dragTransition={{ power: 0.12, timeConstant: 160 }}
           whileDrag={{ scale: 1.06, rotate: 0 }}
-          tabIndex={-1}
-          onPointerDown={() => setLayer(raise())}
-          onTap={() => onOpen(shot.number)}
+          onPointerDown={press}
+          onDragStart={() => (dragged.current = true)}
+          onClick={(event) => {
+            if (dragged.current && event.detail > 0) return
+            onOpen(shot.number)
+          }}
         >
           <img
             className={styles.image}
             src={source(shot, 'thumb')}
             width={shot.width}
             height={shot.height}
-            alt=""
+            alt={shot.alt}
             draggable={false}
             loading="lazy"
             decoding="async"
           />
-        </motion.div>
+          <span className="visually-hidden">
+            {shot.verdict ? ` ${said[shot.verdict]}.` : ''} Open it larger.
+          </span>
+        </motion.button>
       </motion.div>
-    </div>
+    </li>
   )
 }

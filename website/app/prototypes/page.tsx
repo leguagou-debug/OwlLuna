@@ -31,11 +31,11 @@ export default function Prototypes() {
             <SectionHeading as="h1" eyebrow="Prototypes" title="How it came to look like this" />
             <p className={styles.key}>
               <span className={styles.keyLine} aria-hidden="true">
-                <Tag verdict="kept" className={styles.keyTag} />
+                <Tag verdict="kept" className={`print ${styles.keyTag}`} />
                 went into the app.
               </span>
               <span className={styles.keyLine} aria-hidden="true">
-                <Tag verdict="dropped" className={styles.keyTag} />
+                <Tag verdict="dropped" className={`print ${styles.keyTag}`} />
                 did not.
               </span>
               <span className="visually-hidden">A screenshot marked Kept went into the app. One marked Dropped did not.</span>

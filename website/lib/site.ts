@@ -19,6 +19,8 @@ export const site = {
   since: '2024–2026',
   /** The App Store page, once the app is published. Empty until then. */
   appStoreUrl: '',
+  /** The code from Google Search Console's HTML-tag verification. Empty adds no tag. */
+  googleSiteVerification: '',
   /** An address for privacy and support questions. Empty shows GitHub Issues alone. */
   contactEmail: '',
   /** The day the privacy policy last changed, as YYYY-MM-DD. */

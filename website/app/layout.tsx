@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   description: site.description,
   applicationName: site.name,
   authors: [{ name: site.author.name, url: site.author.url }],
+  alternates: { canonical: './' },
+  verification: { google: site.googleSiteVerification.trim() || undefined },
   openGraph: {
     type: 'website',
     siteName: site.name,

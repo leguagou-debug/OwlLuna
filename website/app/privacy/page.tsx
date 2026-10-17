@@ -12,7 +12,6 @@ export const metadata: Metadata = {
   title: 'Privacy Policy',
   description:
     'OwlLuna collects nothing. What the app keeps on your iPad, what iCloud sync copies to your own iCloud storage, what each permission is for, and how to remove it all.',
-  alternates: { canonical: './' },
 }
 
 const apple = {

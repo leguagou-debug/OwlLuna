@@ -1,3 +1,4 @@
+import { AppStructuredData } from '@/components/AppStructuredData'
 import { BentoHero } from '@/components/hero/BentoHero'
 import { More } from '@/components/sections/More'
 import { Notebooks } from '@/components/sections/Notebooks'
@@ -12,6 +13,7 @@ import { Writing } from '@/components/sections/Writing'
 export default function Home() {
   return (
     <>
+      <AppStructuredData />
       <BentoHero />
       <Pledge />
       <div id="features">
