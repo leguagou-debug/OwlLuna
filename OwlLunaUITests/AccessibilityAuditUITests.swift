@@ -28,12 +28,16 @@ final class AccessibilityAuditUITests: XCTestCase {
             XCUIDevice.shared.appearance = .light
             XCUIDevice.shared.orientation = .portrait
         }
-        // The iPadOS 27 simulator can ignore the switch above, so the app is told as well.
-        let extra = ["-appearance", appearance == .dark ? "dark" : "light"] + extra
         let empty = XCUIApplication()
         empty.launchArguments = ["-storageRoot", "audit-empty", "-resetStorage"] + extra
         empty.launch()
         XCTAssertTrue(empty.buttons["Import PDF"].firstMatch.waitForExistence(timeout: 30))
+        // The iPadOS 27 simulator ignores the switch above, and the app's own Dark setting misleads the contrast audit,
+        // so the simulator is set beforehand (CI runs `simctl ui appearance` before each part).
+        let wanted = appearance == .dark ? "dark" : "light"
+        if isDark(empty.screenshot()) != (appearance == .dark) {
+            throw XCTSkip("The simulator isn't \(wanted): run `xcrun simctl ui <device> appearance \(wanted)` first.")
+        }
         XCTAssertTrue(empty.staticTexts["Your shelf is ready."].exists)
         try audit(empty, checks, screen: "\(mode) empty library")
         empty.terminate()

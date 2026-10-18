@@ -15,16 +15,6 @@ final class ToolTrayUITests: XCTestCase {
         add(attachment)
     }
 
-    /// Whether the desk at the screen's left edge is dark.
-    private func isDark(_ shot: XCUIScreenshot) -> Bool {
-        guard let image = shot.image.cgImage else { return false }
-        var pixel = [UInt8](repeating: 0, count: 4)
-        let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        context?.draw(image, in: CGRect(x: -4, y: -image.height / 2, width: image.width, height: image.height))
-        return Int(pixel[0]) + Int(pixel[1]) + Int(pixel[2]) < 300
-    }
-
     private func strokeCount(_ canvas: XCUIElement) -> Int {
         Int(((canvas.value as? String) ?? "").split(separator: " ").first ?? "") ?? 0
     }

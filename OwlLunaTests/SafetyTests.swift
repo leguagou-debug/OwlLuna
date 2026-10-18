@@ -637,8 +637,9 @@ final class LibraryStoreSafetyTests: XCTestCase {
         let folder = try XCTUnwrap(try context.fetch(FetchDescriptor<FolderRecord>()).first)
         store.renameFolder(folder, to: "Biology")
         store.setCloth(.jade, for: folder)
-        await waitUntil { FolderFile.read(root).folders.first?.clothRaw == ClothColor.jade.rawValue }
+        await store.finishWritingShelves()
         let file = FolderFile.read(root)
+        XCTAssertEqual(file.folders.first?.clothRaw, ClothColor.jade.rawValue)
         XCTAssertEqual(file.folders.first?.name, "Biology")
         XCTAssertEqual(file.folders.first?.extra["icon"], .string("leaf"))
     }
