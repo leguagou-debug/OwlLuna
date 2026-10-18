@@ -181,7 +181,7 @@ final class AccessibilityAuditUITests: XCTestCase {
         stickers.tap()
         XCTAssertTrue(app.navigationBars["Stickers"].waitForExistence(timeout: 10))
         sleep(1)
-        try check("sticker drawer", modal: true)
+        try check("sticker drawer", modal: true, cutBy: app.scrollViews["sticker.drawer"])
         app.buttons["sticker.noteYellow"].tap()
         XCTAssertTrue(app.buttons["editor.arrange.done"].waitForExistence(timeout: 5))
         sleep(1)
