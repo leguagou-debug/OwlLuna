@@ -35,6 +35,7 @@
 .fanned {
   flex: var(--shape) 1 0%;
   min-width: 0;
+  --ring: var(--accent);
 }
 
 .fanned + .fanned {
@@ -59,6 +60,10 @@
     rotate 0.3s var(--ease-glide),
     translate 0.3s var(--ease-glide),
     box-shadow 0.3s var(--ease-glide);
+}
+
+.loose:focus-visible {
+  outline-color: var(--ring);
 }
 
 .loose img {

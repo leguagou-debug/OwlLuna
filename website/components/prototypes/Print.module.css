@@ -1,6 +1,7 @@
 .print {
   order: var(--order);
   min-width: 0;
+  --ring: var(--accent);
 }
 
 /* Two abreast on a narrow screen; a wide print takes the row. */
@@ -29,6 +30,10 @@
     rotate 0.3s var(--ease-glide),
     translate 0.3s var(--ease-glide),
     box-shadow 0.3s var(--ease-glide);
+}
+
+.frame:focus-visible {
+  outline-color: var(--ring);
 }
 
 .image {
