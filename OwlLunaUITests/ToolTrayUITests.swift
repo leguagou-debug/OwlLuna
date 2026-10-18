@@ -46,7 +46,7 @@ final class ToolTrayUITests: XCTestCase {
             XCUIDevice.shared.appearance = mode.appearance
             let app = XCUIApplication()
             app.launchArguments = ["-storageRoot", "tools", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "anyInput", "-freshToolPresets",
-                                   "-fakePencilSqueeze"]
+                                   "-fakePencilSqueeze", "-appearance", mode.appearance == .dark ? "dark" : "light"]
                 + (mode.size.map { ["-UIPreferredContentSizeCategoryName", $0] } ?? [])
             app.launch()
             let notebook = app.buttons["notebook.Studio Notes 2"]
@@ -60,7 +60,7 @@ final class ToolTrayUITests: XCTestCase {
                 XCTAssertTrue(element.waitForNonExistence(timeout: 5))
             }
             attach(app, "\(mode.name)-tray")
-            // A simulator that has never been dark can ignore the switch; then nothing below would be a night check.
+            // The iPadOS 27 simulator can ignore the switch; the app's own setting holds, and this says so if it ever doesn't.
             XCTAssertEqual(isDark(app.screenshot()), mode.appearance == .dark, "the desk is \(mode.name == "dark" ? "dark" : "light")")
             try audit(app, mode.checks, screen: "\(mode.name) tool tray", largeText: large, bar: tray)
 

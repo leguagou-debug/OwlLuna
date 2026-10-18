@@ -16,6 +16,11 @@ final class OwlLunaUITestsLaunchTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Each configuration turns the iPad and changes its appearance; the tests after these expect it upright and light.
+        addTeardownBlock { @MainActor in
+            XCUIDevice.shared.orientation = .portrait
+            XCUIDevice.shared.appearance = .light
+        }
     }
 
     func testLaunch() throws {

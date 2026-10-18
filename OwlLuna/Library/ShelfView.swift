@@ -601,6 +601,9 @@ struct ShelfView: View {
     /// A bar without room for the search field would drop it into the overflow menu, so there it sits under the bar.
     private var searchInBar: Bool { barRoom >= actionsWidth + 308 && !dynamicTypeSize.isAccessibilitySize }
 
+    /// In a narrow bar, as beside the sidebar on an 11-inch iPad held upright, Sort and New show just their symbols so the title has room.
+    private var compactActions: Bool { barRoom < 600 }
+
     @ToolbarContentBuilder
     private func toolbar(_ visible: [NotebookRecord]) -> some ToolbarContent {
         ToolbarItem(placement: .principal) {
@@ -648,7 +651,7 @@ struct ShelfView: View {
                             OwlLunaPicker("Group By", selection: $grouping) {
                                 ForEach(LibraryGrouping.allCases) { Text($0.displayName).tag($0) }
                             }
-                        } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }
+                        } label: { Label("Sort", systemImage: "arrow.up.arrow.down").symbolOnly(compactActions) }
                     }
                     Button("Select") { isSelecting = true }.disabled(visible.isEmpty)
                     if scope != .trash {
@@ -662,7 +665,7 @@ struct ShelfView: View {
                                 Button(action: startScan) { Label("Scan Documents…", systemImage: "doc.viewfinder") }
                             }
                         } label: {
-                            Label("New", systemImage: "plus")
+                            Label("New", systemImage: "plus").symbolOnly(compactActions)
                         } primaryAction: {
                             onCreate()
                         }
@@ -1034,4 +1037,11 @@ private extension UIResponder {
     }
 
     @objc private func owlLunaCaptureFirstResponder() { UIResponder.found = self }
+}
+
+private extension View {
+    /// Just the symbol, its name still read out, when `on`.
+    @ViewBuilder func symbolOnly(_ on: Bool) -> some View {
+        if on { labelStyle(.iconOnly) } else { self }
+    }
 }

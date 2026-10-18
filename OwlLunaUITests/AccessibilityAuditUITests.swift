@@ -28,6 +28,8 @@ final class AccessibilityAuditUITests: XCTestCase {
             XCUIDevice.shared.appearance = .light
             XCUIDevice.shared.orientation = .portrait
         }
+        // The iPadOS 27 simulator can ignore the switch above, so the app is told as well.
+        let extra = ["-appearance", appearance == .dark ? "dark" : "light"] + extra
         let empty = XCUIApplication()
         empty.launchArguments = ["-storageRoot", "audit-empty", "-resetStorage"] + extra
         empty.launch()

@@ -164,6 +164,8 @@ enum ReplayInk {
 /// The transport along the bottom while a recording is replayed with its ink.
 struct ReplayBar: View {
     let session: EditorSession
+    /// The width of the page beside the panels. A narrower one gets a shorter slider, then loses its clocks, so Done stays on screen.
+    var room: CGFloat = .infinity
     /// Whether the transcript is showing beside the page; nil when there is none to show.
     var transcript: Bool?
     var toggleTranscript: () -> Void = {}
@@ -182,13 +184,13 @@ struct ReplayBar: View {
                 Label(recorder.isPaused ? "Play" : "Pause", systemImage: recorder.isPaused ? "play.fill" : "pause.fill")
             }
             .accessibilityIdentifier("editor.replay.play")
-            if !dynamicTypeSize.isAccessibilitySize {
+            if !dynamicTypeSize.isAccessibilitySize, room >= 450 {
                 Text(clock(time)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Color.ink)
             }
             PlaybackScrubber(time: time, duration: duration, scrub: session.scrubReplay(to:), seek: session.seekReplay(to:))
-                .frame(minWidth: 140, idealWidth: 260, maxWidth: 320)
+                .frame(minWidth: 140, idealWidth: room >= 640 ? 260 : 140, maxWidth: 320)
                 .accessibilityIdentifier("editor.replay.position")
-            if !dynamicTypeSize.isAccessibilitySize {
+            if !dynamicTypeSize.isAccessibilitySize, room >= 500 {
                 Text(clock(duration)).font(.subheadline.monospacedDigit()).foregroundStyle(Color.textSecondary)
             }
             PlaybackSpeedMenu(recorder: recorder)

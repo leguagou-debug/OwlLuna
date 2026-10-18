@@ -771,7 +771,8 @@ fileprivate struct EditorContent: View {
                 if session.mode == .presenting {
                     presentationBar
                 } else if session.mode == .replaying {
-                    ReplayBar(session: session, transcript: isCompact || session.replayLines.isEmpty ? nil : !hidesTranscript,
+                    ReplayBar(session: session, room: paneWidth - (showsTranscriptPanel ? 300 : 0),
+                              transcript: isCompact || session.replayLines.isEmpty ? nil : !hidesTranscript,
                               toggleTranscript: { withAnimation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion)) { hidesTranscript.toggle() } },
                               done: { enter(.writing) })
                         .floatingBar()

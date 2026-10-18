@@ -29,6 +29,7 @@ final class PDFTextUITests: XCTestCase {
     }
 
     func testTextIsSelectedCopiedAndHighlightedAndAHighlighterSnapsToItsLine() throws {
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-storageRoot", "pdftext", "-resetStorage", "-seedLongPDF", "-drawingInput", "anyInput", "-freshToolPresets"]
         app.launch()

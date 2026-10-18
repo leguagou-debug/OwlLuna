@@ -169,7 +169,7 @@ final class SliceUITests: XCTestCase {
     func testDarkModeAndLargestTextScreenshots() throws {
         XCUIDevice.shared.appearance = .dark
         defer { XCUIDevice.shared.appearance = .light }
-        var app = launch(reset: true, seed: true)
+        var app = launch(reset: true, seed: true, extra: ["-appearance", "dark"])
         waitForLibrary(app)
         _ = app.buttons["notebook.Physics II 3"].waitForExistence(timeout: 10)
         attach(app, "library-dark")

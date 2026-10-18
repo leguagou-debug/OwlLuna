@@ -22,6 +22,7 @@ final class ParityUITests: XCTestCase {
     }
 
     func testSearchOpensTheMatchingPageAndLibraryActionsWork() throws {
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-storageRoot", "parity", "-resetStorage", "-seedLongPDF", "-indexSeed", "-drawingInput", "anyInput"]
         app.launch()
