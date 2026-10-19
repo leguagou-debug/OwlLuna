@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+
 const repo = 'https://github.com/owaisazmal/OwlLuna'
 
 export const site = {
@@ -26,6 +28,22 @@ export const site = {
   /** The day the privacy policy last changed, as YYYY-MM-DD. */
   policyUpdated: '2026-10-12',
 }
+
+/** The share card every page carries, linked to the page it is on. */
+export const openGraph = {
+  type: 'website',
+  siteName: site.name,
+  url: './',
+  images: [
+    {
+      url: '/opengraph-image.png',
+      width: 1200,
+      height: 630,
+      type: 'image/png',
+      alt: 'OwlLuna: an owl writing on a notepad beside the words Handwritten notes for iPad. Free, for good.',
+    },
+  ],
+} satisfies Metadata['openGraph']
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
