@@ -100,6 +100,64 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(names, ["Physics II"])
     }
 
+    func testARecordingCutOffOnOneDeviceIsNeverTakenOverByASync() async throws {
+        let lecture = try await makeNotebook("Lecture", on: a)
+        try await sync(a)
+        try await sync(b)
+        let cut = {
+            var entry = RecordingEntry(id: UUID(), file: "cut.aac", createdAt: .now, duration: 0)
+            entry.device = a.deviceID
+            return entry
+        }()
+        func holding(_ root: StorageRoot) async -> [UUID] {
+            var found: [UUID] = []
+            for id in root.packageIDs() {
+                let package = NotebookPackage(root: root, id: id)
+                if let manifest = try? await package.readManifest().manifest, manifest.unfinishedRecordings.map(\.id) == [cut.id],
+                   FileManager.default.fileExists(atPath: package.assetURL(cut.file).path(percentEncoded: false)) { found.append(id) }
+            }
+            return found
+        }
+
+        // The app on A quits mid-recording, the notebook dated as the recording began; B writes in it meanwhile.
+        let packageA = NotebookPackage(root: a, id: lecture.id)
+        var manifest = try await packageA.readManifest().manifest
+        manifest.unfinishedRecordings = [cut]
+        manifest.modifiedAt = manifest.modifiedAt.addingTimeInterval(30)
+        _ = try await packageA.write(SaveSnapshot(manifest: manifest, ink: [:]))
+        try Data(repeating: 1, count: 256).write(to: packageA.assetURL(cut.file))
+        try await edit(lecture.id, on: b, strokes: 4, after: 60)
+        try await sync(b)
+        let first = try await sync(a)
+        XCTAssertEqual(first.conflictCopies.count, 1, "written on both, so both are kept")
+        let copy = try XCTUnwrap(first.conflictCopies.first)
+        let afterFirst = await holding(a)
+        XCTAssertEqual(afterFirst, [copy], "the recording and its audio are in the copy")
+
+        try await sync(a)
+        try await sync(b)
+        let onB = await holding(b)
+        XCTAssertEqual(onB, [copy], "another iPad keeps it as it came")
+        try await edit(copy, on: b, strokes: 2, after: 60)
+        try await sync(b)
+        let kept = try await sync(a)
+        XCTAssertEqual(kept.pulled, [copy], "a version that still holds it comes in as usual")
+        XCTAssertEqual(kept.conflictCopies, [])
+
+        let packageB = NotebookPackage(root: b, id: copy)
+        var dropped = try await packageB.readManifest().manifest
+        dropped.unfinishedRecordings = []
+        dropped.modifiedAt = dropped.modifiedAt.addingTimeInterval(60)
+        _ = try await packageB.write(SaveSnapshot(manifest: dropped, ink: [:]))
+        try await sync(b)
+        let newer = try await LibrarySync.pullNewer(copy, root: a, cloud: cloud, timeout: .zero)
+        XCTAssertEqual(newer, .waiting, "a version without it isn't swapped in")
+        let last = try await sync(a)
+        XCTAssertEqual(last.conflictCopies.count, 1, "nor taken over it by a pass: both are kept")
+        let afterLast = await holding(a)
+        XCTAssertEqual(afterLast.count, 1)
+    }
+
     func testNotebooksChangedOnBothDevicesAreBothKept() async throws {
         let notes = try await makeNotebook("Notes", on: a)
         try await sync(a)

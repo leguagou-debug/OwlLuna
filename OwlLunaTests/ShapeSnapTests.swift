@@ -200,4 +200,44 @@ final class ShapeSnapTests: XCTestCase {
         rests.began("palm", isPencil: false, fingersDraw: true, at: CGPoint(x: 600, y: 700), time: 5.12)
         XCTAssertEqual(try XCTUnwrap(rests.take(at: 5.15, within: 2)), 0.6, accuracy: 0.001, "a palm landing as the Pencil lifts leaves its rest alone")
     }
+
+    func testWhenFingersDrawOnlyAFingerAloneOnThePagesHolds() throws {
+        var rests = TouchRests()
+        rests.began("thumb", isPencil: false, fingersDraw: true, at: CGPoint(x: 20, y: 500), time: 0)
+        rests.began("finger", isPencil: false, fingersDraw: true, at: start, time: 1)
+        rests.ended("thumb", time: 1.2)
+        drag("finger", &rests, from: 1)
+        rests.ended("finger", time: 1.55)
+        XCTAssertNil(rests.take(at: 1.6, within: 2, strokeBegan: 1), "a thumb that landed first lends the stroke no rest, and two fingers make no stroke")
+
+        rests.began("finger", isPencil: false, fingersDraw: true, at: start, time: 2)
+        drag("finger", &rests, from: 2)
+        rests.began("thumb", isPencil: false, fingersDraw: true, at: CGPoint(x: 20, y: 500), time: 2.6)
+        rests.ended("finger", time: 3.3)
+        rests.ended("thumb", time: 3.4)
+        XCTAssertNil(rests.take(at: 3.45, within: 2, strokeBegan: 2), "nor does one that lands alongside")
+
+        rests.began("finger", isPencil: false, fingersDraw: true, at: start, time: 4)
+        drag("finger", &rests, from: 4)
+        rests.ended("finger", time: 5.3)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 5.35, within: 2, strokeBegan: 4.02)), 0.8, accuracy: 0.001, "a finger alone holds")
+    }
+
+    func testARestIsOnlyTheStrokesItsTouchDrew() throws {
+        var rests = TouchRests()
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 10)
+        drag("pencil", &rests, from: 10)
+        rests.ended("pencil", time: 11.1)
+        XCTAssertNil(rests.take(at: 11.2, within: 2, strokeBegan: 3), "a stroke from before, brought back by Redo, isn't given the rest")
+
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 12)
+        drag("pencil", &rests, from: 12)
+        rests.ended("pencil", time: 13.1)
+        XCTAssertNil(rests.take(at: 13.5, within: 2, strokeBegan: 13.3), "nor is a stroke begun after the Pencil lifted")
+
+        rests.began("pencil", isPencil: true, fingersDraw: false, at: start, time: 14)
+        drag("pencil", &rests, from: 14)
+        rests.ended("pencil", time: 15.1)
+        XCTAssertEqual(try XCTUnwrap(rests.take(at: 15.15, within: 2, strokeBegan: 14.05)), 0.6, accuracy: 0.001, "the stroke the Pencil drew is")
+    }
 }

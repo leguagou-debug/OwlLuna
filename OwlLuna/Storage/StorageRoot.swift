@@ -24,6 +24,19 @@ struct StorageRoot: Sendable, Hashable {
     static let packageExtension = "owlluna"
     static let legacyPackageExtension = "scribe"
 
+    /// A random name for this device's library. Left out of backups, so an iPad restored from one names itself afresh.
+    var deviceID: String {
+        let file = url.appending(path: "device-id")
+        if let data = try? Data(contentsOf: file), let id = String(data: data, encoding: .utf8), !id.isEmpty { return id }
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try? Data(UUID().uuidString.utf8).write(to: file, options: .withoutOverwriting)
+        var excluded = URLResourceValues()
+        excluded.isExcludedFromBackup = true
+        var marked = file
+        try? marked.setResourceValues(excluded)
+        return (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
     static let live: StorageRoot = {
         #if DEBUG
         if let override = ProcessInfo.processInfo.environment["OWLLUNA_STORAGE_ROOT"] {

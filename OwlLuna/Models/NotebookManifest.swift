@@ -129,6 +129,22 @@ struct RecordingEntry: Sendable, Hashable, Identifiable {
     var undecoded: [String: UndecodedField] = [:]
 }
 
+extension NotebookManifest {
+    /// Recordings being made, or cut off before Stop, so their audio is named. Older builds keep them as an unknown key.
+    var unfinishedRecordings: [RecordingEntry] {
+        get { extra["unfinishedRecordings"]?.arrayValue?.compactMap(ManifestCodec.decodeRecording) ?? [] }
+        set { extra["unfinishedRecordings"] = newValue.isEmpty ? nil : .array(newValue.map(ManifestCodec.encodeRecording)) }
+    }
+}
+
+extension RecordingEntry {
+    /// The device an unfinished recording is being made on (`StorageRoot.deviceID`): only that one takes it up.
+    var device: String? {
+        get { extra["device"]?.stringValue }
+        set { extra["device"] = newValue.map(JSONValue.string) }
+    }
+}
+
 struct LibraryState: Sendable, Hashable {
     var isFavorite = false
     var deletedAt: Date?

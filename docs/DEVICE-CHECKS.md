@@ -106,12 +106,12 @@ These values were chosen in the simulator and need judging with a real hand. The
 
 | Tunable | Value | Where | Judged in |
 |---|---|---|---|
-| Zoom window: rest before it moves on | 0.8 s | `ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`; used at `OwlLuna/Canvas/PageStack.swift:2676` | [Pencil 8](#pencil-8) |
+| Zoom window: rest before it moves on | 0.8 s | `ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`; used at `OwlLuna/Canvas/PageStack.swift:2686` | [Pencil 8](#pencil-8) |
 | Zoom window: the band | the last 30% of the window (`advanceZone` 0.7); moves 55% of its width (`stride`); windows of 30, 42 or 60% of the page (`widths`) | `OwlLuna/Canvas/ZoomWindow.swift:9`, `:11`, `:7` | [Pencil 8](#pencil-8) |
-| Handwriting to Text: rest before it is set as type | 1.0 s (`InkTyping.pause`), with the reading begun 0.4 s into it (`InkTyping.lookAhead`). It was 1.2 s before | `OwlLuna/Canvas/InkTyping.swift:13`, `:17`; the timer at `OwlLuna/Canvas/PageStack.swift:1133`. A Debug build takes `-inkTypingPause <seconds>` (`InkTyping.swift:11`) | [Pencil 9](#pencil-9) |
-| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:278`; used at `OwlLuna/Canvas/PageStack.swift:1200` (loop) and `:1232` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
+| Handwriting to Text: rest before it is set as type | 1.0 s (`InkTyping.pause`), with the reading begun 0.4 s into it (`InkTyping.lookAhead`). It was 1.2 s before | `OwlLuna/Canvas/InkTyping.swift:13`, `:17`; the timer at `OwlLuna/Canvas/PageStack.swift:1135`. A Debug build takes `-inkTypingPause <seconds>` (`InkTyping.swift:11`) | [Pencil 9](#pencil-9) |
+| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:278`; used at `OwlLuna/Canvas/PageStack.swift:1202` (loop) and `:1234` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
 | Draw and hold: how still a rest is | 6 pt (`TouchRests.slop`) | `OwlLuna/Canvas/ShapeSnap.swift:304` | [Pencil 7](#pencil-7) |
-| Draw and hold: which touch's rest counts | the Pencil's; a finger's only when fingers draw and no Pencil was down beside it | `TouchRests.began`, `OwlLuna/Canvas/ShapeSnap.swift:319` | [Pencil 3](#pencil-3) |
+| Draw and hold: which touch's rest counts | the Pencil's; a finger's only when fingers draw and it was alone on the pages; only for a stroke begun while that touch was down | `TouchRests.began`, `OwlLuna/Canvas/ShapeSnap.swift:322`; `TouchRests.take`, `:353` | [Pencil 3](#pencil-3) |
 | Draw and hold: smallest shape | 24 pt across | `OwlLuna/Canvas/ShapeSnap.swift:32` | [Pencil 7](#pencil-7) |
 | Scribble to erase | at least 5 turns (`minimumReversals`), travelling 4 times its own diagonal (`density`), over half of a stroke (`cover`) | `OwlLuna/Canvas/PencilGestures.swift:7`, `:9`, `:11` | [Pencil 6](#pencil-6) |
 | Loop to select | its ends within 30% of its size, or 20 pt | `OwlLuna/Canvas/PencilGestures.swift:105` | [Pencil 6](#pencil-6) |
@@ -419,7 +419,7 @@ This needs a Mac signed in to the same Apple Account with iCloud Drive on, and i
 <a id="pencil-3"></a>
 ### Pencil 3. Palm rejection
 
-A resting palm or thumb must never draw, scroll, or count as the Pencil resting for draw and hold (`TouchRests`, `OwlLuna/Canvas/ShapeSnap.swift:303` to `:354`). How often a palm gets past iPadOS's own palm rejection has never been seen.
+A resting palm or thumb must never draw, scroll, or count as the Pencil resting for draw and hold (`TouchRests`, `OwlLuna/Canvas/ShapeSnap.swift:303` to `:359`). How often a palm gets past iPadOS's own palm rejection has never been seen.
 
 **Steps:**
 1. With **⋯** › **Draw With** › **Apple Pencil Only**, write a paragraph with the side of your hand on the glass, as on paper: on the lower half of the page, and close to the tray.
@@ -454,7 +454,7 @@ A resting palm or thumb must never draw, scroll, or count as the Pencil resting 
 <a id="pencil-5"></a>
 ### Pencil 5. Double-tap and squeeze switch tools, and the ink dish opens under the tip
 
-The app has no system tool picker, so it carries out the system's setting itself (`OwlLuna/Canvas/PageStack.swift:2904`). Where the system asks for a palette, the ink dish comes to the tip (`toggleDish`, `:2937`).
+The app has no system tool picker, so it carries out the system's setting itself (`OwlLuna/Canvas/PageStack.swift:2914`). Where the system asks for a palette, the ink dish comes to the tip (`toggleDish`, `:2947`).
 
 **Setup:** an Apple Pencil Pro (double-tap and squeeze) or an Apple Pencil (2nd generation) (double-tap only), on an iPad with hover if you can. Note what iPadOS's Settings › Apple Pencil has for double-tap and squeeze.
 
@@ -512,7 +512,7 @@ These have only been recognised from strokes drawn by tests.
 
 **Common failures:** a pause at the end of a word turning a letter into a line; a held shape not straightening; Undo removing the stroke at once.
 
-**Tunable:** the rest is 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:278`). Too short: letters and ticks you pause on become lines. Too long: you hold and wait and are unsure it took. A rest only counts while the tip stays within 6 pt (`TouchRests.slop`, `:304`); if a steady hold still fails, the tip is drifting further than that. It must be taken within 2 s of lifting (`takeHold(within:)`, `:365`). Count, of 20 deliberate holds, how many straightened, and on the handwriting page how many straightened by mistake.
+**Tunable:** the rest is 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:278`). Too short: letters and ticks you pause on become lines. Too long: you hold and wait and are unsure it took. A rest only counts while the tip stays within 6 pt (`TouchRests.slop`, `:304`); if a steady hold still fails, the tip is drifting further than that. It must be taken within 2 s of lifting (`takeHold(for:within:)`, `:403`). Count, of 20 deliberate holds, how many straightened, and on the handwriting page how many straightened by mistake.
 
 **Evidence:** a screen recording and the counts.
 
@@ -533,7 +533,7 @@ These have only been recognised from strokes drawn by tests.
 
 **Common failures:** the window moving under the Pencil; writing that runs off the strip before it moves; a move lost at the end of a page.
 
-**Tunable:** the rest is 0.8 s (`ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`, used at `OwlLuna/Canvas/PageStack.swift:2676`). Late: you sit with the Pencil up, waiting for it. Jumpy: it moves while you lift between letters or go back to dot an "i". The band is the last 30% of the window (`advanceZone`, `OwlLuna/Canvas/ZoomWindow.swift:9`) and a move is 55% of its width (`stride`, `OwlLuna/Canvas/ZoomWindow.swift:11`). Too narrow a band: you reach the end of the strip first. Too wide: it moves on with room left. For each size, note how many of the ten moves felt late, early or right, your writing hand, and your speed.
+**Tunable:** the rest is 0.8 s (`ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`, used at `OwlLuna/Canvas/PageStack.swift:2686`). Late: you sit with the Pencil up, waiting for it. Jumpy: it moves while you lift between letters or go back to dot an "i". The band is the last 30% of the window (`advanceZone`, `OwlLuna/Canvas/ZoomWindow.swift:9`) and a move is 55% of its width (`stride`, `OwlLuna/Canvas/ZoomWindow.swift:11`). Too narrow a band: you reach the end of the strip first. Too wide: it moves on with room left. For each size, note how many of the ten moves felt late, early or right, your writing hand, and your speed.
 
 **Evidence:** a screen recording of each size, with a phone video of the hand.
 
@@ -556,7 +556,7 @@ This has only read block letters drawn by a test.
 
 **Pass:** a sentence becomes one text box that carries on along the line and onto the next, in the pen's colour. One Undo gives the handwriting back and it stays ink. Turning the shortcut off reads what was waiting at once. Count wrong words in every 20, for print, joined-up and small.
 
-**Common failures:** a word set in two pieces; i-dots and t-crosses left as ink beside the text; the first word after turning it on much slower than the rest (Vision warming up; `InkText.warmUp`, `OwlLuna/Canvas/PageStack.swift:2882`).
+**Common failures:** a word set in two pieces; i-dots and t-crosses left as ink beside the text; the first word after turning it on much slower than the rest (Vision warming up; `InkText.warmUp`, `OwlLuna/Canvas/PageStack.swift:2892`).
 
 **Tunable:** the rest is 1.0 s (`InkTyping.pause`, `OwlLuna/Canvas/InkTyping.swift:13`), and reading starts 0.4 s into it (`InkTyping.lookAhead`, `:17`). Too short: a word is set while you pause to think, or its dots arrive after it is set. Too long: you've started the next line before the last is set and it feels late. On a Debug build, compare `-inkTypingPause 0.8` and `-inkTypingPause 1.4` with the default. A phone video shows the time from lift to text; aim for about one second.
 
@@ -752,6 +752,25 @@ This has only read block letters drawn by a test.
 **Common failures:** an old title; a locked notebook found; a tap that only opens the library.
 
 **Evidence:** screenshots of the results; Console `category:spotlight`.
+
+<a id="hw-10"></a>
+### Hardware 10. A recording cut off, locked or interrupted
+
+**Setup:** Settings › Display & Brightness › Auto-Lock at 2 minutes. A Smart Folio or Magic Keyboard cover if you have one, and a second phone to call the iPad. A Debug build for step 6.
+
+**Steps:**
+1. In a notebook, **Record Audio** and leave the iPad untouched for five minutes. Stop. Play the recording through.
+2. **Record Audio** for a minute, then press the top button to lock. Unlock and go back to the notebook.
+3. **Record Audio** for a minute, then switch to another app. Come back.
+4. **Record Audio**, then call the iPad from the phone (or ask Siri something). End the call and come back. With a cover, record again and close it.
+5. **Record Audio** for two minutes, then swipe OwlLuna away in the app switcher. Open the notebook again and play the recording.
+6. On a Debug build, record for two minutes and stop the app from Xcode. Open the notebook again.
+
+**Pass:** in step 1 the iPad stays awake and the recording is five minutes long. Steps 2 to 4 each leave a notice at the top of the editor saying when the recording stopped and why ("when the iPad locked or you left OwlLuna", "when another app needed the microphone", "when the iPad's cover was closed"), and the recording up to then is in **Recordings** and plays. Steps 5 and 6 show "Recording stopped at … when OwlLuna quit" and the recording plays to where it was cut off. Every recording shares as an `.m4a`.
+
+**Common failures:** "Recording couldn't start: …"; the iPad locking during step 1; a recording missing after a quit, or one listed at 0:00 that won't play; no notice, or a notice that names the wrong time.
+
+**Evidence:** a screen recording of steps 2 to 5; a screenshot of each notice.
 
 ## Windows, screens and keys
 

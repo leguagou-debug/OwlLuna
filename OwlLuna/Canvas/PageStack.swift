@@ -488,6 +488,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         }
         strokeHold.onTouchDown = { [weak self] in self?.session.onTouchDown?() }
         strokeHold.fingersDraw = { [weak self] in self?.effectivePolicy == .anyInput }
+        strokeHold.onPencilDown = { FingerDrawHint.pencilTouched() }
+        strokeHold.onFingerDrag = { [weak self] in self?.fingerDragged() }
         for pan in [lassoPan, textPan] {
             pan.maximumNumberOfTouches = 1
             pan.allowedTouchTypes = Self.scrollTouchTypes + [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
@@ -545,7 +547,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         session.dish = nil
         ExternalDisplay.shared.end(for: self)
         anchor.resignFirstResponder()
-        UIApplication.shared.isIdleTimerDisabled = false
+        IdleTimer.shared.hold(false, by: self)
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -1100,7 +1102,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         guard !isApplyingDrawing, let canvas = canvasView as? PageCanvasView, canvas.isLoaded, let id = canvas.pageID else { return }
         canvas.strokeCount = nil
         let before = document.loadedInk(id)
-        let rest = canvas === zoomCanvas ? nil : strokeHold.takeHold()
+        let rest = canvas === zoomCanvas ? nil : strokeHold.takeHold(for: canvas.drawing.strokes.last)
         if pencilGesture(on: canvas, pageID: id, before: before, rest: rest) {
             // What a scribble left of handwriting that was waiting to be read still is.
             if !unreadWriting.isEmpty { readWritingAfterARest() }
@@ -2046,6 +2048,14 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         laserGesture.allowedTouchTypes = fingersPoint ? Self.scrollTouchTypes + [pencil] : [pencil]
     }
 
+    /// A finger dragged with a pen in hand where only the Pencil draws: the first time, the editor says why nothing was drawn.
+    private func fingerDragged() {
+        guard session.mode == .writing || session.mode == .focus, !isLocked, !document.isReadOnly, session.selection == nil, cropView == nil,
+              textView == nil, zoomTarget == nil, !toolbox.isRulerActive, FingerDrawHint.isAllowed,
+              FingerDrawHint.take(input: session.drawingInput, penInHand: toolbox.pen != nil) else { return }
+        document.noteOnlyPencilDraws()
+    }
+
     /// This editor's pane was touched while another had the keyboard: key commands and undo come here now.
     func paneBecameActive() {
         if textView == nil, !isModalShowing { anchor.becomeFirstResponder() }
@@ -2754,7 +2764,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     func setPresenting(_ presenting: Bool) {
         guard presenting != isPresenting else { return }
         isPresenting = presenting
-        UIApplication.shared.isIdleTimerDisabled = presenting
+        IdleTimer.shared.hold(presenting, by: self)
         laserGesture.isEnabled = presenting
         laser.clear()
         mirrored = nil

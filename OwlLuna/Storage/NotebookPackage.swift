@@ -28,6 +28,8 @@ struct ManifestLoad: Sendable {
     var warnings: [String] = []
     var quarantined: [String] = []
     var recoveredPageIDs: [UUID] = []
+    /// Recordings cut off before Stop that were found on opening and joined the list.
+    var adoptedRecordings: [RecordingEntry] = []
     /// True when the loaded manifest differs from what's on disk and should be saved.
     var needsSave = false
     var isReadOnly: Bool { manifest.isNewerThanSupported }
@@ -49,10 +51,12 @@ struct SaveReceipt: Sendable {
 actor NotebookPackage {
     nonisolated let id: UUID
     nonisolated let url: URL
+    nonisolated let root: StorageRoot
 
     init(root: StorageRoot, id: UUID) {
         self.id = id
         self.url = root.package(id)
+        self.root = root
     }
 
     nonisolated var manifestURL: URL { url.appending(path: "manifest.json") }
@@ -324,6 +328,45 @@ actor NotebookPackage {
 
     func removeAsset(_ file: String) {
         try? FileManager.default.removeItem(at: assetURL(file))
+    }
+
+    // MARK: Recordings
+
+    /// The entry timed from its finished audio, or nil and the file removed when nothing playable was written, unless `keepingUnreadable` and something was.
+    @concurrent
+    nonisolated func finishRecording(_ entry: RecordingEntry, keepingUnreadable: Bool = false) async -> RecordingEntry? {
+        let url = assetURL(entry.file)
+        var finished = entry
+        finished.device = nil
+        if let done = RecordingFile.finish(url) {
+            finished.file = done.url.lastPathComponent
+            finished.duration = done.duration
+            return finished
+        }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        if keepingUnreadable, size > 0 { return finished }
+        try? FileManager.default.removeItem(at: url)
+        return nil
+    }
+
+    /// This device's cut-off recordings join the list, dated so the change syncs; another device's are left alone, as it may still be recording.
+    @concurrent
+    nonisolated func adoptUnfinishedRecordings(_ load: ManifestLoad) async -> ManifestLoad {
+        guard !load.manifest.unfinishedRecordings.isEmpty, !load.isReadOnly else { return load }
+        let device = root.deviceID
+        let (mine, others) = (load.manifest.unfinishedRecordings.filter { $0.device == device }, load.manifest.unfinishedRecordings.filter { $0.device != device })
+        guard !mine.isEmpty else { return load }
+        var load = load
+        for entry in mine {
+            guard var adopted = await finishRecording(entry) else { continue }
+            adopted.createdAt = adopted.startedAt.addingTimeInterval(adopted.duration)
+            load.manifest.recordings.append(adopted)
+            load.adoptedRecordings.append(adopted)
+        }
+        load.manifest.unfinishedRecordings = others
+        load.manifest.modifiedAt = .now
+        load.needsSave = true
+        return load
     }
 
     // MARK: Maintenance

@@ -1,10 +1,14 @@
 import XCTest
 import PencilKit
+import SwiftUI
+import SwiftData
 @testable import OwlLuna
 
-/// What the editor keeps in memory: the bitmaps behind items and the laser, and what a memory warning lets go.
+/// What the editor keeps in memory: item bitmaps, the laser, what a memory warning lets go, and what a closed editor lets go.
 @MainActor
 final class MemoryTests: XCTestCase {
+    private var container: ModelContainer?
+
     private func window() throws -> UIWindow {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -20,6 +24,25 @@ final class MemoryTests: XCTestCase {
 
     private func warnOfLowMemory() {
         NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: UIApplication.shared)
+    }
+
+    /// A two-page notebook open in the editor on screen, with what the library hands an editor.
+    private func showEditor(in window: UIWindow) async throws -> NotebookDocument {
+        let root = temporaryRoot(self)
+        let paper = PageDefaults(template: .blank, paperColor: .white, pageSize: .letter)
+        let manifest = NotebookManifest(title: "Editor", defaults: paper, pages: [paper.newPage(), paper.newPage()])
+        try await NotebookPackage(root: root, id: manifest.id).create(manifest)
+        let schema = LibraryIndex.schema
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        self.container = container
+        let store = LibraryStore(root: root, context: container.mainContext), flashcards = FlashcardLibrary(root: root)
+        let document = try await NotebookDocument.open(manifest.id, root: root)
+        window.rootViewController = UIHostingController(rootView: EditorView(document: document) {}
+            .environment(store).environment(flashcards).environment(EditorWindow()))
+        for _ in 0..<100 where document.recorder?.onTranscriptChange == nil || document.inkObserver == nil { await pause(0.05) }
+        XCTAssertNotNil(document.recorder?.onTranscriptChange, "the editor appeared and wired up its session")
+        XCTAssertNotNil(document.inkObserver, "with its pages on screen")
+        return document
     }
 
     func testAPictureHasNothingDrawnBehindItAtAnyZoom() async throws {
@@ -130,5 +153,32 @@ final class MemoryTests: XCTestCase {
         let reloaded = await document.ink(ids[0])
         XCTAssertTrue(reloaded.strokes.isEmpty)
         XCTAssertNotNil(document.loadedInk(ids[0]), "and read again when wanted")
+    }
+
+    func testAClosedEditorLetsGoOfItsSessionAndNotebook() async throws {
+        let window = try window()
+        weak var document: NotebookDocument?
+        weak var recorder: NotebookRecorder?
+        weak var canvas: InkObserver?
+        do {
+            let opened = try await showEditor(in: window)
+            document = opened
+            recorder = opened.recorder
+            canvas = opened.inkObserver
+            window.rootViewController = nil
+        }
+        for _ in 0..<100 where document != nil || recorder != nil || canvas != nil { await pause(0.05) }
+        XCTAssertNil(canvas, "the pages go with the editor")
+        XCTAssertNil(recorder, "and so does its recorder")
+        XCTAssertNil(document, "the session holds its notebook, so the notebook going means the session has gone too")
+    }
+
+    func testRedrawingAroundAnEditorMakesNoSecondSession() async throws {
+        let window = try window()
+        let document = try await showEditor(in: window)
+        let recorder = try XCTUnwrap(document.recorder)
+        _ = EditorView(document: document) {}
+        XCTAssertTrue(document.recorder === recorder, "the screen around the editor is redrawn often; the notebook keeps the recorder that is on screen")
+        window.rootViewController = nil
     }
 }

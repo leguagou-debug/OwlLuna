@@ -102,6 +102,7 @@ final class EditorSession {
         didSet {
             UserDefaults.standard.set(drawingInput.rawValue, forKey: SettingsKey.drawingInput)
             canvas?.setDrawingPolicy(drawingInput.policy)
+            if drawingInput != .pencilOnly { document.dismissNotices(.onlyPencilDraws) }
         }
     }
     @ObservationIgnored weak var canvas: EditorCanvasControlling?
@@ -526,20 +527,34 @@ final class EditorSession {
 
 struct EditorView: View {
     let document: NotebookDocument
+    let initialPageID: UUID?
     /// True while a locked notebook is behind its lock screen.
     var isCovered = false
     let close: () -> Void
-    @State private var session: EditorSession
+    @State private var slot = SessionSlot()
 
     init(document: NotebookDocument, initialPageID: UUID? = nil, isCovered: Bool = false, close: @escaping () -> Void) {
         self.document = document
+        self.initialPageID = initialPageID
         self.isCovered = isCovered
         self.close = close
-        _session = State(initialValue: EditorSession(document: document, initialPageID: initialPageID))
     }
 
     var body: some View {
-        EditorContent(session: session, isCovered: isCovered, close: close)
+        EditorContent(session: slot.session { EditorSession(document: document, initialPageID: initialPageID) }, isCovered: isCovered, close: close)
+    }
+}
+
+/// Makes the editor's session once: the screen around the editor makes its view again each time it is redrawn.
+@MainActor
+private final class SessionSlot {
+    private var made: EditorSession?
+
+    func session(_ make: () -> EditorSession) -> EditorSession {
+        if let made { return made }
+        let session = make()
+        made = session
+        return session
     }
 }
 
@@ -932,10 +947,7 @@ fileprivate struct EditorContent: View {
         .onAppear {
             knownPages = Set(document.pages.map(\.id))
             document.noteCurrentPage(session.currentPage)
-            session.openNotebook = { openLinkedNotebook($0, page: $1, from: $2) }
-            session.onTouchDown = { if pane != .single, window?.active != document.id { window?.active = document.id } }
-            session.isActivePane = { pane == .single || window?.active.map { $0 == document.id } ?? (pane != .secondary) }
-            session.recorder.onTranscriptChange = { refreshSearchText() }
+            connectSession()
             // A notebook coming back from behind the tab bar still has its undo history.
             session.refreshUndoState()
             refreshNotebookTitles()
@@ -946,7 +958,10 @@ fileprivate struct EditorContent: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in session.refreshUndoState() }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in session.refreshUndoState() }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in session.refreshUndoState() }
-        .onDisappear { session.recorder.shutdown() }
+        .onDisappear {
+            session.recorder.shutdown()
+            disconnectSession()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .owlLunaShowPage)) { note in
             guard (note.object as? UUID) == document.id, let page = note.userInfo?["page"] as? UUID, let index = document.index(of: page) else { return }
             session.go(to: index)
@@ -1691,7 +1706,8 @@ fileprivate struct EditorContent: View {
     private var banners: some View {
         VStack(spacing: Space.x2) {
             ForEach(document.notices) { notice in
-                NoticeBanner(notice: notice) { document.dismissNotice(notice) }
+                let letFingersDraw = NoticeBanner.Action(title: "Let Fingers Draw") { session.drawingInput = .anyInput }
+                NoticeBanner(notice: notice, action: notice.kind == .onlyPencilDraws ? letFingersDraw : nil) { document.dismissNotice(notice) }
             }
         }
         .padding(.top, Space.x2)
@@ -1905,23 +1921,34 @@ extension EditorContent {
         Task { if let failure = await store.toggleLock(record) { errorMessage = failure } }
     }
 
-    /// A transcript was written or removed: the library's search text for this notebook is read again.
-    fileprivate func refreshSearchText() {
-        let directory = document.package.textDirectory, id = document.id, store = store
-        Task {
-            let text = await Task.detached(priority: .utility) { LibraryIndex.searchText(in: directory) }.value
-            store.updateSearchText(text, for: id)
+    /// What the session and its recorder call back into. None of it holds this view, which holds the session.
+    fileprivate func connectSession() {
+        let id = document.id, directory = document.package.textDirectory, pane = pane, failure = $errorMessage
+        session.openNotebook = { [weak session, weak store, weak window] notebook, page, origin in
+            guard let session, let store else { return }
+            guard let record = store.record(notebook), !record.isTrashed else {
+                failure.wrappedValue = String(localized: "The notebook this link opened is no longer in your library.")
+                return
+            }
+            guard let window, let open = window.openNotebook, !window.goesToItsWindow(notebook, page: page) else { return }
+            window.linkReturn = NotebookReturn(origin: id, page: origin, title: session.document.title, destination: notebook)
+            open(notebook, page)
+        }
+        session.onTouchDown = { [weak window] in if pane != .single, window?.active != id { window?.active = id } }
+        session.isActivePane = { [weak window] in pane == .single || window?.active.map { $0 == id } ?? (pane != .secondary) }
+        session.recorder.onTranscriptChange = { [weak store] in
+            Task {
+                let text = await Task.detached(priority: .utility) { LibraryIndex.searchText(in: directory) }.value
+                store?.updateSearchText(text, for: id)
+            }
         }
     }
 
-    fileprivate func openLinkedNotebook(_ id: UUID, page: UUID?, from origin: UUID) {
-        guard let record = store.record(id), !record.isTrashed else {
-            errorMessage = String(localized: "The notebook this link opened is no longer in your library.")
-            return
-        }
-        guard let window, let open = window.openNotebook, !window.goesToItsWindow(id, page: page) else { return }
-        window.linkReturn = NotebookReturn(origin: document.id, page: origin, title: document.title, destination: id)
-        open(id, page)
+    fileprivate func disconnectSession() {
+        session.openNotebook = nil
+        session.onTouchDown = nil
+        session.isActivePane = { true }
+        session.recorder.onTranscriptChange = nil
     }
 
     fileprivate func addSticker(_ sticker: CustomSticker) async {
@@ -2002,29 +2029,53 @@ struct RibbonShape: Shape {
 }
 
 struct NoticeBanner: View {
+    /// A button beside the message that does what it says and puts the notice away.
+    struct Action {
+        let title: LocalizedStringKey
+        let perform: () -> Void
+    }
+
     let notice: DocumentNotice
+    var action: Action?
     let dismiss: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let dismissable = notice.kind != .saveFailed
-        HStack(spacing: Space.x3) {
-            Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down" : "info.circle")
-                .foregroundStyle(notice.kind == .saveFailed ? Color.tomato : Color.accentColor)
-            Text(notice.message).font(.subheadline).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if dismissable {
-                Button(action: dismiss) { Label("Dismiss", systemImage: "xmark").imageScale(.medium) }
-                    .buttonStyle(.barIcon)
+        let stacked = action != nil && dynamicTypeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.x2)) : AnyLayout(HStackLayout(spacing: Space.x3))
+        layout {
+            HStack(spacing: Space.x3) {
+                Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down" : "info.circle")
+                    .foregroundStyle(notice.kind == .saveFailed ? Color.tomato : Color.accentColor)
+                Text(notice.message).font(.subheadline).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
+            if action != nil || dismissable {
+                HStack(spacing: Space.x1) {
+                    if let action {
+                        Button(action.title) {
+                            action.perform()
+                            dismiss()
+                        }
+                        .buttonStyle(.owlLuna(.primary, compact: true))
+                    }
+                    if dismissable {
+                        Button(action: dismiss) { Label("Dismiss", systemImage: "xmark").imageScale(.medium) }
+                            .buttonStyle(.barIcon)
+                    }
+                }
             }
         }
         .padding(.leading, Space.x4)
         .padding(.trailing, dismissable ? Space.x1 : Space.x4)
-        .padding(.vertical, dismissable ? Space.x1 : Space.x3)
+        .padding(.vertical, dismissable && !stacked ? Space.x1 : Space.x3)
         .frame(maxWidth: 520, alignment: .leading)
         .board(in: RoundedRectangle.bar)
         .padding(.horizontal, Space.x4)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isStaticText)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
+        .accessibilityAddTraits(action == nil ? .isStaticText : [])
     }
 }
 

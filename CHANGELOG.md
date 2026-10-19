@@ -28,6 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The language picked in a recording's transcript is now for that recording only.
 - A notebook made with a newer version of OwlLuna can now go into Recently Deleted and come back out.
 - A notebook deleted for good on another iPad now goes into Recently Deleted here, unless it was in there already.
+- On a Mac, fingers and the pointer draw from the start.
 
 ### Fixed
 
@@ -38,6 +39,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A change made after syncing with an iPad whose clock runs fast now wins, as it should.
 - A notebook reopened at launch, or open when you come back to the app, first takes in writing done on another iPad. If that isn't ready, the editor says a newer version is waiting, and closing keeps both.
 - Typing in a text box while zoomed in now wraps the lines where the page does.
+- A notebook you close no longer stays in memory until the app quits.
+- A recording is kept if OwlLuna quits, crashes or runs out of battery before Stop. It joins the list, as long as it got, the next time the notebook opens.
+- The iPad no longer locks while you record. If a recording stops without Stop, the editor says when and why.
+- A finger that drags where only the Pencil draws is told why nothing was drawn, the first time, with a Let Fingers Draw button.
+- A resting palm or thumb no longer spoils draw and hold.
 
 ## [1.0.0] (build 2) - 2026-10-15
 

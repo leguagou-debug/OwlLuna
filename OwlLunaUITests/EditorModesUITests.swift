@@ -483,6 +483,33 @@ final class EditorModesUITests: XCTestCase {
         XCTAssertEqual(strokeCount(canvas), 0, "and the second removes it")
     }
 
+    func testAFingerThatCannotDrawIsToldHowItCan() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-storageRoot", "modes", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "pencilOnly", "-freshToolPresets",
+                               "-freshFingerDrawHint"]
+        app.launch()
+        let notebook = app.buttons["notebook.Physics II 3"]
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30))
+        notebook.tap()
+        let canvas = app.element("page.canvas.1")
+        XCTAssertTrue(canvas.waitForExistence(timeout: 20))
+        let letFingersDraw = app.buttons["Let Fingers Draw"]
+        XCTAssertFalse(letFingersDraw.exists)
+
+        drag(on: canvas, y: 0.3)
+        XCTAssertTrue(letFingersDraw.waitForExistence(timeout: 5), "a finger that drew nothing is told why")
+        XCTAssertEqual(strokeCount(canvas), 0)
+        let notice = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Only Apple Pencil draws right now.")).firstMatch
+        XCTAssertTrue(notice.exists)
+        attach(app, "only-pencil-draws")
+
+        letFingersDraw.tap()
+        XCTAssertTrue(letFingersDraw.waitForNonExistence(timeout: 5), "the notice goes")
+        XCTAssertFalse(notice.exists)
+        drag(on: canvas, y: 0.5)
+        XCTAssertEqual(strokeCount(canvas), 1, "and now a finger draws")
+    }
+
     func testPresenterNotesSitBesideThePage() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-storageRoot", "modes", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "anyInput", "-secondScreenInset"]
