@@ -358,6 +358,22 @@ enum LibrarySync {
         return (modifiedAt, ManifestCodec.decodeLibrary(json["library"]?.objectValue ?? [:]))
     }
 
+    /// Whether the synced copy, taken over this device's, would drop a recording cut off here that only this device can take up.
+    private static func losesRecording(_ id: UUID, root: StorageRoot, cloud: CloudFolder) -> Bool {
+        func unfinished(in package: URL) -> [RecordingEntry] {
+            guard let data = try? Data(contentsOf: package.appending(path: "manifest.json")),
+                  let manifest = try? ManifestCodec.decode(data, fallbackID: id).manifest else { return [] }
+            return manifest.unfinishedRecordings
+        }
+        let here = unfinished(in: root.package(id))
+        guard !here.isEmpty else { return false }
+        let device = root.deviceID
+        let mine = here.filter { $0.device == device }
+        guard !mine.isEmpty else { return false }
+        let there = Set(unfinished(in: cloud.package(id)).map(\.id))
+        return mine.contains { !there.contains($0.id) }
+    }
+
     /// Rewrites how a notebook is filed and nothing else. Returns false for a manifest this version mustn't write.
     private static func refile(_ id: UUID, as library: LibraryState, inPackage url: URL) throws -> Bool {
         let manifestURL = url.appending(path: "manifest.json")
@@ -615,7 +631,7 @@ enum LibrarySync {
                         // The pages go by their date. How the notebook is filed is settled apart from them, so a pull
                         // never takes a lock off and a favourite never counts as an edit.
                         let inStep = same(local.modifiedAt, remote.modifiedAt)
-                        let unchangedHere = inStep || (agreed != nil && same(local.modifiedAt, agreed))
+                        let unchangedHere = inStep || (agreed != nil && same(local.modifiedAt, agreed) && !losesRecording(id, root: root, cloud: cloud))
                         let unchangedThere = inStep || (agreed != nil && same(remote.modifiedAt, agreed))
                         let wanted = LibraryState.settled(here: local.library, there: remote.library, written: (!unchangedHere, !unchangedThere), now: now)
                         var hereHolds = local.library, thereHolds = remote.library
@@ -879,7 +895,7 @@ enum LibrarySync {
         guard let agreed = state.notebooks[id], let known = state.copy, try copyID(in: cloud) == known, !(try isPresent(cloud.tombstone(id))),
               let local = glance(ofPackage: root.package(id)), let remote = glance(ofPackage: package),
               !same(remote.modifiedAt, agreed), !same(remote.modifiedAt, local.modifiedAt) else { return .none }
-        guard same(local.modifiedAt, agreed), await take(id) else { return .waiting }
+        guard same(local.modifiedAt, agreed), !losesRecording(id, root: root, cloud: cloud), await take(id) else { return .waiting }
         do {
             // Saved here while it was being taken: a pass keeps both.
             guard let taken = glance(ofPackage: root.package(id)), same(taken.modifiedAt, agreed) else {
@@ -916,7 +932,8 @@ enum LibrarySync {
             }
             guard let ink = try? Data(contentsOf: package.appending(path: page.inkFile), options: .mappedIfSafe), NotebookPackage.hash(ink) == hash else { return false }
         }
-        let assets = manifest.pages.compactMap(\.background.assetFile) + manifest.recordings.flatMap { [$0.file] + [$0.transcriptFile].compactMap { $0 } }
+        let assets = manifest.pages.compactMap(\.background.assetFile) + manifest.unfinishedRecordings.map(\.file)
+            + manifest.recordings.flatMap { [$0.file] + [$0.transcriptFile].compactMap { $0 } }
         return assets.allSatisfy { exists("assets/\($0)") }
     }
 

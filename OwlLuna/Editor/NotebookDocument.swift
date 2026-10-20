@@ -52,7 +52,7 @@ enum UndoBudget {
 }
 
 struct DocumentNotice: Identifiable, Hashable, Sendable {
-    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion }
+    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion, recordingStopped, onlyPencilDraws }
     let id = UUID()
     let kind: Kind
     let message: String
@@ -181,12 +181,16 @@ final class NotebookDocument {
         if isReadOnly {
             notices.append(DocumentNotice(kind: .readOnly, message: String(localized: "This notebook was saved by a newer version of OwlLuna, so it opens read-only.")))
         }
+        for recording in load.adoptedRecordings {
+            notices.append(DocumentNotice(kind: .recordingStopped, message: RecordingStop.quit.message(at: recording.duration)))
+        }
         if manifestVersion != savedManifestVersion { scheduleSave(after: .zero) }
     }
 
     static func open(_ id: UUID, root: StorageRoot) async throws -> NotebookDocument {
         let package = NotebookPackage(root: root, id: id)
-        let load = try await package.readManifest()
+        let read = try await package.readManifest()
+        let load = await package.adoptUnfinishedRecordings(read)
         return NotebookDocument(package: package, load: load)
     }
 
@@ -526,6 +530,34 @@ final class NotebookDocument {
         structureChanged()
     }
 
+    /// Names a recording's audio in the manifest as it starts, saved at once, so quitting before Stop doesn't lose it.
+    func beginRecording(_ recording: RecordingEntry) {
+        guard !isReadOnly else { return }
+        var recording = recording
+        recording.device = package.root.deviceID
+        manifest.unfinishedRecordings.append(recording)
+        manifest.modifiedAt = .now
+        manifestVersion += 1
+        scheduleSave(after: .zero)
+    }
+
+    /// The recording joins the list once its audio is a finished file; closing waits for that.
+    func finishRecording(_ recording: RecordingEntry) {
+        guard !isReadOnly else { return }
+        let package = package
+        perform { [self] in
+            let finished = await package.finishRecording(recording, keepingUnreadable: true)
+            manifest.unfinishedRecordings.removeAll { $0.id == recording.id }
+            if let finished { manifest.recordings.append(finished) }
+            structureChanged()
+        }
+    }
+
+    func noteRecordingStopped(_ message: String) {
+        notices.removeAll { $0.kind == .recordingStopped }
+        notices.append(DocumentNotice(kind: .recordingStopped, message: message))
+    }
+
     func removeRecording(_ id: UUID) {
         guard !isReadOnly else { return }
         manifest.recordings.removeAll { $0.id == id }
@@ -576,6 +608,16 @@ final class NotebookDocument {
 
     func dismissNotice(_ notice: DocumentNotice) {
         notices.removeAll { $0.id == notice.id }
+    }
+
+    func dismissNotices(_ kind: DocumentNotice.Kind) {
+        notices.removeAll { $0.kind == kind }
+    }
+
+    /// A finger dragged on a page and drew nothing, because only the Pencil draws.
+    func noteOnlyPencilDraws() {
+        guard !notices.contains(where: { $0.kind == .onlyPencilDraws }) else { return }
+        notices.append(DocumentNotice(kind: .onlyPencilDraws, message: String(localized: "Only Apple Pencil draws right now.")))
     }
 
     /// Another device wrote in the notebook since, and so did this one: closing it keeps both.

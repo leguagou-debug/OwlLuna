@@ -15,6 +15,27 @@ enum PlaybackSpeed {
     }
 }
 
+/// Why a recording ended without Stop, told in the editor when the iPad is back in hand.
+enum RecordingStop: Sendable {
+    case left, coverClosed, interrupted, failed, quit
+
+    func message(at seconds: TimeInterval) -> String {
+        let time = Self.clock(seconds)
+        return switch self {
+        case .left: String(localized: "Recording stopped at \(time) when the iPad locked or you left OwlLuna.")
+        case .coverClosed: String(localized: "Recording stopped at \(time) when the iPad's cover was closed.")
+        case .interrupted: String(localized: "Recording stopped at \(time) when another app needed the microphone.")
+        case .failed: String(localized: "Recording stopped at \(time) because the audio couldn't be written. What came before is kept.")
+        case .quit: String(localized: "Recording stopped at \(time) when OwlLuna quit. What came before is kept.")
+        }
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        let whole = seconds.isFinite ? Int(max(seconds, 0)) : 0
+        return Duration.seconds(whole).formatted(.time(pattern: whole >= 3600 ? .hourMinuteSecond : .minuteSecond))
+    }
+}
+
 /// Records and plays audio attached to a notebook. Files go into the package's `assets/`; entries into the manifest.
 @MainActor
 @Observable
@@ -31,14 +52,16 @@ final class NotebookRecorder: NSObject {
     /// Called as playback moves, about ten times a second, and when it is moved by hand.
     @ObservationIgnored var onPlaybackTime: ((TimeInterval) -> Void)?
     @ObservationIgnored private var holdsAtEnd = false
-    @ObservationIgnored private var recordingSince: Date?
     @ObservationIgnored private var inkedPages: Set<UUID> = []
 
     @ObservationIgnored private let document: NotebookDocument
     @ObservationIgnored var defaults: UserDefaults
     @ObservationIgnored private var recorder: AVAudioRecorder?
     @ObservationIgnored private var player: AVAudioPlayer?
-    @ObservationIgnored private var currentFile: String?
+    /// The entry for the recording being made, already in the manifest as unfinished.
+    @ObservationIgnored private var unfinished: RecordingEntry?
+    /// The recording being started, until it is. Stopping clears it, so a start overtaken by a close gives up.
+    @ObservationIgnored private var startingRecording: UUID?
     @ObservationIgnored private var timer: Timer?
     /// The playback being started, until its player exists. Stopping playback clears it, so a start that was
     /// overtaken while the audio session switched gives up.
@@ -61,12 +84,18 @@ final class NotebookRecorder: NSObject {
         NotificationCenter.default.addObserver(self, selector: #selector(sessionInterrupted), name: AVAudioSession.interruptionNotification, object: nil)
     }
 
+    deinit {
+        Task { @MainActor in IdleTimer.shared.refresh() }
+    }
+
     /// iPadOS took the microphone away (a call, or the app being suspended). What was recorded is saved there, so the
     /// button never shows a recording that isn't being made.
     @objc private nonisolated func sessionInterrupted(_ notification: Notification) {
         let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
         guard raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began else { return }
-        Task { @MainActor in self.stopRecording() }
+        let reason = (notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt).flatMap(AVAudioSession.InterruptionReason.init(rawValue:))
+        let stop: RecordingStop = reason == .builtInMicMuted ? .coverClosed : .interrupted
+        Task { @MainActor in self.stopRecording(because: stop) }
     }
 
     var recordings: [RecordingEntry] { document.manifest.recordings }
@@ -83,54 +112,80 @@ final class NotebookRecorder: NSObject {
 
     func startRecording() {
         guard !document.isReadOnly else { return }
+        let request = UUID()
+        startingRecording = request
         Task {
             guard await AVAudioApplication.requestRecordPermission() else {
                 errorMessage = String(localized: "Microphone access is off. Turn it on in Settings › Privacy & Security › Microphone.")
                 return
             }
             do {
+                guard startingRecording == request else { return }
                 stopPlayback()
                 try await Self.changeSession {
                     try $0.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
                     try $0.setActive(true)
                 }.value
-                guard recorder == nil else { return }
+                guard startingRecording == request, recorder == nil else {
+                    if startingRecording == nil, recorder == nil { Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) } }
+                    return
+                }
+                startingRecording = nil
                 stopPlayback()
                 try FileManager.default.createDirectory(at: document.package.assetsDirectory, withIntermediateDirectories: true)
-                let file = "\(UUID().uuidString).m4a"
-                let settings: [String: Any] = [
-                    AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44_100, AVNumberOfChannelsKey: 1,
-                    AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-                ]
-                let recorder = try AVAudioRecorder(url: document.package.assetURL(file), settings: settings)
-                guard recorder.record() else { throw ImportError.unreadable }
+                let (recorder, file) = try makeRecorder()
+                recorder.delegate = self
                 self.recorder = recorder
-                currentFile = file
-                recordingSince = .now
+                var entry = RecordingEntry(id: UUID(), file: file, createdAt: .now, duration: 0)
+                entry.startedAt = entry.createdAt
+                unfinished = entry
+                document.beginRecording(entry)
                 inkedPages = []
                 isRecording = true
                 elapsed = 0
                 startTimer()
+                IdleTimer.shared.hold(true, by: self)
             } catch {
                 errorMessage = String(localized: "Recording couldn't start: \(error.localizedDescription)")
             }
         }
     }
 
-    func stopRecording() {
-        guard let recorder, let currentFile else { return }
-        let duration = recorder.currentTime
+    /// Records to a file a cut-off recording can be read back from, or to an `.m4a` as before if that can't be made.
+    private func makeRecorder() throws -> (AVAudioRecorder, String) {
+        let file = "\(UUID().uuidString).\(RecordingFile.recordingExtension)"
+        if let recorder = try? AVAudioRecorder(url: document.package.assetURL(file), settings: RecordingFile.settings), recorder.record() {
+            return (recorder, file)
+        }
+        let fallback = "\(UUID().uuidString).m4a"
+        let recorder = try AVAudioRecorder(url: document.package.assetURL(fallback), settings: RecordingFile.settings)
+        guard recorder.record() else { throw ImportError.unreadable }
+        return (recorder, fallback)
+    }
+
+    /// Stops and keeps what was recorded. A `reason` is for a stop the user didn't ask for, which the editor then tells them about.
+    func stopRecording(because reason: RecordingStop? = nil) {
+        startingRecording = nil
+        guard let recorder, var entry = unfinished else { return }
+        let duration = recorder.isRecording ? recorder.currentTime : elapsed
+        recorder.delegate = nil
         recorder.stop()
         self.recorder = nil
-        self.currentFile = nil
+        unfinished = nil
         isRecording = false
         stopTimer()
-        var entry = RecordingEntry(id: UUID(), file: currentFile, createdAt: .now, duration: duration)
-        entry.startedAt = recordingSince ?? Date.now.addingTimeInterval(-duration)
+        IdleTimer.shared.hold(false, by: self)
+        entry.createdAt = .now
+        entry.duration = duration
         entry.inkedPages = Array(inkedPages)
-        recordingSince = nil
-        document.addRecording(entry)
+        if let reason { document.noteRecordingStopped(reason.message(at: duration)) }
+        document.finishRecording(entry)
         Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) }
+    }
+
+    fileprivate func recorderStopped(_ id: ObjectIdentifier, because reason: RecordingStop) {
+        guard let recorder, ObjectIdentifier(recorder) == id else { return }
+        stopRecording(because: reason)
     }
 
     /// Switching the shared audio session can block while the audio hardware answers, so it is done off the main
@@ -364,7 +419,7 @@ final class NotebookRecorder: NSObject {
     }
 
     private func tick() {
-        if let recorder { elapsed = recorder.currentTime.rounded(.down) }
+        if let recorder, recorder.isRecording { elapsed = recorder.currentTime.rounded(.down) }
         if let player, player.isPlaying { report(player.currentTime) }
     }
 }
@@ -372,5 +427,18 @@ final class NotebookRecorder: NSObject {
 extension NotebookRecorder: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in self.playbackFinished() }
+    }
+}
+
+extension NotebookRecorder: AVAudioRecorderDelegate {
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        let id = ObjectIdentifier(recorder)
+        Task { @MainActor in self.recorderStopped(id, because: .failed) }
+    }
+
+    /// Only a stop the recorder came to by itself reaches here: `stopRecording` lets go of the delegate first.
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        let id = ObjectIdentifier(recorder)
+        Task { @MainActor in self.recorderStopped(id, because: flag ? .interrupted : .failed) }
     }
 }

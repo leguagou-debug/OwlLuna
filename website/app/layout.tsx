@@ -6,7 +6,7 @@ import { Providers } from '@/components/Providers'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import { FontPreload } from '@/lib/fonts'
-import { site } from '@/lib/site'
+import { openGraph, site } from '@/lib/site'
 
 export const metadata: Metadata = {
   metadataBase: new URL(`${site.url}/`),
@@ -16,20 +16,7 @@ export const metadata: Metadata = {
   authors: [{ name: site.author.name, url: site.author.url }],
   alternates: { canonical: './' },
   verification: { google: site.googleSiteVerification.trim() || undefined },
-  openGraph: {
-    type: 'website',
-    siteName: site.name,
-    url: './',
-    images: [
-      {
-        url: '/opengraph-image.png',
-        width: 1200,
-        height: 630,
-        type: 'image/png',
-        alt: 'OwlLuna: an owl writing on a notepad beside the words Handwritten notes for iPad. Free, for good.',
-      },
-    ],
-  },
+  openGraph,
   twitter: { card: 'summary_large_image' },
 }
 

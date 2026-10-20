@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 import PencilKit
 @testable import OwlLuna
 
@@ -254,6 +255,183 @@ final class RecordingsTests: XCTestCase {
         XCTAssertEqual(shared?.count, 1)
         XCTAssertTrue(lock.isUnlocked(document.id))
         ExportFolder.discard(shared ?? [])
+    }
+
+    // MARK: Cut off
+
+    /// Writes `seconds` of a tone as a recording does, and returns a copy taken before the file was closed, as an app that quits leaves it.
+    private func cutOff(_ url: URL, seconds: Int) throws -> URL {
+        let copy = url.deletingLastPathComponent().appending(path: "cut-" + url.lastPathComponent)
+        let file = try AVAudioFile(forWriting: url, settings: RecordingFile.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 44_100))
+        buffer.frameLength = 44_100
+        let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+        for index in 0..<44_100 { samples[index] = sin(Float(index) * 0.05) * 0.3 }
+        for _ in 0..<seconds { try file.write(from: buffer) }
+        try FileManager.default.copyItem(at: url, to: copy)
+        return copy
+    }
+
+    private func scratchFolder() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "recordings-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return folder
+    }
+
+    private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) }
+
+    func testARecordingCutOffBeforeItsFileIsClosedPlaysAsADTSButNotAsM4A() throws {
+        let folder = try scratchFolder()
+        let m4a = try cutOff(folder.appending(path: "talk.m4a"), seconds: 3)
+        XCTAssertThrowsError(try AVAudioFile(forReading: m4a), "an .m4a says where its sound is only once it is closed")
+
+        let adts = try cutOff(folder.appending(path: "lecture.aac"), seconds: 3)
+        XCTAssertEqual(try XCTUnwrap(RecordingFile.duration(of: adts)), 3, accuracy: 0.3, "every frame has its header, so what was written plays")
+        var chopped = try Data(contentsOf: adts)
+        chopped.removeLast(37)
+        let torn = folder.appending(path: "torn.aac")
+        try chopped.write(to: torn)
+
+        for source in [adts, torn] {
+            let finished = try XCTUnwrap(RecordingFile.finish(source), "\(source.lastPathComponent)")
+            XCTAssertEqual(finished.url.pathExtension, "m4a", "made an .m4a once it ends, like every recording before")
+            XCTAssertEqual(finished.duration, 3, accuracy: 0.3)
+            let player = try AVAudioPlayer(contentsOf: finished.url)
+            XCTAssertEqual(player.duration, finished.duration, accuracy: 0.05, "the player knows its length")
+        }
+
+        let empty = folder.appending(path: "empty.aac")
+        try Data().write(to: empty)
+        XCTAssertNil(RecordingFile.finish(empty), "nothing written, nothing to play")
+        XCTAssertFalse(exists(folder.appending(path: "empty.m4a")))
+    }
+
+    func testARecordingIsNamedAsItStartsSoClearingUpKeepsItsAudio() async throws {
+        let document = try await notebook(recordings: [])
+        document.saveDelay = .seconds(600)
+        document.maxSaveLatency = .seconds(600)
+        let package = document.package
+        var entry = RecordingEntry(id: UUID(), file: "\(UUID().uuidString).aac", createdAt: start, duration: 0)
+        entry.startedAt = start
+        let audio = package.assetURL(entry.file), stray = package.assetURL("stray.aac")
+        try FileManager.default.moveItem(at: try cutOff(try scratchFolder().appending(path: "a.aac"), seconds: 2), to: audio)
+        try Data(repeating: 1, count: 64).write(to: stray)
+
+        let before = document.manifest.modifiedAt
+        document.beginRecording(entry)
+        await waitUntil(2) { !document.hasUnsavedChanges }
+        XCTAssertFalse(document.hasUnsavedChanges, "saved at once, not after the usual pause")
+        XCTAssertGreaterThan(document.manifest.modifiedAt, before, "a change of its own, so a sync never takes another version over it unseen")
+        for file in [audio, stray] {
+            try FileManager.default.setAttributes([.modificationDate: start], ofItemAtPath: file.path(percentEncoded: false))
+        }
+        await document.collectGarbage()
+        XCTAssertTrue(exists(audio), "the audio being written is named in the manifest, so clearing up keeps it")
+        XCTAssertFalse(exists(stray), "while a file nothing names goes")
+        XCTAssertEqual(NotebookRecorder(document: document, defaults: defaults()).recordings, [], "it isn't in the list until it ends")
+        let saved = try await package.readManifest().manifest
+        XCTAssertEqual(saved.unfinishedRecordings.map(\.id), [entry.id])
+        XCTAssertEqual(saved.unfinishedRecordings.first?.device, package.root.deviceID, "marked as being made on this iPad")
+        XCTAssertEqual(saved.recordings, [], "an older build sees no recording, only a key it keeps")
+
+        entry.duration = 1.5
+        document.finishRecording(entry)
+        await document.finishPendingWork()
+        XCTAssertEqual(document.manifest.unfinishedRecordings, [])
+        let finished = try XCTUnwrap(document.manifest.recordings.first)
+        XCTAssertEqual(finished.id, entry.id)
+        XCTAssertEqual(finished.file, entry.file.replacingOccurrences(of: ".aac", with: ".m4a"))
+        XCTAssertEqual(finished.duration, 2, accuracy: 0.3, "timed from what was written")
+        XCTAssertNil(finished.device)
+        XCTAssertTrue(document.hasUnsavedChanges)
+        _ = await document.flush()
+        await document.collectGarbage()
+        XCTAssertTrue(exists(package.assetURL(finished.file)))
+        XCTAssertFalse(exists(audio), "the file it was recorded into goes once the .m4a is saved in its place")
+    }
+
+    func testARecordingTheAppQuitDuringJoinsTheListWhenTheNotebookOpens() async throws {
+        let root = temporaryRoot(self)
+        var manifest = NotebookManifest(title: "Lecture", defaults: paper, pages: [paper.newPage()])
+        let package = NotebookPackage(root: root, id: manifest.id)
+        try await package.create(manifest)
+        func cut(_ name: String, on device: String? = nil) -> RecordingEntry {
+            var entry = RecordingEntry(id: UUID(), file: "\(name).aac", createdAt: start, duration: 0)
+            entry.startedAt = start
+            entry.device = device ?? root.deviceID
+            return entry
+        }
+        let lecture = cut("lecture"), empty = cut("empty"), missing = cut("missing"), elsewhere = cut("elsewhere", on: UUID().uuidString)
+        let folder = try scratchFolder()
+        try FileManager.default.moveItem(at: try cutOff(folder.appending(path: "a.aac"), seconds: 4), to: package.assetURL(lecture.file))
+        try FileManager.default.moveItem(at: try cutOff(folder.appending(path: "b.aac"), seconds: 2), to: package.assetURL(elsewhere.file))
+        try Data().write(to: package.assetURL(empty.file))
+        manifest.unfinishedRecordings = [lecture, empty, missing, elsewhere]
+        _ = try await package.write(SaveSnapshot(manifest: manifest, ink: [:]))
+        let written = try await package.readManifest().manifest.modifiedAt
+
+        let document = try await NotebookDocument.open(manifest.id, root: root)
+        XCTAssertEqual(document.manifest.recordings.map(\.id), [lecture.id], "one with nothing playable is dropped")
+        XCTAssertEqual(document.manifest.unfinishedRecordings, [elsewhere], "another iPad's may still be being made there, so it is left for that iPad")
+        XCTAssertTrue(exists(package.assetURL(elsewhere.file)))
+        let adopted = document.manifest.recordings[0]
+        XCTAssertEqual(adopted.file, "lecture.m4a")
+        XCTAssertEqual(adopted.duration, 4, accuracy: 0.3, "as long as what was written")
+        XCTAssertEqual(adopted.startedAt.timeIntervalSince(start), 0, accuracy: 0.001)
+        XCTAssertEqual(adopted.createdAt.timeIntervalSince(start), adopted.duration, accuracy: 0.002, "it ended where its sound does")
+        XCTAssertFalse(exists(package.assetURL(empty.file)), "and goes with its file")
+        XCTAssertEqual(document.notices.map(\.kind), [.recordingStopped])
+        XCTAssertEqual(document.notices.first?.message, RecordingStop.quit.message(at: adopted.duration))
+
+        _ = await document.flush()
+        let saved = try await package.readManifest().manifest
+        XCTAssertEqual(saved.recordings.map(\.file), ["lecture.m4a"], "saved finished")
+        XCTAssertEqual(saved.unfinishedRecordings.map(\.id), [elsewhere.id])
+        XCTAssertGreaterThan(saved.modifiedAt, written, "dated, so it syncs out like any recording and a pull can't take it back")
+        let again = try await NotebookDocument.open(manifest.id, root: root)
+        XCTAssertEqual(again.notices, [], "told once")
+        await again.collectGarbage()
+        XCTAssertTrue(exists(package.assetURL(elsewhere.file)), "and its audio is kept")
+    }
+
+    func testAStopTheUserDidntAskForIsToldWithTheTimeItCameAt() async throws {
+        XCTAssertEqual(RecordingStop.clock(41 * 60 + 12), "41:12")
+        XCTAssertEqual(RecordingStop.clock(5.9), "0:05")
+        XCTAssertEqual(RecordingStop.clock(3725), "1:02:05", "an hour or more shows the hours")
+        XCTAssertEqual(RecordingStop.left.message(at: 2472), "Recording stopped at 41:12 when the iPad locked or you left OwlLuna.")
+        XCTAssertEqual(RecordingStop.coverClosed.message(at: 2472), "Recording stopped at 41:12 when the iPad's cover was closed.")
+        XCTAssertEqual(RecordingStop.interrupted.message(at: 2472), "Recording stopped at 41:12 when another app needed the microphone.")
+        XCTAssertEqual(RecordingStop.failed.message(at: 2472), "Recording stopped at 41:12 because the audio couldn't be written. What came before is kept.")
+        XCTAssertEqual(RecordingStop.quit.message(at: 2472), "Recording stopped at 41:12 when OwlLuna quit. What came before is kept.")
+
+        let document = try await notebook(recordings: [])
+        document.noteRecordingStopped(RecordingStop.left.message(at: 60))
+        document.noteRecordingStopped(RecordingStop.interrupted.message(at: 90))
+        XCTAssertEqual(document.notices.map(\.message), [RecordingStop.interrupted.message(at: 90)], "only the latest stop is shown")
+    }
+
+    func testTheIPadStaysAwakeWhileAnythingHoldsIt() throws {
+        final class Screen { var awake = false }
+        let screen = Screen(), idle = IdleTimer { screen.awake = $0 }
+        let presenting = NSObject(), recording = NSObject()
+        idle.hold(true, by: presenting)
+        idle.hold(true, by: recording)
+        idle.hold(false, by: presenting)
+        XCTAssertTrue(screen.awake, "presenting ends while a recording is being made")
+        idle.hold(true, by: presenting)
+        idle.hold(false, by: recording)
+        XCTAssertTrue(screen.awake, "a recording ends while presenting")
+        idle.hold(false, by: presenting)
+        XCTAssertFalse(screen.awake)
+        idle.hold(false, by: recording)
+        XCTAssertFalse(idle.isHeld, "letting go twice is harmless")
+
+        var gone: NSObject? = NSObject()
+        idle.hold(true, by: try XCTUnwrap(gone))
+        gone = nil
+        idle.refresh()
+        XCTAssertFalse(screen.awake, "a hold goes with whatever took it")
     }
 
     // MARK: Export

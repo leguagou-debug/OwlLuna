@@ -5,7 +5,10 @@ enum DrawingInput: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     /// What draws until the setting is changed.
-    static let initial = DrawingInput.pencilOnly
+    static let initial = initial(isMac: ProcessInfo.processInfo.isiOSAppOnMac)
+
+    /// A Mac has no Pencil to draw with, so there the pointer and fingers draw from the start.
+    static func initial(isMac: Bool) -> DrawingInput { isMac ? .anyInput : .pencilOnly }
 
     var displayName: String {
         switch self {
@@ -24,6 +27,31 @@ enum DrawingInput: String, CaseIterable, Identifiable {
     }
 }
 
+/// The notice for a finger that dragged on a page and drew nothing because only the Pencil draws: once per install.
+enum FingerDrawHint {
+    /// UI tests drag fingers on Pencil-only pages all the time, so there it is off unless one asks for it fresh with `-freshFingerDrawHint`.
+    static let isAllowed: Bool = {
+        #if DEBUG
+        guard LaunchOptions.usesTestStorage else { return true }
+        guard LaunchOptions.arguments.contains("-freshFingerDrawHint") else { return false }
+        UserDefaults.standard.removeObject(forKey: SettingsKey.fingerDrawHintSeen)
+        #endif
+        return true
+    }()
+
+    /// Whether it is due now. After a yes it isn't again.
+    static func take(input: DrawingInput, penInHand: Bool, defaults: UserDefaults = .standard) -> Bool {
+        guard input == .pencilOnly, penInHand, !defaults.bool(forKey: SettingsKey.fingerDrawHintSeen) else { return false }
+        defaults.set(true, forKey: SettingsKey.fingerDrawHintSeen)
+        return true
+    }
+
+    /// Whoever has a Pencil on the pages knows it draws, so the notice isn't needed.
+    static func pencilTouched(defaults: UserDefaults = .standard) {
+        if !defaults.bool(forKey: SettingsKey.fingerDrawHintSeen) { defaults.set(true, forKey: SettingsKey.fingerDrawHintSeen) }
+    }
+}
+
 enum SettingsKey {
     static let drawingInput = "drawingInput"
     static let defaultTemplate = "defaultTemplate"
@@ -35,6 +63,7 @@ enum SettingsKey {
     static let libraryLayout = "libraryLayout"
     static let dailyJournalID = "dailyJournalID"
     static let whiteboardTipSeen = "whiteboardTipSeen"
+    static let fingerDrawHintSeen = "fingerDrawHintSeen"
     static let dailyJournalPromptHidden = "dailyJournalPromptHidden"
     static let showsOnThisDay = "showsOnThisDay"
     static let onThisDayHiddenDay = "onThisDayHiddenDay"
