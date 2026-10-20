@@ -1,6 +1,6 @@
 import UIKit
 
-/// Keeps the iPad from locking while anything holds it: a notebook being presented, or a recording being made.
+/// Keeps the iPad from locking while anything holds it: a notebook being presented, or a recording that locking would stop.
 @MainActor
 final class IdleTimer {
     static let shared = IdleTimer()

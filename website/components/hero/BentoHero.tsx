@@ -171,6 +171,11 @@ function Pitch() {
             Download on the App Store
             <Away />
           </Button>
+        ) : site.testFlightUrl ? (
+          <Button href={site.testFlightUrl} variant="cloth">
+            Join the beta on TestFlight
+            <Away />
+          </Button>
         ) : (
           <Button href="#features" variant="cloth">
             See what it does
@@ -180,7 +185,9 @@ function Pitch() {
           Source on GitHub
           <Away />
         </Button>
-        {site.appStoreUrl ? null : <span className={styles.pitchSoon}>Coming soon to the App Store</span>}
+        {site.appStoreUrl || site.testFlightUrl ? null : (
+          <span className={styles.pitchSoon}>Coming soon to the App Store</span>
+        )}
       </div>
     </div>
   )

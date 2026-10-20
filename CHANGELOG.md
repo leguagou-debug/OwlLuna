@@ -24,11 +24,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- iCloud sync is no longer experimental. It has been tested on real iCloud, on iPads signed in to one Apple Account.
 - Dark Paper in Dark Mode is now Keep Paper Light, in Settings › Appearance. Exports always keep the page's own colours.
 - The language picked in a recording's transcript is now for that recording only.
 - A notebook made with a newer version of OwlLuna can now go into Recently Deleted and come back out.
 - A notebook deleted for good on another iPad now goes into Recently Deleted here, unless it was in there already.
 - On a Mac, fingers and the pointer draw from the start.
+- A recording carries on when the iPad locks or you switch apps. A notebook with a lock still stops recording when it locks, and keeps the iPad awake until then.
 
 ### Fixed
 
@@ -41,7 +43,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Typing in a text box while zoomed in now wraps the lines where the page does.
 - A notebook you close no longer stays in memory until the app quits.
 - A recording is kept if OwlLuna quits, crashes or runs out of battery before Stop. It joins the list, as long as it got, the next time the notebook opens.
-- The iPad no longer locks while you record. If a recording stops without Stop, the editor says when and why.
+- If a recording stops without Stop, the editor says when and why.
 - A finger that drags where only the Pencil draws is told why nothing was drawn, the first time, with a Let Fingers Draw button.
 - A resting palm or thumb no longer spoils draw and hold.
 - With two notebooks side by side, touching either one makes it the one you're working in, and a Pencil double-tap or squeeze reaches only that one.

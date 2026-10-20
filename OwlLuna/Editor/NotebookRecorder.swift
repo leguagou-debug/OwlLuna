@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import UIKit
 
 /// How fast recordings play. One speed for every notebook, kept from one playback to the next.
 enum PlaybackSpeed {
@@ -17,12 +18,12 @@ enum PlaybackSpeed {
 
 /// Why a recording ended without Stop, told in the editor when the iPad is back in hand.
 enum RecordingStop: Sendable {
-    case left, coverClosed, interrupted, failed, quit
+    case locked, coverClosed, interrupted, failed, quit
 
     func message(at seconds: TimeInterval) -> String {
         let time = Self.clock(seconds)
         return switch self {
-        case .left: String(localized: "Recording stopped at \(time) when the iPad locked or you left OwlLuna.")
+        case .locked: String(localized: "Recording stopped at \(time) when the notebook locked.")
         case .coverClosed: String(localized: "Recording stopped at \(time) when the iPad's cover was closed.")
         case .interrupted: String(localized: "Recording stopped at \(time) when another app needed the microphone.")
         case .failed: String(localized: "Recording stopped at \(time) because the audio couldn't be written. What came before is kept.")
@@ -34,6 +35,17 @@ enum RecordingStop: Sendable {
         let whole = seconds.isFinite ? Int(max(seconds, 0)) : 0
         return Duration.seconds(whole).formatted(.time(pattern: whole >= 3600 ? .hourMinuteSecond : .minuteSecond))
     }
+}
+
+/// A recording carries on with the iPad locked or another app in front, but nothing is recorded behind a notebook's lock.
+enum BackgroundRecording {
+    /// The stop due as the notebook's window moves or its lock changes; nil while the recording carries on.
+    static func stop(locked: Bool, inBackground: Bool) -> RecordingStop? {
+        locked && inBackground ? .locked : nil
+    }
+
+    /// Only a recording the iPad locking would stop keeps it awake; any other would just drain the battery.
+    static func keepsAwake(locked: Bool) -> Bool { locked }
 }
 
 /// Records and plays audio attached to a notebook. Files go into the package's `assets/`; entries into the manifest.
@@ -62,6 +74,7 @@ final class NotebookRecorder: NSObject {
     @ObservationIgnored private var unfinished: RecordingEntry?
     /// The recording being started, until it is. Stopping clears it, so a start overtaken by a close gives up.
     @ObservationIgnored private var startingRecording: UUID?
+    @ObservationIgnored private var isInBackground = false
     @ObservationIgnored private var timer: Timer?
     /// The playback being started, until its player exists. Stopping playback clears it, so a start that was
     /// overtaken while the audio session switched gives up.
@@ -88,8 +101,7 @@ final class NotebookRecorder: NSObject {
         Task { @MainActor in IdleTimer.shared.refresh() }
     }
 
-    /// iPadOS took the microphone away (a call, or the app being suspended). What was recorded is saved there, so the
-    /// button never shows a recording that isn't being made.
+    /// iPadOS took the microphone away (a call, another app's sound, a cover closing): what was recorded is saved there.
     @objc private nonisolated func sessionInterrupted(_ notification: Notification) {
         let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
         guard raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began else { return }
@@ -104,6 +116,26 @@ final class NotebookRecorder: NSObject {
     /// A page was written on. While recording, the entry remembers which, so a replay knows where to look.
     func noteInk(onPage pageID: UUID) {
         if isRecording { inkedPages.insert(pageID) }
+    }
+
+    /// The editor's window went to the background, the iPad locking or another app coming to the front, or came back.
+    func noteWindow(inBackground: Bool) {
+        isInBackground = inBackground
+        keepToTheLock()
+    }
+
+    func noteLockChanged() {
+        keepToTheLock()
+    }
+
+    /// Behind a notebook's lock a recording stops and playback waits; until then the recording keeps the iPad awake.
+    private func keepToTheLock() {
+        let locked = document.manifest.library.isLocked
+        if let stop = BackgroundRecording.stop(locked: locked, inBackground: isInBackground) {
+            stopRecording(because: stop)
+            pause()
+        }
+        IdleTimer.shared.hold(isRecording && BackgroundRecording.keepsAwake(locked: locked), by: self)
     }
 
     func toggleRecording() {
@@ -126,6 +158,7 @@ final class NotebookRecorder: NSObject {
                     try $0.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
                     try $0.setActive(true)
                 }.value
+                if document.isSetAside { startingRecording = nil }
                 guard startingRecording == request, recorder == nil else {
                     if startingRecording == nil, recorder == nil { Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) } }
                     return
@@ -144,7 +177,7 @@ final class NotebookRecorder: NSObject {
                 isRecording = true
                 elapsed = 0
                 startTimer()
-                IdleTimer.shared.hold(true, by: self)
+                keepToTheLock()
             } catch {
                 errorMessage = String(localized: "Recording couldn't start: \(error.localizedDescription)")
             }
@@ -180,7 +213,23 @@ final class NotebookRecorder: NSObject {
         entry.inkedPages = Array(inkedPages)
         if let reason { document.noteRecordingStopped(reason.message(at: duration)) }
         document.finishRecording(entry)
+        saveStoppedRecording()
         Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) }
+    }
+
+    /// Letting go of the audio session lets iPadOS suspend an app in the background, so the recording is saved under a background task.
+    private func saveStoppedRecording() {
+        let document = document
+        var task = UIBackgroundTaskIdentifier.invalid
+        task = UIApplication.shared.beginBackgroundTask(withName: "Save recording") {
+            UIApplication.shared.endBackgroundTask(task)
+            task = .invalid
+        }
+        Task {
+            await document.finishPendingWork()
+            await document.flush()
+            if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+        }
     }
 
     fileprivate func recorderStopped(_ id: ObjectIdentifier, because reason: RecordingStop) {

@@ -399,16 +399,44 @@ final class RecordingsTests: XCTestCase {
         XCTAssertEqual(RecordingStop.clock(41 * 60 + 12), "41:12")
         XCTAssertEqual(RecordingStop.clock(5.9), "0:05")
         XCTAssertEqual(RecordingStop.clock(3725), "1:02:05", "an hour or more shows the hours")
-        XCTAssertEqual(RecordingStop.left.message(at: 2472), "Recording stopped at 41:12 when the iPad locked or you left OwlLuna.")
+        XCTAssertEqual(RecordingStop.locked.message(at: 2472), "Recording stopped at 41:12 when the notebook locked.")
         XCTAssertEqual(RecordingStop.coverClosed.message(at: 2472), "Recording stopped at 41:12 when the iPad's cover was closed.")
         XCTAssertEqual(RecordingStop.interrupted.message(at: 2472), "Recording stopped at 41:12 when another app needed the microphone.")
         XCTAssertEqual(RecordingStop.failed.message(at: 2472), "Recording stopped at 41:12 because the audio couldn't be written. What came before is kept.")
         XCTAssertEqual(RecordingStop.quit.message(at: 2472), "Recording stopped at 41:12 when OwlLuna quit. What came before is kept.")
 
         let document = try await notebook(recordings: [])
-        document.noteRecordingStopped(RecordingStop.left.message(at: 60))
+        document.noteRecordingStopped(RecordingStop.locked.message(at: 60))
         document.noteRecordingStopped(RecordingStop.interrupted.message(at: 90))
         XCTAssertEqual(document.notices.map(\.message), [RecordingStop.interrupted.message(at: 90)], "only the latest stop is shown")
+    }
+
+    func testARecordingCarriesOnInTheBackgroundButNotBehindANotebooksLock() {
+        XCTAssertNil(BackgroundRecording.stop(locked: false, inBackground: true), "the iPad locking or another app coming to the front leaves it recording")
+        XCTAssertNil(BackgroundRecording.stop(locked: false, inBackground: false))
+        XCTAssertEqual(BackgroundRecording.stop(locked: true, inBackground: true), .locked, "leaving the screen locks the notebook, and nothing is recorded behind its lock")
+        XCTAssertNil(BackgroundRecording.stop(locked: true, inBackground: false), "a notebook locked while it is in front stays open until it is closed, and so does its recording")
+        XCTAssertFalse(BackgroundRecording.keepsAwake(locked: false), "locking doesn't stop it, so the iPad locks as it usually would")
+        XCTAssertTrue(BackgroundRecording.keepsAwake(locked: true), "locking would stop it, so the iPad stays awake")
+    }
+
+    func testPlaybackWaitsBehindANotebooksLockAndOtherwisePlaysOnInTheBackground() async throws {
+        let document = try await notebook(recordings: [recording(duration: 20)])
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        addTeardownBlock { @MainActor in recorder.shutdown() }
+        recorder.togglePlayback(recorder.recordings[0])
+        await waitUntil { recorder.playingID != nil }
+        XCTAssertNotNil(recorder.playingID)
+
+        recorder.noteWindow(inBackground: true)
+        XCTAssertFalse(recorder.isPaused, "with no lock it plays on with the iPad locked")
+        document.updateLibraryState { $0.isLocked = true }
+        XCTAssertTrue(recorder.isPaused, "locked from another window while this one is in the background, it waits")
+        recorder.resume()
+        recorder.noteWindow(inBackground: false)
+        XCTAssertFalse(recorder.isPaused, "in front it stays open until it is closed")
+        recorder.noteWindow(inBackground: true)
+        XCTAssertTrue(recorder.isPaused, "and leaving the screen locks it")
     }
 
     func testTheIPadStaysAwakeWhileAnythingHoldsIt() throws {

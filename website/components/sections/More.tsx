@@ -169,17 +169,15 @@ export function More() {
                   <p className={styles.rowText}>It carries your flashcards, smart shelves and writing history with it.</p>
                 </div>
                 <div className={styles.half}>
-                  <p className={styles.rowName}>
-                    iCloud sync
-                    <span className={styles.flag}>Experimental</span>
-                  </p>
+                  <p className={styles.rowName}>iCloud sync</p>
                   <p className={styles.rowText}>
                     Sync between your iPads asks before it starts, and{' '}
                     <span className={styles.path}>Settings › iCloud</span> has the switch. Each notebook is copied whole,
                     and one changed on two devices keeps both versions.
                   </p>
                   <p className={styles.rowText}>
-                    It is still marked experimental, so make a backup of anything that matters.
+                    It has been tested on real iCloud, between iPads on one Apple Account. As with any sync, a backup
+                    first is a good habit.
                   </p>
                 </div>
               </div>

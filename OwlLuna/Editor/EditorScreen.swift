@@ -493,9 +493,8 @@ struct EditorScreen: View {
         }
         .task(id: notebookID) { await open() }
         .onChange(of: scenePhase) { _, phase in
+            document?.recorder?.noteWindow(inBackground: phase == .background)
             guard phase == .background else { return }
-            // Nothing is recorded behind another app, or behind a notebook's lock.
-            document?.recorder?.stopRecording(because: .left)
             lock.lock(notebookID)
             askedToUnlock = false
         }
