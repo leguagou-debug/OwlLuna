@@ -29,6 +29,19 @@ struct CloudFolder: Sendable, Hashable {
     }
 }
 
+/// How a pass asks iCloud for files and gives them back. A test stands in for iCloud here.
+struct CloudAccess: Sendable {
+    /// Asks for files to be brought down and waits for them, up to the limit. Returns those still not on the device.
+    var fetch: @Sendable (_ files: [URL], _ limit: Duration) async -> [URL]
+    /// Takes a file's copy off the device once iCloud holds all of it. True when it did.
+    var evict: @Sendable (URL) -> Bool
+
+    static func live(_ cloud: CloudFolder) -> CloudAccess {
+        guard cloud.isUbiquitous else { return CloudAccess(fetch: { files, _ in files.filter(CloudFiles.isPending) }, evict: { _ in false }) }
+        return CloudAccess(fetch: { await CloudFiles.download($0, within: $1) }, evict: CloudFiles.evict)
+    }
+}
+
 /// What a delete marker says was deleted: the notebook's page date, and when it was last moved into or out of
 /// Recently Deleted. A marker from an older build is empty and says neither.
 struct DeleteMarker: Sendable, Equatable {
@@ -36,11 +49,19 @@ struct DeleteMarker: Sendable, Equatable {
     var trashStamp: Date?
     /// The delete was held back with others and then let go, so another device doesn't hold it again.
     var confirmed = false
+    /// When the marker was written. Nil from an older build, whose marker goes by its file's date.
+    var markedAt: Date?
 
-    init(modifiedAt: Date? = nil, trashStamp: Date? = nil, confirmed: Bool = false) {
+    /// How long a marker is kept once the notebook is gone from the synced copy and the device. A pass that finds no
+    /// marker never deletes: a device that comes back with the notebook after that sends it up again whole, so all a
+    /// longer life buys is fewer notebooks coming back. A year is four times the longest Recently Deleted.
+    static let keptForDays = 365
+
+    init(modifiedAt: Date? = nil, trashStamp: Date? = nil, confirmed: Bool = false, markedAt: Date? = nil) {
         self.modifiedAt = modifiedAt
         self.trashStamp = trashStamp
         self.confirmed = confirmed
+        self.markedAt = markedAt
     }
 
     init(_ data: Data) {
@@ -48,6 +69,7 @@ struct DeleteMarker: Sendable, Equatable {
         modifiedAt = json?["modifiedAt"]?.stringValue.flatMap(ManifestCodec.parseDate)
         trashStamp = json?["trashStamp"]?.stringValue.flatMap(ManifestCodec.parseDate)
         confirmed = json?["confirmed"]?.boolValue ?? false
+        markedAt = json?["markedAt"]?.stringValue.flatMap(ManifestCodec.parseDate)
     }
 
     func encoded() throws -> Data {
@@ -55,6 +77,7 @@ struct DeleteMarker: Sendable, Equatable {
         if let modifiedAt { values["modifiedAt"] = ManifestCodec.encodeDate(modifiedAt) }
         if let trashStamp { values["trashStamp"] = ManifestCodec.encodeDate(trashStamp) }
         if confirmed { values["confirmed"] = .bool(true) }
+        if let markedAt { values["markedAt"] = ManifestCodec.encodeDate(markedAt) }
         return try JSONValue.object(values).serialized()
     }
 
@@ -384,6 +407,12 @@ enum LibrarySync {
         return true
     }
 
+    /// Whether a file is in the synced copy, on the device or only in iCloud.
+    private static func isListed(_ url: URL) -> Bool {
+        let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
+        return [url, placeholder].contains { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+    }
+
     /// Whether a file is in the synced copy. One still on its way down from iCloud is waited for.
     private static func isPresent(_ url: URL) throws -> Bool {
         let fileManager = FileManager.default
@@ -508,13 +537,13 @@ enum LibrarySync {
     /// they come back wherever they're gone. `lettingGo` are ones whose deletes were meant: they aren't held again,
     /// and go as a single delete would. The folders are settled inside `holdingFolders`, which a library uses to
     /// keep its own folder writes from interleaving with the pass's. `replacingFolders` puts this device's folders
-    /// in place of a synced list that can't be read.
+    /// in place of a synced list that can't be read. `access` is how files are brought down and evicted.
     static func run(root: StorageRoot, cloud: CloudFolder, account: String? = nil, now: Date = .now, keeping: Set<UUID> = [], lettingGo: Set<UUID> = [],
-                    replacingFolders: Bool = false,
+                    replacingFolders: Bool = false, access: CloudAccess? = nil,
                     take: @Sendable (UUID) async -> Bool = { _ in true }, release: @Sendable (UUID) async -> Void = { _ in },
                     holdingFolders: @Sendable (@escaping @Sendable () throws -> FolderPass?) async throws -> FolderPass? = { try $0() },
                     signedIn: (@Sendable () -> String?)? = nil) async throws -> SyncReport {
-        let fileManager = FileManager.default
+        let fileManager = FileManager.default, access = access ?? .live(cloud)
         func checkStillWanted() throws {
             try Task.checkCancellation()
             if let signedIn, signedIn() != account { throw SyncError.accountChanged }
@@ -523,11 +552,8 @@ enum LibrarySync {
         for directory in [root.library, cloud.library, cloud.tombstones] {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        // Notebooks with files iCloud still hadn't brought down when the wait ran out.
-        let stillComing = await cloud.isUbiquitous ? CloudFiles.download(cloud.url) : CloudFiles.pending(in: cloud.url)
-        let arriving = Set(stillComing.compactMap { url in
-            url.pathComponents.first { $0.hasSuffix(".\(StorageRoot.packageExtension)") }.flatMap { UUID(uuidString: String($0.dropLast(StorageRoot.packageExtension.count + 1))) }
-        })
+        // Only the small files a pass decides on come down first. A notebook's pages wait until it is to be pulled.
+        _ = await access.fetch(deciding(in: cloud), .seconds(60))
         try checkStillWanted()
         var state = SyncState.read(root)
         var report = SyncReport()
@@ -569,7 +595,9 @@ enum LibrarySync {
         let here = Set(try root.listPackageIDs()), there = try packageIDs(in: cloud.library)
         // Read after the packages are listed: it is written before an expired one goes.
         let expired = ExpiredTrash.read(root)
-        let deleted = Set(((try? fileManager.contentsOfDirectory(atPath: cloud.tombstones.path(percentEncoded: false))) ?? []).compactMap(UUID.init(uuidString:)))
+        // A marker still on its way down is listed too, so it is waited for rather than taken as missing.
+        let deleted = Set(((try? fileManager.contentsOfDirectory(atPath: cloud.tombstones.path(percentEncoded: false))) ?? [])
+            .compactMap { UUID(uuidString: CloudFiles.placeholderTarget($0) ?? $0) })
         func deleteMarker(_ id: UUID) throws -> DeleteMarker? {
             guard deleted.contains(id), let data = try contents(of: cloud.tombstone(id)) else { return nil }
             return DeleteMarker(data)
@@ -591,11 +619,36 @@ enum LibrarySync {
         }
         let held = isTooManyToDelete(vanishing.count, of: here.union(there).count) ? Set(vanishing) : []
 
+        // What has to come down before a notebook can be settled: the pages of one changed there, or the clippings
+        // its cards there name. All of it is asked for now, so it comes down together, and those notebooks go last,
+        // so a wait for them never holds up what this device sends.
+        var needs: [UUID: [URL]] = [:]
+        for id in there.subtracting(held) {
+            guard let remote = glance(ofPackage: cloud.package(id)) else { continue }
+            let local = here.contains(id) ? glance(ofPackage: root.package(id)) : nil
+            if !same(remote.modifiedAt, local?.modifiedAt), !same(remote.modifiedAt, state.notebooks[id]) {
+                needs[id] = needed(id, root: root, cloud: cloud)
+            } else if local != nil {
+                needs[id] = clippingsNeeded(id, root: root, cloud: cloud)
+            }
+            if needs[id]?.isEmpty == true { needs[id] = nil }
+        }
+        if !needs.isEmpty { _ = await access.fetch(needs.values.flatMap { $0 }, .zero) }
+        // Notebooks both sides hold alike when the pass is done, whose pictures and recordings can then leave the device.
+        var alike: [UUID] = []
+
         do {
-            for id in here.union(there).union(state.notebooks.keys).sorted(by: { $0.uuidString < $1.uuidString }) {
+            func turn(_ id: UUID) -> (Int, String) { (needs[id] == nil ? 0 : 1, id.uuidString) }
+            for id in here.union(there).union(state.notebooks.keys).sorted(by: { turn($0) < turn($1) }) {
                 try checkStillWanted()
                 if held.contains(id) {
                     report.held.append(id)
+                    continue
+                }
+                // Waited for before the notebook is taken, so opening it isn't held up meanwhile. A version iCloud is
+                // still bringing down is read once all of it has arrived, not part-way.
+                if let wanted = needs[id], !(await access.fetch(wanted, .seconds(60))).isEmpty {
+                    report.arriving.append(id)
                     continue
                 }
                 guard await take(id) else { report.open.append(id); continue }
@@ -615,11 +668,6 @@ enum LibrarySync {
                         } else {
                             report.arriving.append(id)
                         }
-                        break notebook
-                    }
-                    if let remote, arriving.contains(id), !same(remote.modifiedAt, local?.modifiedAt), !same(remote.modifiedAt, agreed) {
-                        // A version iCloud is still bringing down is read once all of it has arrived, not part-way.
-                        report.arriving.append(id)
                         break notebook
                     }
                     switch (local, remote) {
@@ -685,6 +733,7 @@ enum LibrarySync {
                             }
                         }
                         state.trashStamps[id] = (wanted ?? remote.library).changedAt(.deleted)
+                        alike.append(id)
                     case (let local?, nil):
                         // A marker carries a delete only to the version it was made for, and not over a restore made since.
                         let marker = try deleteMarker(id)
@@ -708,6 +757,7 @@ enum LibrarySync {
                             try push(id, from: root, to: cloud)
                             state.agree(on: id, local)
                             report.pushed.append(id)
+                            alike.append(id)
                         }
                     case (nil, let remote?) where expiredOnlyHere(id, remote, agreed: agreed, expired: expired, now: now):
                         // Another device may keep Recently Deleted longer, and still have it there.
@@ -715,7 +765,7 @@ enum LibrarySync {
                     case (nil, let remote?):
                         if let agreed, same(remote.modifiedAt, agreed), !remote.library.wasRestored(since: state.trashStamps[id]) {
                             // It was here and in step, it's gone, and nobody has written in it or restored it since: it was deleted on this device.
-                            try DeleteMarker(modifiedAt: remote.modifiedAt, trashStamp: remote.library.changedAt(.deleted), confirmed: lettingGo.contains(id))
+                            try DeleteMarker(modifiedAt: remote.modifiedAt, trashStamp: remote.library.changedAt(.deleted), confirmed: lettingGo.contains(id), markedAt: now)
                                 .encoded().write(to: cloud.tombstone(id), options: .atomic)
                             try coordinated(writing: cloud.package(id)) { try fileManager.removeItem(at: $0) }
                             state.forget(id)
@@ -728,6 +778,7 @@ enum LibrarySync {
                             try pull(id, from: cloud, into: root)
                             state.agree(on: id, remote)
                             report.pulled.append(id)
+                            alike.append(id)
                         }
                     case (nil, nil):
                         state.forget(id)
@@ -740,6 +791,7 @@ enum LibrarySync {
                 }
                 await release(id)
             }
+            expireMarkers(deleted.subtracting(here).subtracting(there), in: cloud, now: now)
 
             try checkStillWanted()
             let agreedFolders = state.folders, agreedList = state.folderList
@@ -758,7 +810,41 @@ enum LibrarySync {
             throw StoppedPass(report: report, reason: error)
         }
         try state.write(root)
+        evictAssets(of: alike, in: cloud, access: access)
         return report
+    }
+
+    /// Takes the synced copy's pictures, PDFs, recordings and transcripts off the device, for notebooks a pass that
+    /// worked left in step, once iCloud has them. A pass never reads them again: each is named once and never written
+    /// again, so one of the same name here is the same file. Ink, manifests, cards and text stay, as every later push
+    /// compares them with what is here.
+    private static func evictAssets(of ids: [UUID], in cloud: CloudFolder, access: CloudAccess) {
+        let fileManager = FileManager.default
+        var evicted = 0
+        for id in ids {
+            let assets = cloud.package(id).appending(path: "assets", directoryHint: .isDirectory)
+            for name in (try? fileManager.contentsOfDirectory(atPath: assets.path(percentEncoded: false))) ?? [] where CloudFiles.placeholderTarget(name) == nil {
+                if access.evict(assets.appending(path: name)) { evicted += 1 }
+            }
+        }
+        if evicted > 0 { log.notice("took \(evicted) files off the device") }
+    }
+
+    /// Clears away markers for notebooks gone from the synced copy and this device, once they are older than
+    /// `DeleteMarker.keptForDays`. One still on its way down is left for a later pass.
+    private static func expireMarkers(_ ids: Set<UUID>, in cloud: CloudFolder, now: Date) {
+        let cutoff = TrashLength.cutoff(DeleteMarker.keptForDays, now: now)
+        for id in ids {
+            let url = cloud.tombstone(id)
+            guard let data = try? contents(of: url) else { continue }
+            let written = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            guard let marked = DeleteMarker(data).markedAt ?? written, marked < cutoff else { continue }
+            do {
+                try coordinated(writing: url) { try FileManager.default.removeItem(at: $0) }
+            } catch {
+                log.error("marker for \(id) couldn't be cleared: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: Copying notebooks
@@ -768,14 +854,24 @@ enum LibrarySync {
         !relative.hasPrefix("thumbs/") && relative != "thumbs" && !relative.contains(".corrupt")
     }
 
+    private static func path(of url: URL, in package: URL) -> String {
+        let base = package.standardizedFileURL.path(percentEncoded: false)
+        return String(url.standardizedFileURL.path(percentEncoded: false).dropFirst(base.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// Takes thumbnails and files set aside as damaged out of a package assembled from this device's.
+    private static func leaveBehind(in package: URL) {
+        let items = FileManager.default.enumerator(at: package, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
+        for url in items where !travels(path(of: url, in: package)) { try? FileManager.default.removeItem(at: url) }
+    }
+
     /// A file iCloud hasn't brought down yet is listed under its real name, at its placeholder.
     private static func files(in package: URL) -> [String: URL] {
         var result: [String: URL] = [:]
-        let base = package.standardizedFileURL.path(percentEncoded: false)
         let enumerator = FileManager.default.enumerator(at: package, includingPropertiesForKeys: [.isRegularFileKey])
         while let url = enumerator?.nextObject() as? URL {
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
-            var relative = String(url.standardizedFileURL.path(percentEncoded: false).dropFirst(base.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            var relative = path(of: url, in: package)
             if let name = CloudFiles.placeholderTarget(url.lastPathComponent) {
                 relative = String(relative.dropLast(url.lastPathComponent.count)) + name
                 if result[relative] != nil { continue }
@@ -785,29 +881,113 @@ enum LibrarySync {
         return result
     }
 
-    /// A copy keeps its original's modification date, so a file of the same size written at the same instant is the
-    /// same file. The manifests are small and decide everything, so they are always copied.
-    private static func unchanged(_ relative: String, _ a: URL, _ b: URL) -> Bool {
+    /// Whether a file's bytes are on the device as iCloud last had them: not a placeholder, and not an older version.
+    private static func isOnDevice(_ url: URL) -> Bool {
+        guard CloudFiles.placeholderTarget(url.lastPathComponent) == nil else { return false }
+        let status = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?.ubiquitousItemDownloadingStatus
+        return status == nil || status == .current
+    }
+
+    private static func digest(_ url: URL) -> String? {
+        (try? Data(contentsOf: url, options: .mappedIfSafe)).map(NotebookPackage.hash)
+    }
+
+    private static func size(_ url: URL) -> Int? {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+    }
+
+    /// Each page's ink file and the hash its manifest gives it.
+    private static func inkHashes(ofPackage url: URL) -> [String: String] {
+        guard let data = try? Data(contentsOf: url.appending(path: "manifest.json")),
+              let manifest = try? ManifestCodec.decode(data, fallbackID: UUID()).manifest else { return [:] }
+        return Dictionary(manifest.pages.compactMap { page in page.inkHash.map { (page.inkFile, $0) } }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Whether `destination` already holds what `source` does. Two files on the device are the same when their sizes
+    /// and hashes are. A picture, PDF, recording, transcript or clipping is named once and never written again, so one
+    /// of the same name is the same file even when either is only in iCloud. Ink not on the device is the same when
+    /// what `destination` holds is what `hash`, from the source's manifest, says. The manifests decide everything, so
+    /// they are always copied.
+    private static func same(_ relative: String, _ source: URL, _ destination: URL, hash: String? = nil) -> Bool {
         guard !relative.hasPrefix("manifest") else { return false }
-        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
-        guard let first = try? a.resourceValues(forKeys: keys), let second = try? b.resourceValues(forKeys: keys),
-              let written = first.contentModificationDate, let copied = second.contentModificationDate else { return false }
-        return first.fileSize == second.fileSize && abs(written.timeIntervalSince(copied)) < 0.000_002
+        let sourceHere = isOnDevice(source), destinationHere = isOnDevice(destination)
+        if relative.hasPrefix("assets/") || relative.hasPrefix("cards/") {
+            return !(sourceHere && destinationHere) || size(source) == size(destination)
+        }
+        guard destinationHere else { return false }
+        if sourceHere { return size(source) == size(destination) && digest(source) == digest(destination) }
+        return hash != nil && digest(destination) == hash
+    }
+
+    /// What has to come down from a notebook in the synced copy before this device can take it: every file not on
+    /// the device that isn't the same as the one here.
+    private static func needed(_ id: UUID, root: StorageRoot, cloud: CloudFolder) -> [URL] {
+        let source = cloud.package(id), here = root.package(id), hashes = inkHashes(ofPackage: source)
+        return files(in: source).compactMap { relative, url in
+            guard !isOnDevice(url) else { return nil }
+            let local = here.appending(path: relative)
+            if FileManager.default.fileExists(atPath: local.path(percentEncoded: false)), same(relative, url, local, hash: hashes[relative]) { return nil }
+            return source.appending(path: relative)
+        }.sorted { $0.path < $1.path }
+    }
+
+    /// The clippings a notebook's cards there name that aren't here and aren't on the device, when its cards differ.
+    private static func clippingsNeeded(_ id: UUID, root: StorageRoot, cloud: CloudFolder) -> [URL] {
+        let source = cloud.package(id), here = root.package(id)
+        guard let data = try? Data(contentsOf: CardFiles.file(in: source)), data != (try? Data(contentsOf: CardFiles.file(in: here))),
+              let deck = CardFiles.deck(from: data) else { return [] }
+        return deck.clippings.sorted().map { CardFiles.imageURL($0, in: source) }.filter { url in
+            CloudFiles.isPending(url) && !FileManager.default.fileExists(atPath: CardFiles.imageURL(url.lastPathComponent, in: here).path(percentEncoded: false))
+        }
+    }
+
+    /// The files a pass decides on: the copy's name, the folder list, the delete markers and stickers, and each
+    /// notebook's manifest and cards, all of them small.
+    static func deciding(in cloud: CloudFolder) -> [URL] {
+        let fileManager = FileManager.default
+        func listed(_ directory: URL) -> [URL] {
+            ((try? fileManager.contentsOfDirectory(atPath: directory.path(percentEncoded: false))) ?? []).map {
+                directory.appending(path: CloudFiles.placeholderTarget($0) ?? $0)
+            }
+        }
+        var files = [cloud.copyFile, cloud.foldersFile] + listed(cloud.tombstones) + listed(cloud.stickers)
+        for package in listed(cloud.library) where package.pathExtension == StorageRoot.packageExtension {
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: package.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue {
+                files += [package.appending(path: "manifest.json"), CardFiles.file(in: package)]
+            } else {
+                // Listed as one item, it can only come down whole.
+                files.append(package)
+            }
+        }
+        return files
     }
 
     /// Makes `destination` hold what `source` holds: files that differ are copied, files that are gone are removed
-    /// unless `kept`, and the manifest goes last so a reader never sees it name ink that hasn't arrived.
-    private static func mirror(_ source: URL, to destination: URL, keeping kept: (String) -> Bool = { _ in false }) throws {
+    /// unless `kept`, and the manifest goes last so a reader never sees it name ink that hasn't arrived. `hashes` are
+    /// the source manifest's for its ink, when the source is the synced copy.
+    private static func mirror(_ source: URL, to destination: URL, hashes: [String: String] = [:], keeping kept: (String) -> Bool = { _ in false }) throws {
         let wanted = files(in: source), present = files(in: destination)
+        var redated = 0
         for (relative, url) in wanted.sorted(by: { ($0.key == "manifest.json" ? 1 : 0, $0.key) < ($1.key == "manifest.json" ? 1 : 0, $1.key) }) {
+            if let existing = present[relative], same(relative, url, existing, hash: hashes[relative]) {
+                if let a = modified(url), let b = modified(existing), abs(a.timeIntervalSince(b)) >= 0.000_002 { redated += 1 }
+                continue
+            }
             guard CloudFiles.placeholderTarget(url.lastPathComponent) == nil else { throw SyncError.stillArriving }
-            if let existing = present[relative], CloudFiles.placeholderTarget(existing.lastPathComponent) == nil, unchanged(relative, url, existing) { continue }
             try copy(url, over: destination.appending(path: relative))
         }
         for (relative, url) in present where wanted[relative] == nil && !kept(relative) { try? FileManager.default.removeItem(at: url) }
+        // What a real device says of the dates iCloud keeps: a date-only check would have copied these again.
+        if redated > 0 { log.notice("\(redated) files were the same but dated differently") }
     }
 
-    /// Copies one file over another, keeping its date, so `unchanged` takes the two for the same file afterwards.
+    private static func modified(_ url: URL) -> Date? {
+        guard isOnDevice(url) else { return nil }
+        return (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
+    /// Copies one file over another, through a temporary name, so a reader never finds half of it.
     private static func copy(_ source: URL, over target: URL) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -866,7 +1046,7 @@ enum LibrarySync {
             try fileManager.copyItem(at: target, to: staging)
         }
         // A clipping made here for a card not yet written stays; the cards file clears away ones no card names.
-        try coordinated(reading: cloud.package(id)) { try mirror($0, to: staging, keeping: { $0.hasPrefix("cards/") }) }
+        try coordinated(reading: cloud.package(id)) { try mirror($0, to: staging, hashes: inkHashes(ofPackage: $0), keeping: { $0.hasPrefix("cards/") }) }
         guard stamp(ofPackage: staging) != nil else { throw PackageError.unreadable }
         guard isWhole(staging) else { throw SyncError.stillArriving }
         if let library { _ = try refile(id, as: library, inPackage: staging) }
@@ -884,18 +1064,22 @@ enum LibrarySync {
     enum Newer: Sendable, Equatable { case none, pulled, waiting }
 
     /// Brings one notebook's newer version in without a whole pass, when nothing was written in it here since the two
-    /// last agreed. iCloud has up to `timeout` to bring it down; `take` is asked just before it is swapped in.
-    static func pullNewer(_ id: UUID, root: StorageRoot, cloud: CloudFolder, timeout: Duration, now: Date = .now,
+    /// last agreed. iCloud has up to `timeout` to bring down its manifest and then what differs; `take` is asked just
+    /// before it is swapped in.
+    static func pullNewer(_ id: UUID, root: StorageRoot, cloud: CloudFolder, timeout: Duration, now: Date = .now, access: CloudAccess? = nil,
                           take: @Sendable (UUID) async -> Bool = { _ in true }, release: @Sendable (UUID) async -> Void = { _ in }) async throws -> Newer {
         try Task.checkCancellation()
-        let package = cloud.package(id)
-        if cloud.isUbiquitous { _ = await CloudFiles.download(package, timeout: timeout) }
+        let package = cloud.package(id), access = access ?? .live(cloud), deadline = ContinuousClock.now + timeout
+        _ = await access.fetch([cloud.copyFile, cloud.tombstone(id), package.appending(path: "manifest.json"), CardFiles.file(in: package)], timeout)
         var state = SyncState.read(root)
         // One never agreed on, a copy this device doesn't know, or a delete marker is for a pass to settle.
         guard let agreed = state.notebooks[id], let known = state.copy, try copyID(in: cloud) == known, !(try isPresent(cloud.tombstone(id))),
               let local = glance(ofPackage: root.package(id)), let remote = glance(ofPackage: package),
               !same(remote.modifiedAt, agreed), !same(remote.modifiedAt, local.modifiedAt) else { return .none }
-        guard same(local.modifiedAt, agreed), !losesRecording(id, root: root, cloud: cloud), await take(id) else { return .waiting }
+        guard same(local.modifiedAt, agreed), !losesRecording(id, root: root, cloud: cloud) else { return .waiting }
+        let wanted = needed(id, root: root, cloud: cloud)
+        if !wanted.isEmpty, !(await access.fetch(wanted, max(deadline - ContinuousClock.now, .zero))).isEmpty { return .none }
+        guard await take(id) else { return .waiting }
         do {
             // Saved here while it was being taken: a pass keeps both.
             guard let taken = glance(ofPackage: root.package(id)), same(taken.modifiedAt, agreed) else {
@@ -955,7 +1139,10 @@ enum LibrarySync {
         try fileManager.createDirectory(at: root.arriving, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: staging) }
         if fromSyncedCopy {
-            try coordinated(reading: cloud.package(id)) { try mirror($0, to: staging) }
+            // Made from what is here where the two are the same, so only what differs comes down.
+            try fileManager.copyItem(at: root.package(id), to: staging)
+            try coordinated(reading: cloud.package(id)) { try mirror($0, to: staging, hashes: inkHashes(ofPackage: $0)) }
+            leaveBehind(in: staging)
             guard isWhole(staging) else { throw SyncError.stillArriving }
         } else {
             try fileManager.copyItem(at: root.package(id), to: staging)
@@ -983,7 +1170,6 @@ enum LibrarySync {
         let fileManager = FileManager.default
         let herePackage = root.package(id), therePackage = cloud.package(id)
         let hereFile = CardFiles.file(in: herePackage), thereFile = CardFiles.file(in: therePackage)
-        if unchanged(hereFile.lastPathComponent, hereFile, thereFile) { return (false, false) }
         let hereData = fileManager.fileExists(atPath: hereFile.path(percentEncoded: false)) ? try Data(contentsOf: hereFile) : nil
         let thereData = try contents(of: thereFile)
         guard hereData != thereData else { return (false, false) }
@@ -1008,11 +1194,11 @@ enum LibrarySync {
         }
         if changesThere {
             try coordinated(writing: therePackage) { package in
-                for name in merged.clippings where !fileManager.fileExists(atPath: CardFiles.imageURL(name, in: package).path(percentEncoded: false)) {
+                // One iCloud has taken off the device is still there.
+                for name in merged.clippings where !isListed(CardFiles.imageURL(name, in: package)) {
                     let clipping = CardFiles.imageURL(name, in: herePackage)
                     if fileManager.fileExists(atPath: clipping.path(percentEncoded: false)) { try copy(clipping, over: CardFiles.imageURL(name, in: package)) }
                 }
-                // The file goes over as it is here, so the next pass finds the two the same without reading them.
                 try copy(hereFile, over: CardFiles.file(in: package))
             }
         }
@@ -1137,29 +1323,57 @@ enum CloudFiles {
         name.hasPrefix(".") && name.hasSuffix(".icloud") && name.count > 8 ? String(name.dropFirst().dropLast(7)) : nil
     }
 
-    /// Files under `url` that aren't on the device yet: placeholders, and items iCloud says aren't downloaded.
-    static func pending(in url: URL) -> [URL] {
-        var result: [URL] = []
-        let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.ubiquitousItemDownloadingStatusKey], options: [])
-        while let item = enumerator?.nextObject() as? URL {
-            if let name = placeholderTarget(item.lastPathComponent) {
-                result.append(item.deletingLastPathComponent().appending(path: name))
-            } else if (try? item.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?.ubiquitousItemDownloadingStatus == .notDownloaded {
-                result.append(item)
-            }
-        }
-        return result
+    /// Whether a file in an iCloud container isn't on the device yet: a placeholder, or an item iCloud says isn't downloaded.
+    static func isPending(_ url: URL) -> Bool {
+        let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
+        if FileManager.default.fileExists(atPath: placeholder.path(percentEncoded: false)) { return true }
+        return values(url, [.ubiquitousItemDownloadingStatusKey])?.ubiquitousItemDownloadingStatus == .notDownloaded
     }
 
-    /// Asks for everything under `url` to be downloaded and waits, up to `timeout`, for it to arrive. Returns what hadn't by then.
-    static func download(_ url: URL, timeout: Duration = .seconds(60)) async -> [URL] {
-        let deadline = ContinuousClock.now + timeout
-        var waiting = pending(in: url)
-        while !waiting.isEmpty, ContinuousClock.now < deadline, !Task.isCancelled {
-            for item in waiting { try? FileManager.default.startDownloadingUbiquitousItem(at: item) }
+    /// Read afresh each time, as a URL keeps what it was told.
+    private static func values(_ url: URL, _ keys: Set<URLResourceKey>) -> URLResourceValues? {
+        var url = url
+        url.removeAllCachedResourceValues()
+        return try? url.resourceValues(forKeys: keys)
+    }
+
+    /// Asks for files to be downloaded, an older version too, and waits up to `limit` for those not on the device.
+    /// It stops sooner once nothing has come for `quiet`, or iCloud has given a reason for each, as it does with no
+    /// network, so a pass isn't held up for what can't come. Returns what hadn't arrived.
+    static func download(_ files: [URL], within limit: Duration, quiet: Duration = .seconds(10)) async -> [URL] {
+        let clock = ContinuousClock(), deadline = clock.now + limit
+        for file in files where isPending(file) || downloadingStatus(file) == .downloaded {
+            try? FileManager.default.startDownloadingUbiquitousItem(at: file)
+        }
+        var waiting = files.filter(isPending), lastArrival = clock.now
+        while !waiting.isEmpty, clock.now < deadline, clock.now - lastArrival < quiet, !Task.isCancelled, !waiting.allSatisfy(cannotDownload) {
             try? await Task.sleep(for: .milliseconds(500))
-            waiting = pending(in: url)
+            for file in waiting { try? FileManager.default.startDownloadingUbiquitousItem(at: file) }
+            let still = waiting.filter(isPending)
+            if still.count < waiting.count { lastArrival = clock.now }
+            waiting = still
         }
         return waiting
+    }
+
+    private static func downloadingStatus(_ url: URL) -> URLUbiquitousItemDownloadingStatus? {
+        values(url, [.ubiquitousItemDownloadingStatusKey])?.ubiquitousItemDownloadingStatus
+    }
+
+    private static func cannotDownload(_ url: URL) -> Bool {
+        values(url, [.ubiquitousItemDownloadingErrorKey])?.ubiquitousItemDownloadingError != nil
+    }
+
+    /// Takes a file's copy off the device, once iCloud has all of it and nothing more is on its way up.
+    static func evict(_ url: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [.ubiquitousItemIsUploadedKey, .ubiquitousItemIsUploadingKey]
+        guard let state = values(url, keys), state.ubiquitousItemIsUploaded == true, state.ubiquitousItemIsUploading != true else { return false }
+        do {
+            try FileManager.default.evictUbiquitousItem(at: url)
+            return true
+        } catch {
+            Logger(subsystem: "com.owais.OwlLuna", category: "sync").error("couldn't evict \(url.lastPathComponent): \(error.localizedDescription)")
+            return false
+        }
     }
 }

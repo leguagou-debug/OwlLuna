@@ -31,68 +31,193 @@ struct ShelfFilter {
     func selectingAll(_ records: [NotebookRecord]) -> Set<UUID> { Set(shown(records).map(\.id)) }
 }
 
-/// The columns a row of the list has room for. The title always shows; the others go, tags first, as the pane narrows
-/// or the text grows, and what they said moves into a line under the title.
-struct ShelfColumns: OptionSet, Hashable {
-    let rawValue: Int
+/// Over the list: the orders it can be sorted by, as tabs, and which way round beside them.
+struct ShelfListSort: View {
+    @Binding var sort: LibrarySortOrder
+    @Binding var reversed: Bool
 
-    static let pages = ShelfColumns(rawValue: 1 << 0)
-    static let changed = ShelfColumns(rawValue: 1 << 1)
-    static let folder = ShelfColumns(rawValue: 1 << 2)
-    static let tags = ShelfColumns(rawValue: 1 << 3)
-    static let all: ShelfColumns = [.pages, .changed, .folder, .tags]
-
-    /// What each takes at the standard text size, before it is scaled with the text.
-    static let titleMinimum: CGFloat = 180
-    static let spacing = Space.x3
-    /// The cover, the selection box and the row's own margins, which don't grow with the text.
-    static let fixed: CGFloat = 32 + 24 + spacing * 2 + Space.x3 * 2
-
-    static func width(of column: ShelfColumns) -> CGFloat {
-        switch column {
-        case .pages: 72
-        case .changed: 112
-        case .folder: 128
-        default: 140
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Space.x3) {
+                Text("Sort").metaStyle(.footnote).accessibilityHidden(true)
+                tabs
+                order(worded: true)
+            }
+            HStack(spacing: Space.x3) {
+                tabs
+                order(worded: true)
+            }
+            HStack(spacing: Space.x3) {
+                tabs
+                order(worded: false)
+            }
+            VStack(alignment: .leading, spacing: Space.x2) {
+                tabs
+                order(worded: true)
+            }
         }
     }
 
-    private static let dropped: [ShelfColumns] = [.tags, .folder, .pages, .changed]
-
-    /// At the accessibility sizes a row is the title with everything else under it.
-    static func fitting(width: CGFloat, scale: CGFloat, isAccessibilitySize: Bool) -> ShelfColumns {
-        guard !isAccessibilitySize else { return [] }
-        var columns = ShelfColumns.all
-        for column in dropped where needs(columns, scale: scale) > width { columns.remove(column) }
-        return columns
+    private var tabs: some View {
+        OwlLunaSegmentedPicker("Sort By", selection: $sort, options: LibrarySortOrder.allCases,
+                               identifier: { "library.list.sort.\($0.rawValue)" }) { Text($0.shortName) }
+            .fixedSize()
     }
 
-    private static func needs(_ columns: ShelfColumns, scale: CGFloat) -> CGFloat {
-        let shown = dropped.filter(columns.contains)
-        return fixed + (titleMinimum + shown.reduce(0) { $0 + width(of: $1) + spacing }) * scale
+    private func order(worded: Bool) -> some View {
+        let name = sort.directionName(reversed: reversed)
+        let up = (sort == .title) != reversed
+        return Button { reversed.toggle() } label: {
+            Label(name, systemImage: up ? "arrow.up" : "arrow.down")
+                .labelStyle(OrderLabelStyle(worded: worded))
+        }
+        .buttonStyle(.owlLuna(.secondary, compact: true))
+        .fixedSize()
+        .accessibilityLabel(Text("Order"))
+        .accessibilityValue(Text(name))
+        .accessibilityIdentifier("library.list.order")
     }
 }
 
-/// A run of the list's rows on one board, ruled apart in ink under a well band naming the run, as a ledger is.
+private struct OrderLabelStyle: LabelStyle {
+    let worded: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Space.x1) {
+            configuration.icon
+            if worded { configuration.title }
+        }
+    }
+}
+
+/// One notebook in the list, on the paper as the shelves are: its cover, its title in the display face, pages and the
+/// last change in small caps, and its folder and tags beside it where there is room or under it where there is not.
+struct NotebookCatalogueRow: View {
+    let record: NotebookRecord
+    let showsFolder: Bool
+    let showsSide: Bool
+    let isSelected: Bool
+    let action: () -> Void
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    static let coverWidth: CGFloat = 44
+    static let titleMinimum: CGFloat = 240
+    static let sideWidth: CGFloat = 300
+    /// The cover, the gaps and the row's own margins, which don't grow with the text.
+    static let fixed: CGFloat = coverWidth + Space.x4 * 2 + Space.x2 * 2
+
+    /// Folder and tags take a column of their own when the title keeps its room beside it.
+    static func showsSide(width: CGFloat, scale: CGFloat, isAccessibilitySize: Bool) -> Bool {
+        !isAccessibilitySize && width >= fixed + (titleMinimum + sideWidth) * scale
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.x4) {
+                RecordCover(record: record, width: CoverWidth.row, showsShadow: false)
+                    .frame(width: min(Self.coverWidth * scale, CoverWidth.row))
+                    .overlay(alignment: .bottomTrailing) {
+                        if isSelected { SelectionBox(isSelected: true).offset(x: Space.x2, y: Space.x2) }
+                    }
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text(record.title.isEmpty ? String(localized: "Untitled") : record.title)
+                        .displayFont(20, relativeTo: .body)
+                        .foregroundStyle(Color.ink)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    Text(record.metaLine).metaStyle(.footnote)
+                    if !showsSide { filing }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if showsSide {
+                    filing.frame(width: Self.sideWidth * scale, alignment: .leading)
+                }
+            }
+        }
+        .buttonStyle(CatalogueRowStyle(isSelected: isSelected))
+        .overlay(alignment: .bottom) { ShelfRule() }
+        .hoverEffect(.highlight)
+    }
+
+    @ViewBuilder
+    private var filing: some View {
+        let folder = showsFolder ? record.folder : nil
+        if folder != nil || !record.tags.isEmpty {
+            NotebookFiling(folder: folder, tags: record.tags, folderWidth: showsSide ? 120 * scale : nil)
+        }
+    }
+}
+
+/// Where a notebook is filed: its folder's spine and name, then its tags as paper labels, wrapping as they need.
+struct NotebookFiling: View {
+    let folder: FolderRecord?
+    let tags: [String]
+    var folderWidth: CGFloat?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Space.x3) {
+            if let folder {
+                HStack(spacing: Space.x2) {
+                    SpineChip(cloth: folder.cloth).scaleEffect(0.8)
+                    Text(folder.name).font(.subheadline).foregroundStyle(Color.textSecondary)
+                }
+                .frame(width: folderWidth, alignment: .leading)
+                .frame(minHeight: 32)
+            }
+            if !tags.isEmpty {
+                FlowLayout(spacing: Space.x2) {
+                    ForEach(tags, id: \.self) { TagChip(name: $0) }
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A row is touched across its whole width and darkens under the finger. Chosen, it is stitched in mustard, as a
+/// chosen cover is on the shelf.
+private struct CatalogueRowStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, Space.x2)
+            .padding(.vertical, Space.x3)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .background { if configuration.isPressed { Color.well } }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle.track
+                        .strokeBorder(Color.mustard, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                        .padding(.vertical, 3)
+                }
+            }
+            .contentShape(Rectangle())
+    }
+}
+
+/// A run of rows on one board, ruled apart in ink under a well band naming the run, as a ledger is.
 struct ShelfListBoard<Rows: View>: View {
-    let title: String
+    var title: String?
     var cloth: ClothColor?
     @ViewBuilder var rows: Rows
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Space.x2) {
-                if let cloth { SpineChip(cloth: cloth).scaleEffect(0.7) }
-                Text(title)
+            if let title {
+                HStack(spacing: Space.x2) {
+                    if let cloth { SpineChip(cloth: cloth).scaleEffect(0.7) }
+                    Text(title)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.textSecondary)
+                .padding(.horizontal, Space.x3)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.well)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Color.textSecondary)
-            .padding(.horizontal, Space.x3)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.well)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
             rows
         }
         .clipShape(RoundedRectangle.plate)
@@ -100,134 +225,45 @@ struct ShelfListBoard<Rows: View>: View {
     }
 }
 
-/// The names over the list's columns. Title and Last changed sort by themselves; touched again, they turn the order round.
-struct ShelfListHeadings: View {
-    let columns: ShelfColumns
-    let isSelecting: Bool
-    @Binding var sort: LibrarySortOrder
-    @Binding var reversed: Bool
-    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
-
-    var body: some View {
-        HStack(spacing: ShelfColumns.spacing) {
-            Color.clear.frame(width: isSelecting ? 32 + 24 + ShelfColumns.spacing : 32, height: 1)
-            heading(String(localized: "Title"), sorts: .title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if columns.contains(.pages) {
-                Text("Pages").frame(width: ShelfColumns.width(of: .pages) * scale, alignment: .trailing)
-            }
-            if columns.contains(.changed) {
-                heading(String(localized: "Last changed"), sorts: .modified)
-                    .frame(width: ShelfColumns.width(of: .changed) * scale, alignment: .leading)
-            }
-            if columns.contains(.folder) {
-                Text("Folder").frame(width: ShelfColumns.width(of: .folder) * scale, alignment: .leading)
-            }
-            if columns.contains(.tags) {
-                Text("Tags").frame(width: ShelfColumns.width(of: .tags) * scale, alignment: .leading)
-            }
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Color.textSecondary)
-        .lineLimit(1)
-        .padding(.horizontal, Space.x3)
-    }
-
-    private func heading(_ name: String, sorts order: LibrarySortOrder) -> some View {
-        let chosen = sort == order
-        return Button {
-            if chosen { reversed.toggle() } else { sort = order; reversed = false }
-        } label: {
-            HStack(spacing: Space.x1) {
-                Text(name)
-                if chosen {
-                    Image(systemName: (order == .title) != reversed ? "chevron.up" : "chevron.down").font(.caption2.weight(.bold))
-                }
-            }
-            .foregroundStyle(chosen ? Color.ink : Color.textSecondary)
-            .frame(minHeight: 32)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .accessibilityLabel(Text("Sort by \(name)"))
-        .accessibilityValue(chosen ? Text(order.summary(reversed: reversed)) : Text(""))
-        .accessibilityIdentifier("library.list.sort.\(order.rawValue)")
-    }
-}
-
-/// One notebook in the list: its cover, its title, and a column each for its pages, when it last changed, its folder
-/// and its tags, as many as there is room for.
-struct NotebookListRow: View {
+/// One notebook in the ledger the shelf becomes at the accessibility text sizes: its cover, growing with the text,
+/// its title, pages and last change, then its folder and tags.
+struct NotebookLedgerRow: View {
     let record: NotebookRecord
-    let columns: ShelfColumns
+    let showsFolder: Bool
     let isSelecting: Bool
     let isSelected: Bool
     let action: () -> Void
-    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    @ScaledMetric(relativeTo: .body) private var coverWidth: CGFloat = 32
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: ShelfColumns.spacing) {
+            HStack(alignment: .top, spacing: Space.x3) {
                 if isSelecting { SelectionBox(isSelected: isSelected) }
                 RecordCover(record: record, width: CoverWidth.row, showsShadow: false)
-                    .frame(width: 32)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: min(coverWidth, CoverWidth.row))
+                VStack(alignment: .leading, spacing: Space.x1) {
                     Text(record.title.isEmpty ? String(localized: "Untitled") : record.title)
-                        .font(.body.weight(.semibold))
+                        .font(.headline)
                         .foregroundStyle(Color.ink)
-                        .lineLimit(2)
-                    if !folded.isEmpty {
-                        Text(folded)
-                            .font(.footnote.monospacedDigit())
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(columns.isEmpty ? nil : 2)
+                    Text(record.metaLine)
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(Color.textSecondary)
+                    let folder = showsFolder ? record.folder : nil
+                    if folder != nil || !record.tags.isEmpty {
+                        NotebookFiling(folder: folder, tags: record.tags)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if columns.contains(.pages) {
-                    Text(record.pageCountText).frame(width: ShelfColumns.width(of: .pages) * scale, alignment: .trailing)
-                }
-                if columns.contains(.changed) {
-                    Text(changed).frame(width: ShelfColumns.width(of: .changed) * scale, alignment: .leading)
-                }
-                if columns.contains(.folder) {
-                    HStack(spacing: Space.x2) {
-                        if let folder = record.folder {
-                            SpineChip(cloth: folder.cloth).scaleEffect(0.7)
-                            Text(folder.name)
-                        }
-                    }
-                    .frame(width: ShelfColumns.width(of: .folder) * scale, alignment: .leading)
-                }
-                if columns.contains(.tags) {
-                    Text(Tags.line(record.tags)).frame(width: ShelfColumns.width(of: .tags) * scale, alignment: .leading)
-                }
             }
-            .font(.subheadline.monospacedDigit())
-            .foregroundStyle(Color.textSecondary)
-            .lineLimit(1)
         }
         .buttonStyle(ShelfListRowStyle(isSelected: isSelected))
-        .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1).allowsHitTesting(false) }
+        .overlay(alignment: .top) { ShelfRule() }
         .hoverEffect(.highlight)
-    }
-
-    private var changed: String { record.modifiedAt.formatted(.relative(presentation: .named)) }
-
-    /// What the columns that went would have said.
-    private var folded: String {
-        var parts: [String] = []
-        if !columns.contains(.pages) { parts.append(record.pageCountText) }
-        if !columns.contains(.changed) { parts.append(changed) }
-        if !columns.contains(.folder), let folder = record.folder { parts.append(folder.name) }
-        if !columns.contains(.tags), !record.tags.isEmpty { parts.append(Tags.line(record.tags)) }
-        return parts.joined(separator: " · ")
     }
 }
 
 /// A row is touched across its whole width and darkens under the finger. Chosen, it has a mustard edge.
-private struct ShelfListRowStyle: ButtonStyle {
+struct ShelfListRowStyle: ButtonStyle {
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
@@ -238,6 +274,13 @@ private struct ShelfListRowStyle: ButtonStyle {
             .background { if configuration.isPressed || isSelected { Color.well } }
             .overlay(alignment: .leading) { if isSelected { Rectangle().fill(Color.mustard).frame(width: 3) } }
             .contentShape(Rectangle())
+    }
+}
+
+/// The ink rule between rows.
+struct ShelfRule: View {
+    var body: some View {
+        Rectangle().fill(Color.hairline).frame(height: 1).allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 
@@ -257,6 +300,18 @@ private struct SelectionBox: View {
         }
         .frame(width: 24, height: 24)
         .accessibilityHidden(true)
+    }
+}
+
+extension LibrarySortOrder {
+    /// The order's name on the list's tabs, where four must fit side by side.
+    var shortName: String {
+        switch self {
+        case .opened: String(localized: "Opened")
+        case .modified: String(localized: "Edited")
+        case .created: String(localized: "Created")
+        case .title: String(localized: "Title")
+        }
     }
 }
 

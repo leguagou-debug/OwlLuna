@@ -152,6 +152,7 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Whether what sits at the screen's left edge, halfway down, is dark.
+    @MainActor
     func isDark(_ shot: XCUIScreenshot) -> Bool {
         guard let image = shot.image.cgImage else { return false }
         var pixel = [UInt8](repeating: 0, count: 4)

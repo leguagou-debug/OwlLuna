@@ -158,7 +158,7 @@ struct ShelfView: View {
             if layout == .list {
                 list(visible)
             } else if dynamicTypeSize.isAccessibilitySize {
-                accessibleList(visible)
+                ledger(visible)
             } else {
                 shelves(visible)
             }
@@ -293,9 +293,10 @@ struct ShelfView: View {
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
-    /// Rows in columns, a board for each run, with as many columns as the pane and the text size leave room for.
+    /// Rows on the paper under the shelves' own labels, with folder and tags beside each title where the pane has room.
     private func list(_ visible: [NotebookRecord]) -> some View {
-        let columns = ShelfColumns.fitting(width: listWidth, scale: textScale, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
+        let isLarge = dynamicTypeSize.isAccessibilitySize
+        let side = NotebookCatalogueRow.showsSide(width: listWidth, scale: textScale, isAccessibilitySize: isLarge)
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: Space.x5) {
                 LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: showsRhythm, onOpenPage: onOpenPage)
@@ -303,13 +304,20 @@ struct ShelfView: View {
                     PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
                         .transition(.opacity)
                 }
-                if !visible.isEmpty, !columns.isEmpty {
-                    ShelfListHeadings(columns: columns, isSelecting: isSelecting, sort: $sort, reversed: $sortReversed)
-                        .padding(.bottom, -Space.x3)
+                // At the accessibility sizes the tabs would stand as tall as the screen; the bar's Sort menu does the same.
+                if !visible.isEmpty, !isLarge {
+                    ShelfListSort(sort: $sort, reversed: $sortReversed)
                 }
                 ForEach(groups(visible)) { shelf in
-                    ShelfListBoard(title: shelf.title, cloth: shelf.cloth) {
-                        ForEach(shelf.records) { record in row(record, columns: columns) }
+                    LazyVStack(alignment: .leading, spacing: Space.x1) {
+                        ShelfLabel(title: shelf.title, cloth: shelf.cloth)
+                        ForEach(shelf.records) { record in
+                            listRow(record) {
+                                NotebookCatalogueRow(record: record, showsFolder: showsFolder, showsSide: side, isSelected: selection.contains(record.id)) {
+                                    tap(record)
+                                }
+                            }
+                        }
                     }
                 }
                 if showsTagPages {
@@ -327,17 +335,20 @@ struct ShelfView: View {
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
-    private func row(_ record: NotebookRecord, columns: ShelfColumns) -> some View {
-        NotebookListRow(record: record, columns: columns, isSelecting: isSelecting, isSelected: selection.contains(record.id)) {
-            if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
-        }
-        .accessibilityLabel(record.accessibilityDescription)
-        .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
-        .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
-        .accessibilityIdentifier("notebook.\(record.title)")
-        .accessibilityActions { if !isSelecting { trashActions(for: record) } }
-        .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
-        .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
+    /// What every row of the list and the ledger does: opens or chooses its notebook, holds a menu and can be dragged.
+    private func listRow<Row: View>(_ record: NotebookRecord, @ViewBuilder row: () -> Row) -> some View {
+        row()
+            .accessibilityLabel(record.accessibilityDescription)
+            .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
+            .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
+            .accessibilityIdentifier("notebook.\(record.title)")
+            .accessibilityActions { if !isSelecting { trashActions(for: record) } }
+            .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
+            .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
+    }
+
+    private func tap(_ record: NotebookRecord) {
+        if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
     }
 
     private func dragPreview(_ record: NotebookRecord) -> some View {
@@ -364,77 +375,77 @@ struct ShelfView: View {
 
     private func item(_ record: NotebookRecord, width: CGFloat) -> some View {
         NotebookCoverItem(record: record, width: width, isSelecting: isSelecting, isSelected: selection.contains(record.id),
-                          zoomNamespace: zoomNamespace, showsFolder: showsFolder) {
-            if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
-        }
+                          zoomNamespace: zoomNamespace, showsFolder: showsFolder) { tap(record) }
         .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
         .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
     }
 
-    private func accessibleList(_ visible: [NotebookRecord]) -> some View {
-        List {
-            Section {
-                Text(title)
-                    .displayFont(28, relativeTo: .title)
-                    .foregroundStyle(Color.ink)
-                    .accessibilityAddTraits(.isHeader)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: Space.x2, trailing: 0))
-                    .listRowBackground(Color.clear)
-            }
-            .listSectionSpacing(0)
-            if showsRhythm { WeekSummarySection(onOpenPage: onOpenPage) }
-            if let recent = continueCandidate {
-                Button { onOpen(recent) } label: {
-                    HStack(spacing: Space.x4) {
-                        RecordCover(record: recent, width: CoverWidth.row, showsShadow: false).frame(width: 48)
-                        VStack(alignment: .leading, spacing: Space.x1) {
-                            Text("Continue writing").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
-                            Text(recent.title).font(.headline).foregroundStyle(Color.ink)
-                            Text("Page \(recent.currentPage + 1) of \(recent.pageCount)").font(.subheadline).foregroundStyle(Color.textSecondary)
+    /// The shelf at the accessibility text sizes: a board for what the shelf leads with, then a board for each run.
+    private func ledger(_ visible: [NotebookRecord]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Space.x5) {
+                LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: false, onOpenPage: onOpenPage)
+                Group(subviews: desk) { rows in
+                    if !rows.isEmpty {
+                        ShelfListBoard {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                                row
+                                    .padding(.horizontal, Space.x3)
+                                    .padding(.vertical, Space.x2)
+                                    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                                    .overlay(alignment: .top) { if index > 0 { ShelfRule() } }
+                            }
                         }
                     }
                 }
-                .accessibilityLabel(Text("Continue writing \(recent.title), page \(recent.currentPage + 1) of \(recent.pageCount)"))
-                .accessibilityHint(Text("Opens at this page"))
-                .listRowBackground(Color.surface)
-            }
-            if scope == .all, searchText.isEmpty, !isSelecting { DeskCards(records: records, zoomNamespace: zoomNamespace, asRows: true, onOpen: onOpenZoomed) }
-            ForEach(visible) { record in
-                Button {
-                    if isSelecting { toggle(record) } else if !record.isTrashed { onOpen(record) }
-                } label: {
-                    HStack(spacing: Space.x4) {
-                        RecordCover(record: record, width: CoverWidth.row, showsShadow: false).frame(width: 48)
-                        VStack(alignment: .leading, spacing: Space.x1) {
-                            Text(record.title).font(.headline).foregroundStyle(Color.ink)
-                            Text(record.metaLine).font(.subheadline).foregroundStyle(Color.textSecondary)
-                        }
-                        Spacer()
-                        if isSelecting {
-                            Image(systemName: selection.contains(record.id) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(Color.accentColor)
+                if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash { pageBoard(visible, hits: pageHits, query: hitsQuery) }
+                ForEach(groups(visible)) { shelf in
+                    ShelfListBoard(title: shelf.title, cloth: shelf.cloth) {
+                        ForEach(shelf.records) { record in
+                            listRow(record) {
+                                NotebookLedgerRow(record: record, showsFolder: showsFolder, isSelecting: isSelecting,
+                                                  isSelected: selection.contains(record.id)) { tap(record) }
+                            }
                         }
                     }
                 }
-                .accessibilityLabel(record.accessibilityDescription)
-                .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
-                .accessibilityIdentifier("notebook.\(record.title)")
-                .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
-                .accessibilityActions { if !isSelecting { trashActions(for: record) } }
-                .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
-                .onDrag { NotebookDrag.provider(for: record, root: store.root) }
-                .listRowBackground(Color.surface)
+                if showsTagPages { pageBoard(taggedNotebooks, hits: tagPages, query: "") }
             }
-            if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash { pageRows(visible, hits: pageHits, query: hitsQuery) }
-            if showsTagPages { pageRows(taggedNotebooks, hits: tagPages, query: "") }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Space.x8)
+            .padding(.vertical, Space.x6)
         }
-        .scrollContentBackground(.hidden)
-        .contentMargins(.top, 0, for: .scrollContent)
+        .scrollDismissesKeyboard(.immediately)
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
-    private func pageRows(_ records: [NotebookRecord], hits: [UUID: [PageHit]], query: String) -> some View {
-        Section {
+    /// Continue writing, this week and the desk cards, each a row of the ledger's first board.
+    @ViewBuilder
+    private var desk: some View {
+        if let recent = continueCandidate {
+            Button { onOpen(recent) } label: {
+                HStack(alignment: .top, spacing: Space.x3) {
+                    RecordCover(record: recent, width: CoverWidth.row, showsShadow: false).frame(width: min(48 * textScale, CoverWidth.row))
+                    VStack(alignment: .leading, spacing: Space.x1) {
+                        Text("Continue writing").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
+                        Text(recent.title).font(.headline).foregroundStyle(Color.ink)
+                        Text("Page \(recent.currentPage + 1) of \(recent.pageCount)").font(.subheadline).foregroundStyle(Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(Text("Continue writing \(recent.title), page \(recent.currentPage + 1) of \(recent.pageCount)"))
+            .accessibilityHint(Text("Opens at this page"))
+        }
+        if showsRhythm { WeekSummaryRow(onOpenPage: onOpenPage) }
+        if scope == .all, searchText.isEmpty, !isSelecting { DeskCards(records: records, zoomNamespace: zoomNamespace, asRows: true, onOpen: onOpenZoomed) }
+    }
+
+    private func pageBoard(_ records: [NotebookRecord], hits: [UUID: [PageHit]], query: String) -> some View {
+        ShelfListBoard(title: String(localized: "Pages")) {
             ForEach(records.flatMap { record in (hits[record.id] ?? []).map { (record, $0) } }, id: \.1.id) { record, hit in
                 Button { onOpenPage(record, hit.page.id) } label: {
                     VStack(alignment: .leading, spacing: Space.x1) {
@@ -442,17 +453,17 @@ struct ShelfView: View {
                         Text(PageSearch.highlighted(hit.snippet, query: query)).font(.subheadline).foregroundStyle(Color.textSecondary)
                     }
                 }
+                .buttonStyle(ShelfListRowStyle(isSelected: false))
+                .overlay(alignment: .top) { ShelfRule() }
+                .hoverEffect(.highlight)
                 .accessibilityLabel(Text(hit.label(in: record.title)))
                 .accessibilityHint(Text("Opens the notebook at this page"))
-                .listRowBackground(Color.surface)
             }
-        } header: {
-            Text("Pages").metaStyle(.footnote)
         }
     }
 
     private func subtitle(_ visible: [NotebookRecord]) -> String {
-        if isSelecting { return String(localized: "Select notebooks to move, favourite or delete") }
+        if isSelecting { return String(localized: "Select notebooks, then pick an action below") }
         if scope == .trash { return String(localized: "Deleted notebooks stay here for \(trashLength.days) days") }
         let count = visible.count
         let notebooks = String(localized: "\(count) notebooks")

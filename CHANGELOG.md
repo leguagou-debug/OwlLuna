@@ -25,6 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - iCloud sync is no longer experimental. It has been tested on real iCloud, on iPads signed in to one Apple Account.
+- iCloud sync takes less room and data. An iPad downloads only what a notebook it receives lacks, leaves pictures, PDFs and recordings to iCloud once they're uploaded, compares files by their contents rather than their dates, and no longer waits a minute without a network before sending.
 - Dark Paper in Dark Mode is now Keep Paper Light, in Settings › Appearance. Exports always keep the page's own colours.
 - The language picked in a recording's transcript is now for that recording only.
 - A notebook made with a newer version of OwlLuna can now go into Recently Deleted and come back out.

@@ -1288,6 +1288,28 @@
         }
       }
     },
+    "Created" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créé"
+          }
+        }
+      }
+    },
     "Deselect All" : {
       "localizations" : {
         "de" : {
@@ -1306,6 +1328,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout désélectionner"
+          }
+        }
+      }
+    },
+    "Edited" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearbeitet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifié"
           }
         }
       }
@@ -1470,28 +1514,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Italique"
-          }
-        }
-      }
-    },
-    "Last changed" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zuletzt geändert"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Último cambio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dernière modification"
           }
         }
       }
@@ -1902,6 +1924,28 @@
         }
       }
     },
+    "Opened" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geöffnet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abierto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvert"
+          }
+        }
+      }
+    },
     "Order" : {
       "localizations" : {
         "de" : {
@@ -2140,28 +2184,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Étagère"
-          }
-        }
-      }
-    },
-    "Sort by %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nach %@ sortieren"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ordenar por %@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trier par %@"
           }
         }
       }
@@ -23552,24 +23574,24 @@
         }
       }
     },
-    "Select notebooks to move, favourite or delete" : {
+    "Select notebooks, then pick an action below" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notizbücher zum Bewegen, Favorisieren oder Löschen auswählen"
+            "value" : "Notizbücher auswählen, dann unten eine Aktion antippen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecciona cuadernos para moverlos, añadirlos a favoritos o eliminarlos"
+            "value" : "Selecciona cuadernos y elige una acción abajo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sélectionnez des carnets à déplacer, à ajouter aux favoris ou à supprimer"
+            "value" : "Sélectionnez des carnets, puis choisissez une action en bas"
           }
         }
       }

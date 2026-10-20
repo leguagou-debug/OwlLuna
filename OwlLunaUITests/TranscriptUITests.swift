@@ -14,6 +14,13 @@ final class TranscriptUITests: XCTestCase {
         add(attachment)
     }
 
+    /// Whole seconds into the recording, from a position such as "0:11 of 0:20".
+    private func seconds(_ slider: XCUIElement) -> Int? {
+        let clock = (slider.value as? String ?? "").components(separatedBy: " of ").first ?? ""
+        let parts = clock.split(separator: ":").compactMap { Int($0) }
+        return parts.count == 2 ? parts[0] * 60 + parts[1] : nil
+    }
+
     func testARecordingIsTranscribedAndItsLinesLeadTheReplay() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-storageRoot", "transcript", "-resetStorage", "-seedLibrary", "2", "-seedReplay", "-fakeTranscript", "-drawingInput", "anyInput"]
@@ -37,23 +44,30 @@ final class TranscriptUITests: XCTestCase {
         XCTAssertEqual(app.buttons["transcript.line.1"].label, "0:01, Today we cover the cell membrane.")
         attach(app, "transcript-written")
 
-        second.tap()
+        // The last line, said from 0:11 to the end, so it is still the one being said however long the pause takes to land.
+        let started = Date.now
+        app.buttons["transcript.line.3"].tap()
         let bar = app.descendants(matching: .any)["editor.replay.bar"]
         XCTAssertTrue(bar.waitForExistence(timeout: 10), "a line starts the replay")
-        app.buttons["editor.replay.play"].tap()
+        let play = app.buttons["editor.replay.play"]
+        play.tap()
+        let played = Date.now.timeIntervalSince(started)
+        XCTAssertEqual(play.label, "Play", "paused")
         let position = app.sliders["editor.replay.position"]
-        XCTAssertTrue((position.value as? String ?? "").hasPrefix("0:0"), "\(String(describing: position.value))")
-        XCTAssertFalse((position.value as? String ?? "").hasPrefix("0:00"), "from that line's moment, not from the start")
+        let at = try XCTUnwrap(seconds(position), "\(String(describing: position.value))")
+        XCTAssertGreaterThanOrEqual(at, 11, "from that line's moment: \(String(describing: position.value))")
+        XCTAssertGreaterThan(Double(at), played,
+                             "not from the start, which \(played.formatted(.number.precision(.fractionLength(1)))) s of playing can't have passed")
         let panel = app.descendants(matching: .any)["replay.transcript"]
         XCTAssertTrue(panel.waitForExistence(timeout: 5), "what was said sits beside the page")
-        XCTAssertTrue(app.buttons["transcript.line.2"].isSelected, "with the line being said marked")
+        XCTAssertTrue(app.buttons["transcript.line.3"].isSelected, "with the line being said marked")
         sleep(1)
         attach(app, "replay-with-transcript")
 
-        app.buttons["transcript.line.3"].tap()
-        XCTAssertTrue((position.value as? String ?? "").hasPrefix("0:11"), "a tap on a line jumps the sound there: \(String(describing: position.value))")
-        XCTAssertTrue(app.buttons["transcript.line.3"].isSelected)
-        XCTAssertEqual(bar.value as? String, "3 of 5 strokes written", "and the ink follows")
+        second.tap()
+        XCTAssertTrue((position.value as? String ?? "").hasPrefix("0:06"), "a tap on a line jumps the sound there: \(String(describing: position.value))")
+        XCTAssertTrue(second.isSelected)
+        XCTAssertEqual(bar.value as? String, "2 of 5 strokes written", "and the ink follows")
 
         app.buttons["editor.replay.transcript"].tap()
         XCTAssertTrue(panel.waitForNonExistence(timeout: 5))

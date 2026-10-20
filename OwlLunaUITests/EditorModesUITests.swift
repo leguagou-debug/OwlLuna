@@ -609,9 +609,13 @@ final class EditorModesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["editor.arrange.done"].waitForExistence(timeout: 5))
         sleep(1)
         let before = placed.frame
-        let handle = app.descendants(matching: .any)["Resize and rotate"].firstMatch
-        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.1, thenDragTo: handle.coordinate(withNormalizedOffset: CGVector(dx: 2.5, dy: 2.2)), withVelocity: 200, thenHoldForDuration: 0.2)
+        let handle = app.otherElements["Resize and rotate"].firstMatch
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        // Points on the window: one taken from the handle is looked up again at every step of the drag, as the handle moves.
+        let grip = handle.frame, window = app.coordinate(withNormalizedOffset: .zero)
+        window.withOffset(CGVector(dx: grip.midX, dy: grip.midY))
+            .press(forDuration: 0.1, thenDragTo: window.withOffset(CGVector(dx: grip.midX + grip.width * 2, dy: grip.midY + grip.height * 1.7)),
+                   withVelocity: 200, thenHoldForDuration: 0.2)
         XCTAssertGreaterThan(placed.frame.width, before.width * 1.2, "the handle makes it larger")
         sleep(1)
         attach(app, "sticker-own-on-page")

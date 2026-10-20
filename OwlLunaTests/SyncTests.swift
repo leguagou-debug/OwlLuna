@@ -1663,7 +1663,7 @@ final class SyncTests: XCTestCase {
         try await sync(a)
         let ink = try inkFile(of: notes.id)
         try FileManager.default.moveItem(at: ink, to: ink.deletingLastPathComponent().appending(path: ".\(ink.lastPathComponent).icloud"))
-        let left = await CloudFiles.download(cloud.url, timeout: .milliseconds(200))
+        let left = await CloudFiles.download([ink], within: .milliseconds(200))
         XCTAssertEqual(left.map(\.lastPathComponent), [ink.lastPathComponent])
         let report = try await sync(b)
         XCTAssertEqual(report.waiting, [notes.id], "a notebook still coming down is left for later, not pulled part-way")

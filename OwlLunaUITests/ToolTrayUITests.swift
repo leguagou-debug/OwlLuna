@@ -128,9 +128,11 @@ final class ToolTrayUITests: XCTestCase {
     /// A pen is made faint from its options, and with Handwriting to Text on, what is written is set as type.
     func testAPenIsMadeFaintAndHandwritingIsSetAsType() throws {
         XCUIDevice.shared.orientation = .portrait
+        // The pen's rest, long enough for a slow runner to get from one stroke to the next.
+        let rest = 8
         let app = XCUIApplication()
         app.launchArguments = ["-storageRoot", "tools", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "anyInput", "-freshToolPresets",
-                               "-scriptedInkText", "Hello", "-inkTypingPause", "4"]
+                               "-scriptedInkText", "Hello", "-inkTypingPause", "\(rest)"]
         app.launch()
         let notebook = app.buttons["notebook.Studio Notes 2"]
         XCTAssertTrue(notebook.waitForExistence(timeout: 30))
@@ -140,10 +142,6 @@ final class ToolTrayUITests: XCTestCase {
         func close(_ element: XCUIElement) {
             canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)).tap()
             XCTAssertTrue(element.waitForNonExistence(timeout: 5))
-        }
-        func draw(atHeight y: CGFloat) {
-            canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: y))
-                .press(forDuration: 0.05, thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: y)), withVelocity: 600, thenHoldForDuration: 0.05)
         }
 
         // The pen in hand opens; its opacity is a bar of its own under the width.
@@ -178,16 +176,25 @@ final class ToolTrayUITests: XCTestCase {
         XCTAssertTrue(typing.waitForExistence(timeout: 5))
         XCTAssertFalse(typing.isSelected)
 
+        // Points on the window: one taken from the canvas is looked up again before and during each stroke.
+        let page = canvas.frame, window = app.coordinate(withNormalizedOffset: .zero)
+        func draw(atHeight y: CGFloat) {
+            let point = { (x: CGFloat) in window.withOffset(CGVector(dx: page.minX + page.width * x, dy: page.minY + page.height * y)) }
+            point(0.2).press(forDuration: 0.05, thenDragTo: point(0.5), withVelocity: 600, thenHoldForDuration: 0.05)
+        }
+
         // Off, writing stays ink.
         draw(atHeight: 0.6)
         XCTAssertEqual(strokeCount(canvas), 1)
         typing.tap()
         waitUntilSelected(typing)
+        let writing = Date.now
         draw(atHeight: 0.3)
         draw(atHeight: 0.34)
-        XCTAssertEqual(strokeCount(canvas), 3, "nothing is read while the writing goes on")
+        let wrote = Date.now.timeIntervalSince(writing).formatted(.number.precision(.fractionLength(1)))
+        XCTAssertEqual(strokeCount(canvas), 3, "nothing is read while the writing goes on (both strokes took \(wrote) s)")
         let text = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Hello'")).firstMatch
-        XCTAssertTrue(text.waitForExistence(timeout: 15), "the handwriting is set as type once the pen has rested")
+        XCTAssertTrue(text.waitForExistence(timeout: TimeInterval(rest + 20)), "the handwriting is set as type once the pen has rested")
         XCTAssertEqual(strokeCount(canvas), 1, "it takes the handwriting's place; ink from before is left")
         XCTAssertEqual(text.frame.minY, canvas.frame.minY + canvas.frame.height * 0.3, accuracy: 60, "where the handwriting was")
         attach(app, "handwriting-as-type")
@@ -196,7 +203,7 @@ final class ToolTrayUITests: XCTestCase {
         app.buttons.matching(identifier: "editor.undo").firstMatch.tap()
         XCTAssertTrue(text.waitForNonExistence(timeout: 5))
         XCTAssertEqual(strokeCount(canvas), 3)
-        sleep(6)
+        sleep(UInt32(rest + 2))
         XCTAssertEqual(strokeCount(canvas), 3, "what Undo gave back is not read again")
         typing.tap()
         XCTAssertFalse(typing.isSelected)

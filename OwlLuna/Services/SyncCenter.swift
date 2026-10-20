@@ -397,9 +397,10 @@ final class SyncCenter {
         guard query == nil, cloud?.isUbiquitous == true else { return }
         let query = NSMetadataQuery()
         query.searchScopes = [NSMetadataQueryUbiquitousDataScope]
-        // Ink and pictures too, since a pull waits for files that come down after the manifest, and the package as one item, as iCloud may list it.
-        let kinds = ["*.\(StorageRoot.packageExtension)", "*.pkdrawing", "*.png", "*.jpg", "*.pdf"].map { NSPredicate(format: "%K LIKE %@", NSMetadataItemFSNameKey, $0) }
-        query.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [NSPredicate(format: "%K IN %@", NSMetadataItemFSNameKey, ["manifest.json", "cards.json"])] + kinds)
+        // Ink, text, pictures, recordings and transcripts too, since a pull waits for files that come down after the
+        // manifest, and the package as one item, as iCloud may list it. Manifests, cards and the folder list are JSON.
+        let kinds = ["*.\(StorageRoot.packageExtension)", "*.json", "*.pkdrawing", "*.txt", "*.png", "*.jpg", "*.pdf", "*.m4a", "*.\(RecordingFile.recordingExtension)"]
+        query.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: kinds.map { NSPredicate(format: "%K LIKE %@", NSMetadataItemFSNameKey, $0) })
         for name in [Notification.Name.NSMetadataQueryDidUpdate, .NSMetadataQueryDidFinishGathering] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: query, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.schedule() }

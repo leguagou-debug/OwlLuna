@@ -46,7 +46,7 @@ Each check names what to keep. This is how to get each kind.
 
   | Category | What logs there | Where |
   |---|---|---|
-  | `sync` | a pass that failed, a notebook that failed, a folder list that can't be read | `OwlLuna/Services/SyncCenter.swift:88`, `OwlLuna/Services/LibrarySync.swift:346` |
+  | `sync` | a pass that failed, a notebook that failed, a folder list that can't be read, a file that couldn't be taken off the iPad; and, as notices, how many files a pass took off the iPad and how many it found the same but dated differently | `OwlLuna/Services/SyncCenter.swift:88`, `OwlLuna/Services/LibrarySync.swift:369` |
   | `library` | index saves, filing and manifest updates, today's page, expired notebooks | `OwlLuna/Library/LibraryStore.swift:33` |
   | `index` | the library index set aside or failing to save, folders that can't be read | `OwlLuna/Storage/LibraryIndex.swift:460` |
   | `storage` | old packages that couldn't be renamed | `OwlLuna/Storage/StorageRoot.swift:6` |
@@ -56,7 +56,7 @@ Each check names what to keep. This is how to get each kind.
   | `widgets` | the App Group missing from the build | `Shared/WidgetSnapshot.swift:27` |
   | `fonts` | a bundled font that didn't register | `OwlLuna/Design/Typography.swift:24` |
 
-  Two things to know. Every line the app logs is an error, so a pass that went well leaves nothing; the app's own diagnostics below say what it did. And the notebook IDs and error text in those lines show as `<private>` in Console; Xcode's console shows them while it runs the app. For iCloud's own side, also stream the processes `bird` and `cloudd`.
+  Two things to know. Every line the app logs is an error, apart from sync's two notices, so a pass that went well leaves little; the app's own diagnostics below say what it did. And the notebook IDs and error text in those lines show as `<private>` in Console; Xcode's console shows them while it runs the app. For iCloud's own side, also stream the processes `bird` and `cloudd`.
 - **Screen recordings.** Control Center › Screen Recording (add it in Control Center if it isn't there). A recording doesn't show your hand, so for the Pencil and palm checks also film the iPad with a phone.
 - **Instruments.** In Xcode, choose the iPad as the destination and Product › Profile (⌘I). That builds Release and opens Instruments; pick the template the check names and record for as long as it says. Instruments can't profile a TestFlight build. The app's signposts (subsystem `com.owais.OwlLuna`) show in the os_signpost instrument, which you can add to any template: "Launch" (`app`), "Open to first ink" (`editor`), "Save" (`document`), "Thumbnail" (`thumbnails`), "OCR page" (`ocr`), "Export" (`export`) and "Cover render" (`covers`).
 - **sysdiagnose.** Press and hold both volume buttons and the top button for about a second, then let go. About ten minutes later it is in Settings › Privacy & Security › Analytics & Improvements › Analytics Data, named `sysdiagnose_…`; share it to the Mac with AirDrop. For sync, first install the iCloud logging profile for iOS and iPadOS from Apple's Profiles and Logs page (developer.apple.com/bug-reporting/profiles-and-logs) on both iPads, so the sysdiagnose holds iCloud's detailed logs. Take one on both iPads within a few minutes of anything going wrong.
@@ -119,9 +119,9 @@ These values were chosen in the simulator and need judging with a real hand. The
 
 ## iCloud sync
 
-One sitting on two iPads, called A and B. The steps build on each other, so run them in order. Allow about three hours, plus an overnight wait if you try the optional storage step in [Sync 8](#sync-8).
+One sitting on two iPads, called A and B. The steps build on each other, so run them in order. Allow about three and a half hours, plus an overnight wait if you try the optional storage step in [Sync 8](#sync-8).
 
-Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iCloud by the maintainer in October 2026, on iPads signed in to one Apple Account. The rest are still open. A new sitting still runs them in order, since the later checks use the notebooks they make.
+Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iCloud by the maintainer in October 2026, on iPads signed in to one Apple Account. The rest are still open. A new sitting still runs them in order, since the later checks use the notebooks they make. Those results came before sync stopped downloading the whole iCloud folder at every pass (CHANGELOG, Unreleased), which changes what Sync 1, 5, 7 and 8 rely on: run them again, with [Sync 14](#sync-14).
 
 **Setup for the whole sitting**
 
@@ -292,7 +292,7 @@ There is no progress figure for a large upload yet (ARCHITECTURE › iCloud sync
 <a id="sync-8"></a>
 ### Sync 8. Evicted files and `.icloud` placeholders
 
-A file iCloud hasn't brought down, or has taken off the iPad to save room, is a placeholder named `.<name>.icloud`. The app asks for everything to be downloaded at each pass and waits up to 60 seconds (`OwlLuna/Services/LibrarySync.swift:511`, `CloudFiles.download` at `:1138`). It must wait for a placeholder and never copy one.
+A file iCloud hasn't brought down, or has taken off the iPad to save room, is a placeholder named `.<name>.icloud`, or a file under its own name that iCloud says isn't downloaded. Each pass asks for the manifests and cards first, then for only what a notebook it receives lacks, and waits up to 60 seconds, or 10 with nothing arriving (`OwlLuna/Services/LibrarySync.swift:556`, `CloudFiles.download` at `:1343`). It must wait for a placeholder and never copy one. OwlLuna itself takes pictures, PDFs and recordings off the iPad after a pass ([Sync 14](#sync-14)), so step 6 isn't the only way to see evicted files.
 
 The Files app can't make iPadOS evict OwlLuna's files: OwlLuna's iCloud folder isn't shown there (there is no `NSUbiquitousContainers` in `Config/Info.plist`, and the copy lives in `<container>/Sync`), so there is no Remove Download to tap. These steps start B from nothing instead, so every file has to come down from iCloud.
 
@@ -386,6 +386,35 @@ This needs a Mac signed in to the same Apple Account with iCloud Drive on, and i
 **Pass:** step 1 asks "A different Apple Account is signed in", with **Sync with This Account** and **Turn Off Sync**, and copies nothing first. After step 3 B syncs with the first account as before.
 
 **Common failures:** B copying its notebooks into the second account without asking; B's library emptied.
+
+<a id="sync-14"></a>
+### Sync 14. What sync keeps on the iPad and brings down
+
+A pass brings down each notebook's manifest and cards first, then only what a notebook it receives lacks (`LibrarySync.deciding` at `OwlLuna/Services/LibrarySync.swift:946`). After a pass that worked it takes the iCloud folder's copies of pictures, PDFs, recordings and transcripts off the iPad once they're uploaded (`evictAssets`, `:821`). Files are compared by size and hash, not by date (`same`, `:911`). The tests stand a plain folder in for iCloud, so only a device shows four things: whether iCloud downloads and evicts single files inside a notebook (it may treat the `.owlluna` package as one item), what iCloud does to file dates, what an evicted file looks like, and how long a pass waits with no network.
+
+**Setup:** the PDF notebook from [Sync 7](#sync-7), with its recording, on both iPads. Console for both iPads, filtered to `subsystem:com.owais.OwlLuna category:sync`.
+
+**Steps:**
+1. On each iPad, screenshot Settings › General › iPad Storage: the space used at the top, and OwlLuna's Documents & Data.
+2. Sync A, wait two minutes, Sync A again. Do the same on B.
+3. Screenshot both storage screens again.
+4. On A, open the PDF notebook, write a word on page 100, tap **Library** and Sync A. Wait. On B, time how long Sync B takes until the line says it received a notebook.
+5. In B's Console, look for "files were the same but dated differently" and note its number, or that there was none.
+6. On B, open the PDF notebook. Check page 100 has A's word, and leaf through the PDF and play the recording.
+7. On A, turn on Airplane Mode. Write a word in "Sync 1", tap **Library**, Sync A, and time how long until the line shows "Last synced" with the time now. Turn Airplane Mode off, Sync A, wait, Sync B.
+8. Optional, a year on: on A, Settings › General › Date & Time, turn off Set Automatically and set the date 13 months ahead. Sync A. Turn Set Automatically back on, close OwlLuna in the app switcher, open it and Sync A, then Sync B.
+
+**Pass:**
+- Step 2: each iPad's Console says "took … files off the device", about one for each picture, PDF, recording and transcript in the synced notebooks, and nothing says a file couldn't be taken off.
+- Step 3: the space used drops by about the size of the PDF and the recording on each iPad. Note which of the two figures moved.
+- Step 4: B receives the notebook in well under the time Sync 7's whole download took, and nothing says it is still downloading for minutes.
+- Step 5: either is a pass, so write down which. No line means iCloud keeps file dates exactly. A number means it doesn't, and the old check by date would have sent those files again.
+- Step 6: the page, every PDF page and the recording are there.
+- Step 7: the pass with no network finishes within about 15 seconds, and B has "Sync 1" with the word once the network is back.
+- Step 8: the delete markers from [Sync 4](#sync-4) and [Sync 6](#sync-6) are cleared, and none of those notebooks comes back on either iPad.
+- Throughout: nothing is deleted, duplicated or kept as a conflicted copy.
+
+**Common failures:** "couldn't evict" lines (note the error text from Xcode's console on a Debug build); the space used not dropping, which may mean iCloud keeps a package as one item; B taking as long as a whole download, or downloading the PDF again; blank PDF pages or a missing recording on B; the pass with no network taking a minute or more.
 
 **To finish the sitting:** Sync both, compare the two libraries notebook by notebook, and screenshot both Settings › iCloud lines.
 

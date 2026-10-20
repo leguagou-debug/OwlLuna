@@ -137,27 +137,28 @@ struct InkLines: Shape {
     }
 }
 
-/// This week as the first row of the library's list at accessibility sizes, where the strip would be.
-struct WeekSummarySection: View {
+/// This week as a row of the shelf's ledger at the accessibility sizes, where the strip would be.
+struct WeekSummaryRow: View {
     let onOpenPage: (NotebookRecord, UUID) -> Void
     @Environment(WritingActivity.self) private var activity
     @State private var showingCalendar = false
 
     var body: some View {
         if activity.isEnabled, activity.hasHistory {
-            Section {
-                Button { showingCalendar = true } label: {
-                    VStack(alignment: .leading, spacing: Space.x1) {
-                        Text("This week").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
-                        Text(activity.week.headline).font(.headline).foregroundStyle(Color.ink)
-                    }
+            Button { showingCalendar = true } label: {
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text("This week").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
+                    Text(activity.week.headline).font(.headline).foregroundStyle(Color.ink)
                 }
-                .accessibilityLabel(activity.week.accessibilityLabel)
-                .accessibilityHint(Text("Opens your writing calendar"))
-                .accessibilityIdentifier("writing.week")
-                .listRowBackground(Color.surface)
-                .writingCalendar(isPresented: $showingCalendar, onOpenPage: onOpenPage)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(activity.week.accessibilityLabel)
+            .accessibilityHint(Text("Opens your writing calendar"))
+            .accessibilityIdentifier("writing.week")
+            .writingCalendar(isPresented: $showingCalendar, onOpenPage: onOpenPage)
         }
     }
 }
