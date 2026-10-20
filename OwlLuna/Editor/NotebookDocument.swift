@@ -591,6 +591,7 @@ final class NotebookDocument {
         manifest.library.stamp(changesSince: before, at: .now)
         manifestVersion += 1
         scheduleSave()
+        if manifest.library.isLocked != before.isLocked { recorder?.noteLockChanged() }
     }
 
     /// A library change written to the files while this document was being opened. Applying it again is
@@ -600,10 +601,12 @@ final class NotebookDocument {
         var changed = manifest
         change(&changed)
         guard changed != manifest else { return }
+        let wasLocked = manifest.library.isLocked
         manifest = changed
         manifestVersion += 1
         scheduleSave()
         onStructureChange?()
+        if manifest.library.isLocked != wasLocked { recorder?.noteLockChanged() }
     }
 
     func dismissNotice(_ notice: DocumentNotice) {

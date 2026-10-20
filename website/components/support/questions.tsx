@@ -54,6 +54,18 @@ export const groups: Group[] = [
         ),
       },
       {
+        id: 'get-it',
+        question: 'How do I get it?',
+        answer: (
+          <p>
+            It is a free beta for iPad (iPadOS 18 or later), through Apple’s TestFlight app. Install TestFlight from the
+            App Store, then open <a href={site.testFlightUrl}>the OwlLuna beta on TestFlight</a> on your iPad. No Mac is
+            needed. The App Store version follows. You can also build the app yourself from{' '}
+            <a href={site.repo}>its source on GitHub</a>, with a Mac and Xcode.
+          </p>
+        ),
+      },
+      {
         id: 'pdfs',
         question: 'Can I bring in PDFs?',
         answer: (
@@ -87,7 +99,7 @@ export const groups: Group[] = [
           <p>
             On your iPad. With iCloud sync on, your notebooks, folders and stickers are also copied to the app’s
             private container in your own iCloud storage, which Apple syncs between your devices. OwlLuna asks before
-            it syncs for the first time. Sync is still experimental.
+            it syncs for the first time. Sync has been tested on real iCloud, between iPads on one Apple Account.
           </p>
         ),
       },

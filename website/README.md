@@ -38,7 +38,8 @@ npm run build && npm run check:links && npm run check:a11y
 
 Everything that varies is in [lib/site.ts](lib/site.ts):
 
-- `appStoreUrl`: the App Store page. While it is empty the site says "Coming soon to the App Store"; once set, the buttons link to it.
+- `appStoreUrl`: the App Store page. Once set, the buttons link to it.
+- `testFlightUrl`: the public TestFlight beta. While `appStoreUrl` is empty, the home page's main button joins the beta, and the Support page's "How do I get it?" links to it. With both empty the home page says "Coming soon to the App Store".
 - `contactEmail`: an address for privacy and support questions. While it is empty the pages point to GitHub Issues alone.
 - `policyUpdated`: the date printed on the Privacy Policy. Change it whenever the policy's wording changes.
 

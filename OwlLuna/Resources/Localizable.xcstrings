@@ -21598,28 +21598,6 @@
         }
       }
     },
-    "Recording stopped at %@ when the iPad locked or you left OwlLuna." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Aufnahme endete bei %@, als das iPad gesperrt wurde oder du OwlLuna verlassen hast."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La grabación se detuvo en %@ cuando se bloqueó el iPad o saliste de OwlLuna."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’enregistrement s’est arrêté à %@, quand l’iPad s’est verrouillé ou que vous avez quitté OwlLuna."
-          }
-        }
-      }
-    },
     "Recording stopped at %@ when the iPad's cover was closed." : {
       "localizations" : {
         "de" : {
@@ -21638,6 +21616,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "L’enregistrement s’est arrêté à %@, quand l’étui de l’iPad a été fermé."
+          }
+        }
+      }
+    },
+    "Recording stopped at %@ when the notebook locked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufnahme endete bei %@, als das Notizbuch gesperrt wurde."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación se detuvo en %@ cuando se bloqueó el cuaderno."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’enregistrement s’est arrêté à %@, quand le carnet s’est verrouillé."
           }
         }
       }

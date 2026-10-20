@@ -21,6 +21,8 @@ export const site = {
   since: '2024–2026',
   /** The App Store page, once the app is published. Empty until then. */
   appStoreUrl: '',
+  /** The public TestFlight beta, offered while `appStoreUrl` is empty. */
+  testFlightUrl: 'https://testflight.apple.com/join/68jmH6R7',
   /** The code from Google Search Console's HTML-tag verification. Empty adds no tag. */
   googleSiteVerification: '',
   /** An address for privacy and support questions. Empty shows GitHub Issues alone. */

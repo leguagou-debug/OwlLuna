@@ -214,18 +214,6 @@
   border-top: 1px solid var(--hairline);
 }
 
-.flag {
-  padding: 2px var(--x2);
-  background: var(--mustard);
-  color: var(--on-mustard);
-  border-radius: var(--radius-thumb);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  line-height: 1.5;
-}
-
 .tags {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

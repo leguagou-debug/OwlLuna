@@ -1,11 +1,11 @@
 # Device checks before 1.0
 
-Everything here has only run in the simulator, or in tests through a stand-in. Each check needs a person and a real iPad, and some need a Pencil, a second iPad or a display. Work through a group, then tick its items in the "Device checks before 1.0" issue and attach what the check asks you to keep.
+Unless a check is marked **Done**, it has only run in the simulator, or in tests through a stand-in. Each check needs a person and a real iPad, and some need a Pencil, a second iPad or a display. Work through a group, then tick its items in the "Device checks before 1.0" issue and attach what the check asks you to keep.
 
 Each check gives its setup, numbered steps, what a pass looks like, the failures to look for and the evidence to keep. **Bold** names are the app's own buttons and menus, spelt as the app spells them. In the editor, **⋯** is the More button at the right of the bar and **+** is Add. A file and line, such as `OwlLuna/Canvas/ZoomWindow.swift:13`, is where a value lives; if the line has moved since this was written, search for the name beside it.
 
 - [Before you start](#before-you-start): builds, devices, evidence, fixtures, tunables
-- [iCloud sync](#icloud-sync): one sitting with two iPads
+- [iCloud sync](#icloud-sync): one sitting with two iPads; Sync 1, 4, 5 and 7 done, Sync 3 in part
 - [Apple Pencil](#apple-pencil)
 - [Hardware and services](#hardware-and-services)
 - [Windows, screens and keys](#windows-screens-and-keys)
@@ -121,6 +121,8 @@ These values were chosen in the simulator and need judging with a real hand. The
 
 One sitting on two iPads, called A and B. The steps build on each other, so run them in order. Allow about three hours, plus an overnight wait if you try the optional storage step in [Sync 8](#sync-8).
 
+Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iCloud by the maintainer in October 2026, on iPads signed in to one Apple Account. The rest are still open. A new sitting still runs them in order, since the later checks use the notebooks they make.
+
 **Setup for the whole sitting**
 
 - Two iPads on the same build, signed in to the same **test** Apple Account, with iCloud Drive on and at least 2 GB free in iCloud. Date and Time set automatically on both (Settings › General › Date & Time).
@@ -136,6 +138,8 @@ One sitting on two iPads, called A and B. The steps build on each other, so run 
 
 <a id="sync-1"></a>
 ### Sync 1. The first sync, and a notebook written on one iPad arrives on the other
+
+**Done:** tested on real iCloud by the maintainer, October 2026.
 
 **Steps:**
 1. On A, open OwlLuna. When it asks "Keep a copy of your notebooks in iCloud?", tap **Sync with iCloud**. If it doesn't ask, turn on Settings › iCloud › **Sync with iCloud**.
@@ -183,6 +187,8 @@ One sitting on two iPads, called A and B. The steps build on each other, so run 
 <a id="sync-3"></a>
 ### Sync 3. A lock, a favourite, a folder, a tag and a sticker carry over
 
+**Done in part:** the lock and the folder were tested on real iCloud by the maintainer, October 2026. The favourite, the tag, the sticker and the rename in step 7 are still open.
+
 **Steps:**
 1. On A, touch and hold "Sync 2" › **Lock…** and confirm with Face ID or Touch ID.
 2. Touch and hold "Sync 3" › **Favourite**.
@@ -204,6 +210,8 @@ One sitting on two iPads, called A and B. The steps build on each other, so run 
 <a id="sync-4"></a>
 ### Sync 4. A delete, and a restore from Recently Deleted
 
+**Done:** tested on real iCloud by the maintainer, October 2026.
+
 **Steps:**
 1. On A, touch and hold "Sync 4" › **Delete**. Sync A, wait, Sync B.
 2. On B, sidebar › **Recently Deleted**. Touch and hold "Sync 4" › **Restore**. Sync B, wait, Sync A.
@@ -219,6 +227,8 @@ One sitting on two iPads, called A and B. The steps build on each other, so run 
 
 <a id="sync-5"></a>
 ### Sync 5. A pass with no network, and a notebook changed on both
+
+**Done:** tested on real iCloud by the maintainer, October 2026.
 
 **Steps:**
 1. On A, turn on Airplane Mode in Control Center and check that Wi-Fi is off too.
@@ -257,6 +267,8 @@ A pass that would take more than three notebooks out of the library, or more tha
 
 <a id="sync-7"></a>
 ### Sync 7. A large upload
+
+**Done:** tested on real iCloud by the maintainer, October 2026.
 
 There is no progress figure for a large upload yet (ARCHITECTURE › iCloud sync › Not done), so this check times it by hand.
 
@@ -754,23 +766,25 @@ This has only read block letters drawn by a test.
 **Evidence:** screenshots of the results; Console `category:spotlight`.
 
 <a id="hw-10"></a>
-### Hardware 10. A recording cut off, locked or interrupted
+### Hardware 10. A recording in the background, locked, cut off or interrupted
 
-**Setup:** Settings › Display & Brightness › Auto-Lock at 2 minutes. A Smart Folio or Magic Keyboard cover if you have one, and a second phone to call the iPad. A Debug build for step 6.
+**Setup:** a passcode on the iPad, and Settings › Display & Brightness › Auto-Lock at 2 minutes. Two notebooks, one of them locked from the library. A Smart Folio or Magic Keyboard cover if you have one, and a second phone to call the iPad. A Debug build for step 8. Talk or play some speech near the iPad throughout.
 
 **Steps:**
-1. In a notebook, **Record Audio** and leave the iPad untouched for five minutes. Stop. Play the recording through.
-2. **Record Audio** for a minute, then press the top button to lock. Unlock and go back to the notebook.
-3. **Record Audio** for a minute, then switch to another app. Come back.
-4. **Record Audio**, then call the iPad from the phone (or ask Siri something). End the call and come back. With a cover, record again and close it.
-5. **Record Audio** for two minutes, then swipe OwlLuna away in the app switcher. Open the notebook again and play the recording.
-6. On a Debug build, record for two minutes and stop the app from Xcode. Open the notebook again.
+1. In the notebook without a lock, **Record Audio** and leave the iPad untouched until it locks itself, then for five minutes more. Unlock, go back to the notebook and Stop. Play the recording through.
+2. **Record Audio**, press the top button to lock, and wait two minutes. Unlock and Stop.
+3. **Record Audio**, switch to another app that doesn't play sound for two minutes, and come back. Stop. With Stage Manager on, do it again with a second OwlLuna window in front instead of another app.
+4. Open the locked notebook, unlock it, **Record Audio** and leave the iPad untouched for three minutes. Then press the top button to lock. Unlock the iPad and the notebook.
+5. In the notebook without a lock, **Record Audio**, then call the iPad from the phone (or ask Siri something). End the call and come back. With a cover, record again and close it.
+6. **Record Audio**, lock the iPad, wait a minute, then call it from the phone. End the call, wait a minute, and unlock.
+7. **Record Audio** for two minutes, then swipe OwlLuna away in the app switcher. Open the notebook again and play the recording.
+8. On a Debug build, record for two minutes and stop the app from Xcode. Open the notebook again.
 
-**Pass:** in step 1 the iPad stays awake and the recording is five minutes long. Steps 2 to 4 each leave a notice at the top of the editor saying when the recording stopped and why ("when the iPad locked or you left OwlLuna", "when another app needed the microphone", "when the iPad's cover was closed"), and the recording up to then is in **Recordings** and plays. Steps 5 and 6 show "Recording stopped at … when OwlLuna quit" and the recording plays to where it was cut off. Every recording shares as an `.m4a`.
+**Pass:** in steps 1 to 3 the system's recording indicator shows while OwlLuna is behind the lock or another app, no notice appears, and each recording is as long as it ran and plays without a gap where the iPad locked or the app changed; in step 1 the iPad locks itself as usual. In step 4 the iPad stays awake, and locking it stops the recording with "Recording stopped at … when the notebook locked."; the indicator goes out at the lock. Step 5 leaves "when another app needed the microphone" and "when the iPad's cover was closed". Step 6 leaves "when another app needed the microphone" after unlocking, the recording up to the call is in **Recordings** and plays, and no notice says the notebook couldn't be saved. Steps 7 and 8 show "Recording stopped at … when OwlLuna quit" and the recording plays to where it was cut off. Every recording shares as an `.m4a`.
 
-**Common failures:** "Recording couldn't start: …"; the iPad locking during step 1; a recording missing after a quit, or one listed at 0:00 that won't play; no notice, or a notice that names the wrong time.
+**Common failures:** "Recording couldn't start: …"; a recording that stops at the lock or the app switch, or a gap in it there; the recording indicator still on after Stop; the iPad locking during step 4, or the locked notebook recording on behind the lock; a recording missing after a stop while locked, or a "Couldn't save" notice after unlocking; a recording missing after a quit, or one listed at 0:00 that won't play; no notice, or a notice that names the wrong time.
 
-**Evidence:** a screen recording of steps 2 to 5; a screenshot of each notice.
+**Evidence:** a screen recording of steps 1 to 4 and 6; a screenshot of each notice.
 
 ## Windows, screens and keys
 
