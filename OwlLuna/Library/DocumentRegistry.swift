@@ -18,6 +18,8 @@ final class DocumentRegistry {
     private var inHand: Set<UUID> = []
     /// How many changes the library has yet to write into each closed notebook's manifest.
     private var changing: [UUID: Int] = [:]
+    /// Why a recording stopped as its notebook was put away with nobody looking, told when the notebook next opens.
+    private var recordingStops: [UUID: String] = [:]
 
     /// The live document for a notebook: open in an editor, or closed with changes still waiting to be saved.
     func document(for id: UUID) -> NotebookDocument? {
@@ -78,7 +80,7 @@ final class DocumentRegistry {
         if let document = entries[id]?.document { return document }
         if let document = closing.removeValue(forKey: id) {
             entries[id] = Entry(document: document, sceneIdentifier: scene)
-            return document
+            return told(document)
         }
         if let pending = opening[id] { return try await pending.task.value }
         let task = Task { () throws -> NotebookDocument in
@@ -88,10 +90,19 @@ final class DocumentRegistry {
             let document = try await NotebookDocument.open(id, root: root)
             configure(document)
             self.entries[id] = Entry(document: document, sceneIdentifier: scene)
-            return document
+            return self.told(document)
         }
         opening[id] = (task, scene)
         return try await task.value
+    }
+
+    func noteRecordingStopped(_ message: String, in id: UUID) {
+        recordingStops[id] = message
+    }
+
+    private func told(_ document: NotebookDocument) -> NotebookDocument {
+        if let message = recordingStops.removeValue(forKey: document.id) { document.noteRecordingStopped(message) }
+        return document
     }
 
     func register(_ document: NotebookDocument, scene: String?) {

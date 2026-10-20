@@ -18,6 +18,8 @@ const apple = {
   privacy: 'https://www.apple.com/legal/privacy/',
   icloud: 'https://support.apple.com/102651',
   features: 'https://www.apple.com/privacy/',
+  testflight: 'https://www.apple.com/legal/privacy/data/en/test-flight/',
+  data: 'https://privacy.apple.com/',
 }
 const github = 'https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement'
 const history = `${site.repo}/commits/main/website/app/privacy/page.tsx`
@@ -34,6 +36,7 @@ const contents = [
   ['deleting', 'Keeping and deleting'],
   ['children', 'Children'],
   ['apple-reports', 'What Apple tells me'],
+  ['testflight', 'The TestFlight beta'],
   ['website', 'This website'],
   ['contact', 'Questions and requests'],
   ['changes', 'Changes to this policy'],
@@ -68,8 +71,8 @@ export default function PrivacyPolicy() {
     <div className={`wrap ${styles.page}`}>
       <SectionHeading as="h1" eyebrow={`Privacy Policy · Last updated ${formatDate(site.policyUpdated)}`} title="OwlLuna collects nothing.">
         <p>
-          OwlLuna is a notebook. It has no accounts, no analytics, no ads and no server of mine behind it, so I never
-          receive your notes or anything about you. This page says exactly what the app keeps, where it keeps it, and
+          OwlLuna is a notebook. It has no accounts, no analytics, no ads and no server of mine behind it, so it never
+          sends me your notes or anything about you. This page says exactly what the app keeps, where it keeps it, and
           how to remove it.
         </p>
       </SectionHeading>
@@ -95,7 +98,8 @@ export default function PrivacyPolicy() {
         <article className={styles.article}>
           <Ledger title="The short version" className={styles.short}>
             <LedgerRow label="Collected by the developer" mark="check">
-              Nothing.
+              Nothing, apart from what <a href="#testflight">TestFlight</a> sends me while you test the beta: crash
+              reports and details of your iPad, not your name or email address.
             </LedgerRow>
             <LedgerRow label="Accounts, analytics, ads, trackers" mark="check">
               None. The app contains no third-party code at all.
@@ -149,6 +153,10 @@ export default function PrivacyPolicy() {
             <p>
               That is why the app&rsquo;s privacy label on the App Store {site.appStoreUrl ? 'reads' : 'will read'}{' '}
               &ldquo;Data Not Collected&rdquo;.
+            </p>
+            <p>
+              Testing the beta is the exception, because Apple&rsquo;s TestFlight passes some details to me: see{' '}
+              <a href="#testflight">The TestFlight beta</a>.
             </p>
           </Part>
 
@@ -299,8 +307,9 @@ export default function PrivacyPolicy() {
               </LedgerRow>
               <LedgerRow label="Microphone">
                 Only while you are recording: from when you start a recording until you stop it or close the notebook.
-                On an iPad it also stops, and is saved, when OwlLuna leaves the screen: when you switch to another app
-                or lock the iPad. The recording is saved in the notebook it was made in.
+                A recording carries on when you switch to another app or lock the iPad, and iPadOS shows its own
+                recording indicator meanwhile. In a notebook with a lock it stops, and is saved, when the notebook
+                locks. The recording is saved in the notebook it was made in.
               </LedgerRow>
               <LedgerRow label="Photos">
                 You choose pictures in Apple&rsquo;s photo picker, and the app receives only those. It never looks
@@ -423,7 +432,8 @@ export default function PrivacyPolicy() {
 
           <Part id="deleting">
             <p>
-              Your data stays until you remove it. There is no copy with me to keep, and none for me to delete.
+              Your data stays until you remove it. Outside the <a href="#testflight">TestFlight beta</a>, there is no
+              copy with me to keep, and none for me to delete.
             </p>
             <Ledger className={styles.table}>
               <LedgerRow label="A notebook">
@@ -472,6 +482,44 @@ export default function PrivacyPolicy() {
             </p>
           </Part>
 
+          <Part id="testflight">
+            <p>
+              The beta comes through TestFlight, which is Apple&rsquo;s service, not code in OwlLuna. While you test,
+              Apple collects the following and passes it to me. You cannot opt out of it.
+            </p>
+            <ul className={styles.list} role="list">
+              <li>
+                <strong>Crash reports.</strong> When the app crashes, the crash log, which shows where in OwlLuna&rsquo;s
+                code it happened and how long the app had been running.
+              </li>
+              <li>
+                <strong>Usage and your iPad.</strong> How many times you installed and used each build, how many times
+                it crashed, which version you have, your iPad&rsquo;s model and an identifier for it, and its iPadOS
+                version and language.
+              </li>
+            </ul>
+            <p>
+              Feedback is up to you. If you send it from the TestFlight app, by taking a screenshot in OwlLuna, or when
+              TestFlight asks after a crash, I also get your comments and any screenshot. With them come the
+              iPad&rsquo;s battery level, free storage, screen resolution, time zone, processor type, connection type
+              and mobile carrier, and how long the app had been open. A screenshot shows whatever is on the screen, your
+              notes included, and you can send feedback without one.
+            </p>
+            <p>
+              If you joined through the public link on this site, Apple does not show me your name or email address,
+              and you appear to me as Anonymous. I see your email address only if you add it to a piece of feedback, or
+              send feedback by email.
+            </p>
+            <p>
+              Apple lets me use all of this only to improve the app, and not share it with anyone else. Apple keeps
+              feedback for a year, and may keep crash logs and usage until the bugs are fixed, as its{' '}
+              <Out href={apple.testflight}>TestFlight &amp; Privacy notice</Out> describes. To leave the beta, open
+              OwlLuna in the TestFlight app and tap Stop Testing. Apple asks you to bring requests to see or delete your
+              TestFlight data to the developer, so ask me as under <a href="#contact">Questions and requests</a>. To see
+              what Apple itself holds, go to <Out href={apple.data}>privacy.apple.com</Out>.
+            </p>
+          </Part>
+
           <Part id="website">
             <p>
               This site is a set of static pages hosted on GitHub Pages. It sets no cookies, runs no analytics and loads
@@ -483,8 +531,9 @@ export default function PrivacyPolicy() {
 
           <Part id="contact">
             <p>
-              Because I hold no data about you, there is nothing I can look up, correct, export or delete on your
-              behalf. Your data is on your own devices and in your own iCloud, where the steps above remove it.
+              Outside the <a href="#testflight">TestFlight beta</a>, I hold no data about you, so there is nothing I can
+              look up, correct, export or delete on your behalf. Your data is on your own devices and in your own
+              iCloud, where the steps above remove it.
             </p>
             <p>
               For any question about this policy

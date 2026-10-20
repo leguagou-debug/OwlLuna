@@ -18,12 +18,13 @@ enum PlaybackSpeed {
 
 /// Why a recording ended without Stop, told in the editor when the iPad is back in hand.
 enum RecordingStop: Sendable {
-    case locked, coverClosed, interrupted, failed, quit
+    case locked, windowClosed, coverClosed, interrupted, failed, quit
 
     func message(at seconds: TimeInterval) -> String {
         let time = Self.clock(seconds)
         return switch self {
         case .locked: String(localized: "Recording stopped at \(time) when the notebook locked.")
+        case .windowClosed: String(localized: "Recording stopped at \(time) when its window was closed.")
         case .coverClosed: String(localized: "Recording stopped at \(time) when the iPad's cover was closed.")
         case .interrupted: String(localized: "Recording stopped at \(time) when another app needed the microphone.")
         case .failed: String(localized: "Recording stopped at \(time) because the audio couldn't be written. What came before is kept.")
@@ -79,7 +80,6 @@ final class NotebookRecorder: NSObject {
     /// The playback being started, until its player exists. Stopping playback clears it, so a start that was
     /// overtaken while the audio session switched gives up.
     @ObservationIgnored private var startingPlayback: UUID?
-    private static var sessionChange: Task<Void, Error>?
     /// How far each transcription under way has got, by recording.
     private(set) var transcribing: [UUID: Double] = [:]
     @ObservationIgnored var transcriber: any SpeechTranscribing = Transcription.transcriber
@@ -98,7 +98,10 @@ final class NotebookRecorder: NSObject {
     }
 
     deinit {
-        Task { @MainActor in IdleTimer.shared.refresh() }
+        Task { @MainActor in
+            IdleTimer.shared.refresh()
+            AudioSessionOwner.shared.refresh()
+        }
     }
 
     /// iPadOS took the microphone away (a call, another app's sound, a cover closing): what was recorded is saved there.
@@ -128,14 +131,24 @@ final class NotebookRecorder: NSObject {
         keepToTheLock()
     }
 
+    private var lockStop: RecordingStop? {
+        BackgroundRecording.stop(locked: document.manifest.library.isLocked, inBackground: isInBackground)
+    }
+
     /// Behind a notebook's lock a recording stops and playback waits; until then the recording keeps the iPad awake.
     private func keepToTheLock() {
-        let locked = document.manifest.library.isLocked
-        if let stop = BackgroundRecording.stop(locked: locked, inBackground: isInBackground) {
+        if let stop = lockStop {
             stopRecording(because: stop)
-            pause()
+            pauseAndLetGo()
         }
-        IdleTimer.shared.hold(isRecording && BackgroundRecording.keepsAwake(locked: locked), by: self)
+        IdleTimer.shared.hold(isRecording && BackgroundRecording.keepsAwake(locked: document.manifest.library.isLocked), by: self)
+    }
+
+    /// Playback, or a playback being started, waits where it is, and the session is let go so other apps' sound can come back.
+    private func pauseAndLetGo() {
+        startingPlayback = nil
+        pause()
+        AudioSessionOwner.shared.releasePlayback(by: self)
     }
 
     func toggleRecording() {
@@ -153,14 +166,17 @@ final class NotebookRecorder: NSObject {
             }
             do {
                 guard startingRecording == request else { return }
+                endPlayer()
+                let claimed = try await AudioSessionOwner.shared.claimRecording(for: self)
                 stopPlayback()
-                try await Self.changeSession {
-                    try $0.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-                    try $0.setActive(true)
-                }.value
+                guard claimed else {
+                    if startingRecording == request { startingRecording = nil }
+                    errorMessage = String(localized: "Only one notebook can record at a time. Stop the other recording first.")
+                    return
+                }
                 if document.isSetAside { startingRecording = nil }
                 guard startingRecording == request, recorder == nil else {
-                    if startingRecording == nil, recorder == nil { Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) } }
+                    if startingRecording == nil, recorder == nil { AudioSessionOwner.shared.releaseRecording(by: self) }
                     return
                 }
                 startingRecording = nil
@@ -179,6 +195,9 @@ final class NotebookRecorder: NSObject {
                 startTimer()
                 keepToTheLock()
             } catch {
+                if startingRecording == request { startingRecording = nil }
+                if recorder == nil { AudioSessionOwner.shared.releaseRecording(by: self) }
+                if player == nil { AudioSessionOwner.shared.releasePlayback(by: self) }
                 errorMessage = String(localized: "Recording couldn't start: \(error.localizedDescription)")
             }
         }
@@ -214,7 +233,7 @@ final class NotebookRecorder: NSObject {
         if let reason { document.noteRecordingStopped(reason.message(at: duration)) }
         document.finishRecording(entry)
         saveStoppedRecording()
-        Self.changeSession { try $0.setActive(false, options: .notifyOthersOnDeactivation) }
+        AudioSessionOwner.shared.releaseRecording(by: self)
     }
 
     /// Letting go of the audio session lets iPadOS suspend an app in the background, so the recording is saved under a background task.
@@ -237,19 +256,6 @@ final class NotebookRecorder: NSObject {
         stopRecording(because: reason)
     }
 
-    /// Switching the shared audio session can block while the audio hardware answers, so it is done off the main
-    /// thread, one change at a time and in the order asked for.
-    @discardableResult
-    private static func changeSession(_ change: @escaping @Sendable (AVAudioSession) throws -> Void) -> Task<Void, Error> {
-        let previous = sessionChange
-        let task = Task.detached(priority: .userInitiated) {
-            _ = await previous?.result
-            try change(AVAudioSession.sharedInstance())
-        }
-        sessionChange = task
-        return task
-    }
-
     /// A player wakes the audio session itself as it gets ready to play, so that is done off the main thread too.
     @concurrent
     private nonisolated static func readyPlayer(for url: URL) async throws -> AVAudioPlayer {
@@ -266,19 +272,26 @@ final class NotebookRecorder: NSObject {
         Task { await start(recording) }
     }
 
+    private static var playbackRefused: String { String(localized: "Recordings can't play while another notebook is recording.") }
+
     @discardableResult
     private func start(_ recording: RecordingEntry) async -> Bool {
         guard !isRecording else { return false }
-        stopPlayback()
+        endPlayer()
         let request = UUID()
         startingPlayback = request
         do {
-            try await Self.changeSession {
-                try $0.setCategory(.playback)
-                try $0.setActive(true)
-            }.value
+            guard try await AudioSessionOwner.shared.claimPlayback(for: self) else {
+                if startingPlayback == request { startingPlayback = nil }
+                errorMessage = Self.playbackRefused
+                return false
+            }
             let player = try await Self.readyPlayer(for: document.package.assetURL(recording.file))
-            guard startingPlayback == request, !isRecording else { return false }
+            if lockStop != nil, startingPlayback == request { startingPlayback = nil }
+            guard startingPlayback == request, !isRecording else {
+                if startingPlayback == nil, self.player == nil { AudioSessionOwner.shared.releasePlayback(by: self) }
+                return false
+            }
             startingPlayback = nil
             player.delegate = self
             speed = PlaybackSpeed.saved(in: defaults)
@@ -290,6 +303,7 @@ final class NotebookRecorder: NSObject {
             return true
         } catch {
             if startingPlayback == request { startingPlayback = nil }
+            if startingPlayback == nil, player == nil { AudioSessionOwner.shared.releasePlayback(by: self) }
             errorMessage = String(localized: "This recording couldn't be played.")
             return false
         }
@@ -309,9 +323,24 @@ final class NotebookRecorder: NSObject {
         report(player.currentTime)
     }
 
+    /// Playback paused behind a lock, or for another notebook's recording, has let go of the session and takes it back first.
     func resume() {
         guard let player, isPaused else { return }
         if currentTime >= player.duration - 0.05 { player.currentTime = 0 }
+        guard AudioSessionOwner.shared.isPlaying(self) else {
+            Task {
+                do {
+                    guard try await AudioSessionOwner.shared.claimPlayback(for: self) else { return errorMessage = Self.playbackRefused }
+                } catch {
+                    return errorMessage = String(localized: "This recording couldn't be played.")
+                }
+                guard self.player === player, isPaused else { return }
+                guard lockStop == nil else { return AudioSessionOwner.shared.releasePlayback(by: self) }
+                player.play()
+                isPaused = false
+            }
+            return
+        }
         player.play()
         isPaused = false
     }
@@ -340,6 +369,11 @@ final class NotebookRecorder: NSObject {
     }
 
     func stopPlayback() {
+        endPlayer()
+        AudioSessionOwner.shared.releasePlayback(by: self)
+    }
+
+    private func endPlayer() {
         player?.stop()
         player = nil
         startingPlayback = nil
@@ -395,8 +429,8 @@ final class NotebookRecorder: NSObject {
         }.value
     }
 
-    func shutdown() {
-        stopRecording()
+    func shutdown(because reason: RecordingStop? = nil) {
+        stopRecording(because: reason)
         stopPlayback()
         for id in Array(transcriptTasks.keys) { cancelTranscription(id) }
     }
@@ -471,6 +505,10 @@ final class NotebookRecorder: NSObject {
         if let recorder, recorder.isRecording { elapsed = recorder.currentTime.rounded(.down) }
         if let player, player.isPlaying { report(player.currentTime) }
     }
+}
+
+extension NotebookRecorder: AudioSessionUser {
+    func giveWayToRecording() { pauseAndLetGo() }
 }
 
 extension NotebookRecorder: AVAudioPlayerDelegate {

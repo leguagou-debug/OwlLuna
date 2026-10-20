@@ -18762,6 +18762,28 @@
         }
       }
     },
+    "Only one notebook can record at a time. Stop the other recording first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es kann immer nur ein Notizbuch aufnehmen. Beende zuerst die andere Aufnahme."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo un cuaderno puede grabar a la vez. Detén primero la otra grabación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un seul carnet peut enregistrer à la fois. Arrêtez d’abord l’autre enregistrement."
+          }
+        }
+      }
+    },
     "Opacity" : {
       "localizations" : {
         "de" : {
@@ -21576,6 +21598,28 @@
         }
       }
     },
+    "Recording stopped at %@ when its window was closed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufnahme endete bei %@, als ihr Fenster geschlossen wurde."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación se detuvo en %@ cuando se cerró su ventana."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’enregistrement s’est arrêté à %@, quand sa fenêtre a été fermée."
+          }
+        }
+      }
+    },
     "Recording stopped at %@ when OwlLuna quit. What came before is kept." : {
       "localizations" : {
         "de" : {
@@ -21682,6 +21726,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les enregistrements sont transcrits sur cet iPad, dans cette langue, sauf si vous en choisissez une autre pour l’un d’eux. Seules les langues que cet iPad peut transcrire sans envoyer l’enregistrement ailleurs sont proposées."
+          }
+        }
+      }
+    },
+    "Recordings can't play while another notebook is recording." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahmen können nicht abgespielt werden, während ein anderes Notizbuch aufnimmt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las grabaciones no se pueden reproducir mientras otro cuaderno está grabando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les enregistrements ne peuvent pas être lus pendant qu’un autre carnet enregistre."
           }
         }
       }
