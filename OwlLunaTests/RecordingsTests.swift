@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import PencilKit
+import SwiftData
 @testable import OwlLuna
 
 /// Recordings by name, played faster or slower, shared on their own and exported with the notebook's PDF.
@@ -423,20 +424,117 @@ final class RecordingsTests: XCTestCase {
     func testPlaybackWaitsBehindANotebooksLockAndOtherwisePlaysOnInTheBackground() async throws {
         let document = try await notebook(recordings: [recording(duration: 20)])
         let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let session = AudioSessionOwner.shared
         addTeardownBlock { @MainActor in recorder.shutdown() }
         recorder.togglePlayback(recorder.recordings[0])
         await waitUntil { recorder.playingID != nil }
         XCTAssertNotNil(recorder.playingID)
+        XCTAssertTrue(session.isPlaying(recorder))
 
         recorder.noteWindow(inBackground: true)
         XCTAssertFalse(recorder.isPaused, "with no lock it plays on with the iPad locked")
         document.updateLibraryState { $0.isLocked = true }
         XCTAssertTrue(recorder.isPaused, "locked from another window while this one is in the background, it waits")
-        recorder.resume()
+        XCTAssertFalse(session.isPlaying(recorder), "and lets go of the session, so other apps' sound can come back")
+
         recorder.noteWindow(inBackground: false)
-        XCTAssertFalse(recorder.isPaused, "in front it stays open until it is closed")
+        recorder.resume()
+        await waitUntil { !recorder.isPaused }
+        XCTAssertFalse(recorder.isPaused, "back in front it takes the session again and plays on")
+        XCTAssertTrue(session.isPlaying(recorder))
         recorder.noteWindow(inBackground: true)
         XCTAssertTrue(recorder.isPaused, "and leaving the screen locks it")
+
+        recorder.stopPlayback()
+        recorder.togglePlayback(recorder.recordings[0])
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertNil(recorder.playingID, "a playback started behind the lock never sounds")
+        XCTAssertFalse(session.isPlaying(recorder))
+    }
+
+    func testOneAudioSessionServesEveryWindow() async throws {
+        final class Uses: @unchecked Sendable {
+            private let lock = NSLock()
+            private var list: [AudioSessionOwner.Use] = []
+            func append(_ use: AudioSessionOwner.Use) { lock.withLock { list.append(use) } }
+            var all: [AudioSessionOwner.Use] { lock.withLock { list } }
+        }
+        @MainActor final class Window: AudioSessionUser {
+            var gaveWay = false
+            func giveWayToRecording() { gaveWay = true }
+        }
+        let uses = Uses()
+        let owner = AudioSessionOwner { uses.append($0) }
+        let a = Window(), b = Window(), c = Window()
+
+        let recording = try await owner.claimRecording(for: a)
+        XCTAssertTrue(recording)
+        let second = try await owner.claimRecording(for: b)
+        XCTAssertFalse(second, "one recording at a time, in any window")
+        let played = try await owner.claimPlayback(for: b)
+        XCTAssertFalse(played, "what played would be recorded too")
+        owner.releaseRecording(by: b)
+        owner.releasePlayback(by: b)
+        await owner.settled()
+        XCTAssertEqual(uses.all, [.recording], "nothing switches the session away from the recording or lets it go")
+        XCTAssertTrue(owner.isRecording(a))
+
+        owner.releaseRecording(by: a)
+        await owner.settled()
+        XCTAssertEqual(uses.all, [.recording, .idle], "let go once nothing records or plays")
+
+        let first = try await owner.claimPlayback(for: a)
+        let other = try await owner.claimPlayback(for: b)
+        XCTAssertTrue(first && other, "two windows can play at once")
+        owner.releasePlayback(by: a)
+        await owner.settled()
+        XCTAssertEqual(owner.use, .playback, "kept while the other plays")
+
+        let lecture = try await owner.claimRecording(for: c)
+        XCTAssertTrue(lecture)
+        XCTAssertTrue(b.gaveWay, "playback in another window pauses rather than be recorded")
+        XCTAssertFalse(a.gaveWay)
+        owner.releasePlayback(by: b)
+        owner.releaseRecording(by: c)
+        await owner.settled()
+        XCTAssertEqual(uses.all, [.recording, .idle, .playback, .playback, .recording, .idle])
+
+        var gone: Window? = Window()
+        _ = try await owner.claimPlayback(for: try XCTUnwrap(gone))
+        gone = nil
+        owner.refresh()
+        await owner.settled()
+        XCTAssertEqual(uses.all.last, .idle, "a recorder that went away without stopping doesn't keep the session")
+
+        let failing = AudioSessionOwner { if $0 == .recording { throw CocoaError(.featureUnsupported) } }
+        do {
+            _ = try await failing.claimRecording(for: a)
+            XCTFail("a session that won't switch to recording says so")
+        } catch {}
+        XCTAssertFalse(failing.isRecording(a), "and nothing is left claimed")
+        XCTAssertEqual(failing.use, .idle)
+    }
+
+    func testARecordingStoppedAsItsWindowWentAwayIsToldWhenTheNotebookNextOpens() async throws {
+        XCTAssertEqual(RecordingStop.windowClosed.message(at: 2472), "Recording stopped at 41:12 when its window was closed.")
+        let schema = LibraryIndex.schema
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let store = LibraryStore(root: temporaryRoot(self), context: container.mainContext)
+        let manifest = NotebookManifest(title: "Lecture", defaults: paper, pages: [paper.newPage()])
+        try await NotebookPackage(root: store.root, id: manifest.id).create(manifest)
+        store.index(manifest)
+        let registry = DocumentRegistry.shared
+        let document = try await registry.open(manifest.id, root: store.root, scene: nil) { _ in }
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        document.noteRecordingStopped(RecordingStop.windowClosed.message(at: 90))
+        await EditorScreen.putAway(document, store: store, because: .windowClosed)
+        XCTAssertNil(registry.document(for: manifest.id))
+
+        let again = try await registry.open(manifest.id, root: store.root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in registry.unregister(manifest.id, document: again) }
+        XCTAssertFalse(again === document)
+        XCTAssertEqual(again.notices.map(\.message), [RecordingStop.windowClosed.message(at: 90)], "the stop is told when the notebook next opens")
+        withExtendedLifetime((container, recorder)) {}
     }
 
     func testTheIPadStaysAwakeWhileAnythingHoldsIt() throws {

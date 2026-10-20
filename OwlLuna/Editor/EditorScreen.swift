@@ -582,15 +582,18 @@ struct EditorScreen: View {
     private func closeWithWindow() {
         guard let document, !isClosing else { return }
         isClosing = true
-        Task { await Self.putAway(document, store: store) }
+        Task { await Self.putAway(document, store: store, because: .windowClosed) }
     }
 
     /// Saves and closes a document without an editor to ask with: a tab behind the bar, or a window that went away.
     /// One that can't be saved is kept, and retried, until it can.
-    static func putAway(_ document: NotebookDocument, store: LibraryStore) async {
+    static func putAway(_ document: NotebookDocument, store: LibraryStore, because reason: RecordingStop? = nil) async {
         // One a sync set aside has nothing to save, and the files are the newer version's now.
         guard !document.isSetAside else { return }
-        document.recorder?.shutdown()
+        document.recorder?.shutdown(because: reason)
+        if reason != nil, let notice = document.notices.last(where: { $0.kind == .recordingStopped }) {
+            DocumentRegistry.shared.noteRecordingStopped(notice.message, in: document.id)
+        }
         await document.finishPendingWork()
         if await document.flush() {
             await document.collectGarbage()
