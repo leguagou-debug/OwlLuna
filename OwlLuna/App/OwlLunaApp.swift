@@ -5,6 +5,7 @@ import CoreSpotlight
 /// Only here to give a second screen its own scene, and every window the chosen appearance; every other scene is SwiftUI's.
 final class OwlLunaAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        LaunchOptions.forgetSavedSettings()
         AppearanceKeeper.shared.start()
         return true
     }

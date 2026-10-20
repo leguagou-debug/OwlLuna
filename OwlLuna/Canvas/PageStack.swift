@@ -843,8 +843,9 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         return layout.range(from: scrollView.bounds.minY / effectiveScale, to: scrollView.bounds.maxY / effectiveScale)
     }
 
+    /// Nothing is built before the first layout, which goes to the page the editor opens at and lays a board out alone.
     private func updateWindow(force: Bool = false) {
-        guard isViewLoaded, !isBaking, let visible = visibleRange() else { return }
+        guard isViewLoaded, lastBounds != .zero, !isBaking, let visible = visibleRange() else { return }
         let count = pages.count
         let window = layout.solo.map { $0...$0 } ?? max(0, visible.lowerBound - 1)...min(count - 1, visible.upperBound + 1)
         if force || window != canvasWindow {

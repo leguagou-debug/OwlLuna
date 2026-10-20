@@ -92,6 +92,23 @@ final class NotebookTabTests: XCTestCase {
         XCTAssertEqual(Array(window.documents.keys), [first.id], "a document that opens after its tab has gone isn't kept")
     }
 
+    func testOnlyThePaneLastTouchedTakesThePencilsDoubleTap() {
+        let window = EditorWindow()
+        let first = UUID(), second = UUID()
+        window.touched(first)
+        XCTAssertNil(window.active, "a notebook with the window to itself needn't say so")
+        XCTAssertTrue(window.isActive(first))
+        window.beside = OpenNotebook(id: second)
+        XCTAssertTrue(window.isActive(first), "until a pane is touched, the first is the one worked in")
+        XCTAssertFalse(window.isActive(second))
+        window.active = second
+        XCTAssertFalse(window.isActive(first))
+        window.touched(first)
+        XCTAssertEqual(window.active, first, "the first pane is touched after the second was opened beside it")
+        XCTAssertTrue(window.isActive(first))
+        XCTAssertFalse(window.isActive(second))
+    }
+
     func testSeveralTabsWaitInTheLibraryAndANotebookOnItsOwnDoesNot() {
         let window = EditorWindow()
         let alone = makeDocument()

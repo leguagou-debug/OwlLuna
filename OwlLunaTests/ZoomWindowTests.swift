@@ -155,6 +155,8 @@ final class ZoomWindowPaperTests: XCTestCase {
         window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
         window.rootViewController = controller
         window.makeKeyAndVisible()
+        // By day, whatever Appearance the app was left set to: charcoal's faint rules can't show a strip three points off.
+        window.overrideUserInterfaceStyle = .light
         addTeardownBlock { @MainActor in window.isHidden = true }
         controller.view.layoutIfNeeded()
         await pause(0.5)

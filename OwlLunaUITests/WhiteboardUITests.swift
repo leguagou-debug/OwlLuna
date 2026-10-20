@@ -25,7 +25,8 @@ final class WhiteboardUITests: XCTestCase {
 
     func testWhiteboardIsWrittenOnWithoutEdgesAndStandsAsACardAmongPages() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-storageRoot", "whiteboard", "-drawingInput", "anyInput", "-resetStorage", "-freshWhiteboardTip"]
+        // The pinch on the board puts a finger where the page ribbon sits for a left hand.
+        app.launchArguments = ["-storageRoot", "whiteboard", "-drawingInput", "anyInput", "-resetStorage", "-freshWhiteboardTip", "-leftHanded", "NO"]
         app.launch()
         XCTAssertTrue(app.buttons["New"].firstMatch.waitForExistence(timeout: 30))
         app.buttons["New"].firstMatch.tap()
@@ -101,7 +102,7 @@ final class WhiteboardUITests: XCTestCase {
 
         // With the Pencil alone drawing, a finger scrolls back up to the card.
         app.terminate()
-        app.launchArguments = ["-storageRoot", "whiteboard", "-drawingInput", "pencilOnly"]
+        app.launchArguments = ["-storageRoot", "whiteboard", "-drawingInput", "pencilOnly", "-leftHanded", "NO"]
         app.launch()
         XCTAssertTrue(app.element("page.canvas.2").waitForExistence(timeout: 30), "the notebook is opened again where it was left")
         app.swipeDown()

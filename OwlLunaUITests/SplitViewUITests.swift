@@ -110,4 +110,40 @@ final class SplitViewUITests: XCTestCase {
         XCTAssertTrue(notebook.waitForExistence(timeout: 30), "going back to the library closes both")
         XCTAssertFalse(closePane.exists)
     }
+
+    func testTheKeyboardGoesToThePaneLastTouched() throws {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["-storageRoot", "split", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "anyInput"]
+        app.launch()
+        let notebook = app.buttons["notebook.Physics II 3"]
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30))
+        notebook.tap()
+        let titles = app.buttons.matching(identifier: "editor.title")
+        XCTAssertTrue(titles.firstMatch.waitForExistence(timeout: 20))
+        let canvases = app.descendants(matching: .any).matching(identifier: "page.canvas.1")
+        XCTAssertTrue(canvases.firstMatch.waitForExistence(timeout: 20))
+        // The simulator drops the first key after launch; nothing is written yet for it to undo.
+        app.typeKey("z", modifierFlags: .command)
+        titles.firstMatch.tap()
+        app.buttons["Open Another Notebook Beside…"].firstMatch.tap()
+        let other = app.buttons["beside.notebook.Studio Notes 2"]
+        XCTAssertTrue(other.waitForExistence(timeout: 10))
+        other.tap()
+        wait(for: [expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: canvases)], timeout: 20)
+        sleep(1)
+
+        let first = canvases.element(boundBy: 0), second = canvases.element(boundBy: 1)
+        draw(on: second)
+        draw(on: first)
+        XCTAssertEqual(strokeCount(first), 1)
+        XCTAssertEqual(strokeCount(second), 1)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(strokeCount(first), 0, "the notebook the window had first is worked in again once it is touched")
+        XCTAssertEqual(strokeCount(second), 1)
+        draw(on: second)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(strokeCount(second), 1, "and the one beside it once that is touched")
+        XCTAssertEqual(strokeCount(first), 0)
+    }
 }

@@ -1923,7 +1923,7 @@ extension EditorContent {
 
     /// What the session and its recorder call back into. None of it holds this view, which holds the session.
     fileprivate func connectSession() {
-        let id = document.id, directory = document.package.textDirectory, pane = pane, failure = $errorMessage
+        let id = document.id, directory = document.package.textDirectory, failure = $errorMessage
         session.openNotebook = { [weak session, weak store, weak window] notebook, page, origin in
             guard let session, let store else { return }
             guard let record = store.record(notebook), !record.isTrashed else {
@@ -1934,8 +1934,8 @@ extension EditorContent {
             window.linkReturn = NotebookReturn(origin: id, page: origin, title: session.document.title, destination: notebook)
             open(notebook, page)
         }
-        session.onTouchDown = { [weak window] in if pane != .single, window?.active != id { window?.active = id } }
-        session.isActivePane = { [weak window] in pane == .single || window?.active.map { $0 == id } ?? (pane != .secondary) }
+        session.onTouchDown = { [weak window] in window?.touched(id) }
+        session.isActivePane = { [weak window] in window?.isActive(id) ?? true }
         session.recorder.onTranscriptChange = { [weak store] in
             Task {
                 let text = await Task.detached(priority: .utility) { LibraryIndex.searchText(in: directory) }.value

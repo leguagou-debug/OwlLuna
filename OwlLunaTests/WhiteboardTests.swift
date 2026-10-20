@@ -277,6 +277,44 @@ final class WhiteboardEditorTests: XCTestCase {
         XCTAssertEqual(session.pageBehindBoard, 0)
     }
 
+    /// Paper that turns dark, or light, as the editor joins a window set to the other appearance keeps the page it opens at, and a board its canvas.
+    func testPaperTurningAsTheEditorOpensKeepsItsPageAndABoardsCanvas() async throws {
+        let darkPaper = UserDefaults.standard.object(forKey: SettingsKey.darkPaper)
+        UserDefaults.standard.set(true, forKey: SettingsKey.darkPaper)
+        addTeardownBlock { UserDefaults.standard.set(darkPaper, forKey: SettingsKey.darkPaper) }
+        func open(_ pages: [NotebookPage], at page: UUID) async throws -> (EditorSession, PageStackController) {
+            let root = temporaryRoot(self)
+            let manifest = NotebookManifest(title: "Night", defaults: PageDefaults(template: .narrowRuled, paperColor: .white, pageSize: .letter), pages: pages)
+            try await NotebookPackage(root: root, id: manifest.id).create(manifest)
+            let session = EditorSession(document: try await NotebookDocument.open(manifest.id, root: root), initialPageID: page)
+            let controller = PageStackController(session: session)
+            session.canvas = controller
+            controller.loadViewIfNeeded()
+            let loadedNight = PaperNight.isOn(controller.traitCollection)
+            let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
+            window.rootViewController = controller
+            window.makeKeyAndVisible()
+            addTeardownBlock { @MainActor in window.isHidden = true }
+            window.overrideUserInterfaceStyle = loadedNight ? .light : .dark
+            window.updateTraitsIfNeeded()
+            controller.view.layoutIfNeeded()
+            XCTAssertNotEqual(PaperNight.isOn(controller.traitCollection), loadedNight)
+            return (session, controller)
+        }
+
+        let pages = [NotebookPage.template(.narrowRuled, color: .white, size: .letter), .template(.narrowRuled, color: .white, size: .letter)]
+        let (session, controller) = try await open(pages, at: pages[1].id)
+        XCTAssertEqual(session.currentPage, 1, "a link or a notebook reopened still lands on its page")
+        XCTAssertEqual(controller.currentPage, 1)
+
+        let board = NotebookPage.board(template: .dotted, color: .white)
+        let (_, opened) = try await open([board, .template(.narrowRuled, color: .white, size: .letter)], at: board.id)
+        XCTAssertEqual(opened.openBoardID, board.id)
+        XCTAssertNotNil(opened.canvas(forPage: 0), "the board is written on, not shown as a card")
+    }
+
     func testABoardOpenedWithTheNotebookIsLeftForThePageAfterIt() async throws {
         let board = NotebookPage.board(template: .dotted, color: .white)
         let (session, controller, _) = try await open([board, .template(.narrowRuled, color: .white, size: .letter)])

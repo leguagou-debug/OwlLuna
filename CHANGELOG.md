@@ -44,6 +44,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The iPad no longer locks while you record. If a recording stops without Stop, the editor says when and why.
 - A finger that drags where only the Pencil draws is told why nothing was drawn, the first time, with a Let Fingers Draw button.
 - A resting palm or thumb no longer spoils draw and hold.
+- With two notebooks side by side, touching either one makes it the one you're working in, and a Pencil double-tap or squeeze reaches only that one.
+- With Settings › Appearance set to always Light or always Dark, a notebook opens at the right page and a whiteboard opens ready to write on.
+- At the largest text sizes, the library's title is no longer cut off.
 
 ## [1.0.0] (build 2) - 2026-10-15
 

@@ -163,6 +163,13 @@ enum LaunchOptions {
         return StorageRoot(url: url)
     }()
 
+    /// A `-resetStorage` UI test, and the app hosting unit tests, start without the settings saved on the simulator; arguments still set any.
+    static func forgetSavedSettings(arguments: [String] = arguments, hostingUnitTests: Bool = NSClassFromString("XCTestCase") != nil,
+                                    defaults: UserDefaults = .standard, domain: String? = Bundle.main.bundleIdentifier) {
+        guard arguments.contains("-storageRoot") ? arguments.contains("-resetStorage") : hostingUnitTests, let domain else { return }
+        defaults.removePersistentDomain(forName: domain)
+    }
+
     static let testingDirectory = URL.applicationSupportDirectory.appending(path: "UITesting", directoryHint: .isDirectory)
 
     /// The folder a test names for itself, always directly inside `base`; nil for a name that could reach anywhere else.
@@ -173,5 +180,6 @@ enum LaunchOptions {
     #else
     static let usesTestStorage = false
     static let storageRoot = StorageRoot.live
+    static func forgetSavedSettings() {}
     #endif
 }

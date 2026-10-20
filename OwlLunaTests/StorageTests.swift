@@ -97,6 +97,26 @@ final class StorageTests: XCTestCase {
         }
         XCTAssertEqual(LaunchOptions.testingDirectory.lastPathComponent, "UITesting")
     }
+
+    /// Dark or Left-Handed picked by hand on a simulator doesn't reach a test that resets, or a unit-test run; a relaunch keeps what the test set.
+    func testAResetLaunchForgetsTheSettingsSavedOnTheSimulator() throws {
+        let suite = "owlluna-tests-\(UUID().uuidString)"
+        addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        func settings(after arguments: [String], hostingUnitTests: Bool = false) -> String {
+            defaults.set(AppAppearance.dark.rawValue, forKey: SettingsKey.appearance)
+            defaults.set(true, forKey: SettingsKey.leftHanded)
+            LaunchOptions.forgetSavedSettings(arguments: arguments, hostingUnitTests: hostingUnitTests, defaults: defaults, domain: suite)
+            return "\(AppAppearance.current(defaults).rawValue), \(defaults.bool(forKey: SettingsKey.leftHanded) ? "left" : "right")"
+        }
+        XCTAssertEqual(settings(after: ["-storageRoot", "whiteboard", "-resetStorage", "-drawingInput", "anyInput"]), "system, right")
+        XCTAssertEqual(settings(after: ["-storageRoot", "whiteboard", "-resetStorage"], hostingUnitTests: true), "system, right")
+        XCTAssertEqual(settings(after: [], hostingUnitTests: true), "system, right")
+        XCTAssertEqual(settings(after: ["-storageRoot", "whiteboard"]), "dark, left", "a relaunch without -resetStorage")
+        XCTAssertEqual(settings(after: ["-storageRoot", "whiteboard"], hostingUnitTests: true), "dark, left")
+        XCTAssertEqual(settings(after: []), "dark, left", "the app opened by hand")
+        XCTAssertEqual(settings(after: ["-resetStorage"]), "dark, left", "-resetStorage only reaches a test's own storage")
+    }
 }
 
 final class ManifestCodecTests: XCTestCase {

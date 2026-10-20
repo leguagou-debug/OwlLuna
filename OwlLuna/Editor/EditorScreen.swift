@@ -154,6 +154,17 @@ final class EditorWindow {
         letGoOfTabsOpenElsewhere()
         return true
     }
+
+    /// A touch on a notebook's pages makes its pane the one being worked in, when the window shows two.
+    func touched(_ id: UUID) {
+        if beside != nil, active != id { active = id }
+    }
+
+    /// Whether a notebook's pane is the one being worked in: a double-tap or squeeze of the Pencil reaches both panes of a window.
+    func isActive(_ id: UUID) -> Bool {
+        guard let beside else { return true }
+        return active.map { $0 == id } ?? (id != beside.id)
+    }
 }
 
 /// Whether an editor has the window to itself or shares it.

@@ -82,11 +82,6 @@ enum DailyJournal {
     /// `-seedJournal`: written pages from a year ago, a month ago and yesterday.
     static func seedForTests(root: StorageRoot) async {
         let defaults = UserDefaults.standard
-        if LaunchOptions.arguments.contains("-resetStorage") {
-            for key in [SettingsKey.dailyJournalID, SettingsKey.dailyJournalPromptHidden, SettingsKey.showsOnThisDay, SettingsKey.onThisDayHiddenDay] {
-                defaults.removeObject(forKey: key)
-            }
-        }
         if LaunchOptions.arguments.contains("-freshWhiteboardTip") { defaults.removeObject(forKey: SettingsKey.whiteboardTipSeen) }
         guard LaunchOptions.arguments.contains("-seedJournal") else { return }
         let calendar = Calendar.current, now = Date.now

@@ -373,6 +373,15 @@ struct ShelfView: View {
 
     private func accessibleList(_ visible: [NotebookRecord]) -> some View {
         List {
+            Section {
+                Text(title)
+                    .displayFont(28, relativeTo: .title)
+                    .foregroundStyle(Color.ink)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: Space.x2, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
+            .listSectionSpacing(0)
             if showsRhythm { WeekSummarySection(onOpenPage: onOpenPage) }
             if let recent = continueCandidate {
                 Button { onOpen(recent) } label: {
@@ -420,6 +429,8 @@ struct ShelfView: View {
             if showsTagPages { pageRows(taggedNotebooks, hits: tagPages, query: "") }
         }
         .scrollContentBackground(.hidden)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
     private func pageRows(_ records: [NotebookRecord], hits: [UUID: [PageHit]], query: String) -> some View {
@@ -607,15 +618,15 @@ struct ShelfView: View {
     @ToolbarContentBuilder
     private func toolbar(_ visible: [NotebookRecord]) -> some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            let shows = showsBarTitle || dynamicTypeSize.isAccessibilitySize
-            Text(title)
+            let label = Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.ink)
                 .lineLimit(1)
-                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize, vertical: false)
-                .opacity(shows ? 1 : 0)
-                .accessibilityHidden(!shows)
-                .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: shows)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 0.6 : 1)
+            label
+                .hidden()
+                .overlay { if showsBarTitle { label.transition(.opacity) } }
+                .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: showsBarTitle)
         }
         ToolbarItem(placement: .primaryAction) {
             if isSelecting {
