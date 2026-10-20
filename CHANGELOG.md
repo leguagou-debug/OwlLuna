@@ -12,12 +12,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A text box can be a bulleted, numbered or checklist list. Tick a checklist line on the page.
 - A text box can be highlighted in any of the highlighter's four colours.
 - Crop a picture on the page: choose Crop, then drag an edge or a corner. Reset Crop brings the whole picture back, and exports keep only the part you kept.
+- Squeeze or stretch a picture on the page from the grip on any of its sides. The corner handle and a pinch still keep its proportions, and a picture settles back on its own shape as you near it.
 - Settings › Appearance: follow the iPad's Light or Dark, or always use one of them, in every window.
 - Settings › Input › Left-Handed moves the page ribbon, the zoom window's buttons and the panels beside the page to the left.
 - Settings › Recently Deleted: empty it after 7, 30 or 90 days. Each iPad keeps to its own length, and sync leaves a notebook on an iPad that keeps it longer.
 - Settings › Pen Tray puts the tray back to the pens it started with.
 - Settings › Recordings sets the language transcripts use. Each recording can still pick another.
-- A list view for the library. Switch between Shelf and List in the library's bar. The list shows tags, folder, pages and last changed as room allows, and a column heading sorts by it.
+- A list view for the library. Switch between Shelf and List in the library's bar. Each row shows the cover, title, pages and last change, with the folder and tags beside it where there's room. Tabs over the list sort it, and the arrow beside them turns the order round.
 - The sort menu can turn the order round.
 - Select several notebooks, or Select All, then favourite, tag, move, lock, export as PDFs or delete them together.
 - Drag a notebook from the library into another app as a PDF. Locked notebooks and those in Recently Deleted stay behind.
@@ -32,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A notebook deleted for good on another iPad now goes into Recently Deleted here, unless it was in there already.
 - On a Mac, fingers and the pointer draw from the start.
 - A recording carries on when the iPad locks or you switch apps. A notebook with a lock still stops recording when it locks, and keeps the iPad awake until then.
+- At the accessibility text sizes, Shelf is now a list in OwlLuna's own style, led by Continue writing and the desk cards, with each notebook's folder and tags under its title.
 
 ### Fixed
 

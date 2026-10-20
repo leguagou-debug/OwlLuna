@@ -349,22 +349,24 @@ final class LibraryShelfTests: XCTestCase {
 
     // MARK: The list
 
-    func testTheListDropsColumnsAsItNarrowsAndAtLargeText() {
-        let wide = ShelfColumns.fitting(width: 1100, scale: 1, isAccessibilitySize: false)
-        XCTAssertEqual(wide, .all)
-        let middle = ShelfColumns.fitting(width: 700, scale: 1, isAccessibilitySize: false)
-        XCTAssertTrue(middle.isStrictSubset(of: .all))
-        XCTAssertFalse(middle.contains(.tags), "tags go first")
-        XCTAssertTrue(middle.contains(.changed))
-        XCTAssertTrue(ShelfColumns.fitting(width: 1100, scale: 1.6, isAccessibilitySize: false).isStrictSubset(of: .all), "larger text, fewer columns")
-        XCTAssertEqual(ShelfColumns.fitting(width: 320, scale: 1, isAccessibilitySize: false), [])
-        XCTAssertEqual(ShelfColumns.fitting(width: 2000, scale: 1, isAccessibilitySize: true), [], "at the accessibility sizes a row is its title")
-        var last = ShelfColumns.all
+    func testTheListPutsFolderAndTagsBesideTheTitleOnlyWhereThereIsRoom() {
+        XCTAssertTrue(NotebookCatalogueRow.showsSide(width: 826, scale: 1, isAccessibilitySize: false), "on its side beside the sidebar")
+        XCTAssertFalse(NotebookCatalogueRow.showsSide(width: 450, scale: 1, isAccessibilitySize: false), "upright beside the sidebar")
+        XCTAssertTrue(NotebookCatalogueRow.showsSide(width: 700, scale: 1, isAccessibilitySize: false))
+        XCTAssertFalse(NotebookCatalogueRow.showsSide(width: 700, scale: 1.35, isAccessibilitySize: false), "larger text needs more room")
+        XCTAssertFalse(NotebookCatalogueRow.showsSide(width: 2000, scale: 1, isAccessibilitySize: true), "at the accessibility sizes they go under the title")
+        var shown = true
         for width in stride(from: 1200, through: 300, by: -20) {
-            let columns = ShelfColumns.fitting(width: CGFloat(width), scale: 1, isAccessibilitySize: false)
-            XCTAssertTrue(columns.isSubset(of: last), "a narrower pane never gains a column")
-            last = columns
+            let side = NotebookCatalogueRow.showsSide(width: CGFloat(width), scale: 1, isAccessibilitySize: false)
+            XCTAssertTrue(shown || !side, "a narrower pane never gains the column")
+            shown = side
         }
+    }
+
+    func testEveryOrderHasATab() {
+        let names = LibrarySortOrder.allCases.map(\.shortName)
+        XCTAssertEqual(Set(names).count, LibrarySortOrder.allCases.count)
+        XCTAssertFalse(names.contains(""))
     }
 }
 

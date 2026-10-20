@@ -63,6 +63,14 @@ final class PageItemView: UIView {
     /// The picture as shown, the whole file, for cropping it without reading it again.
     var shownPicture: Any? { picture.contents }
 
+    /// Width over height of the part of the file that shows, once it has loaded.
+    var naturalAspect: CGFloat? {
+        guard let contents = picture.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { return nil }
+        let image = contents as! CGImage, crop = item.crop ?? PageItem.wholePicture
+        guard image.height > 0, crop.height > 0 else { return nil }
+        return CGFloat(image.width) * crop.width / (CGFloat(image.height) * crop.height)
+    }
+
     /// Pixels per point for drawn art: the screen's, until its bitmap would pass about a screenful of pixels.
     static func drawingScale(for size: CGSize, screen: CGFloat) -> CGFloat {
         let budget: CGFloat = 2400 * 2400, side: CGFloat = 8192
@@ -236,12 +244,16 @@ final class TextMarkersView: UIView {
 /// The stitched outline and handle round the selected item. It sits above the canvas, so touches on the item move
 /// it instead of drawing. Every change is reported as a whole item; `final` marks the end of a gesture.
 final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
+    enum Side: CaseIterable { case top, left, bottom, right }
+
     static let outset: CGFloat = 8
     private static let handleSize: CGFloat = 44
 
     private(set) var item: PageItem
     var pageSize: CGSize
     var scale: CGFloat = 1
+    /// Width over height of the part of a picture that shows, as the file has it. Squeezing settles on it.
+    var naturalAspect: () -> CGFloat? = { nil }
     var onChange: ((PageItem, _ final: Bool) -> Void)?
     /// Where it was tapped, in page points from the item's top left.
     var onTap: ((CGPoint) -> Void)?
@@ -257,8 +269,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
     private let underline = CAShapeLayer()
     private let handle = UIView()
     private let knob = UIImageView()
-    private let side = UIView()
-    private let grip = UIView()
+    private let grips = Side.allCases.map { SideGrip(side: $0) }
     private var base: PageItem?
     private var pinch: CGFloat = 1
     private var twist: CGFloat = 0
@@ -269,7 +280,6 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         UIRotationGestureRecognizer(target: self, action: #selector(twisted)),
     ]
     private(set) lazy var handlePan = UIPanGestureRecognizer(target: self, action: #selector(dragHandle))
-    private lazy var sidePan = UIPanGestureRecognizer(target: self, action: #selector(dragSide))
 
     init(item: PageItem, pageSize: CGSize) {
         self.item = item
@@ -306,19 +316,12 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
             addGestureRecognizer(recognizer)
         }
         handlePan.delegate = self
-        side.frame = CGRect(x: 0, y: 0, width: Self.handleSize, height: Self.handleSize)
-        grip.frame = CGRect(x: (Self.handleSize - 10) / 2, y: (Self.handleSize - 28) / 2, width: 10, height: 28)
-        grip.backgroundColor = .surface
-        grip.layer.cornerRadius = 2
-        grip.layer.borderWidth = 1
-        grip.layer.borderColor = UIColor.ink.withAlphaComponent(0.35).cgColor
-        side.addSubview(grip)
-        addSubview(side)
-        side.addGestureRecognizer(sidePan)
-        side.isAccessibilityElement = true
-        side.accessibilityLabel = String(localized: "Change width")
-        side.accessibilityTraits = .adjustable
-        sidePan.delegate = self
+        for grip in grips {
+            addSubview(grip)
+            grip.pan.addTarget(self, action: #selector(dragSide))
+            grip.pan.delegate = self
+            grip.onStep = { [weak self, side = grip.side] direction in self?.step(side, by: direction) }
+        }
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
     }
 
@@ -347,15 +350,26 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         underline.strokeColor = UIColor.ink.resolvedColor(with: traitCollection).withAlphaComponent(0.55).cgColor
         CATransaction.commit()
         // A text box or a strip of tape keeps its right edge for the width grip, so its corner handle moves to the left.
-        let hasGrip = item.text != nil || item.tape != nil
+        let hasGrip = item.text != nil || item.tape != nil, squeezes = item.assetFile != nil
         handle.center = CGPoint(x: hasGrip ? bounds.minX + outset / 2 : bounds.maxX - outset / 2, y: bounds.maxY - outset / 2)
         handle.isHidden = isEditing
-        side.center = CGPoint(x: bounds.maxX - outset / 2, y: bounds.midY)
-        side.isHidden = isEditing || !hasGrip
+        for grip in grips {
+            let across = grip.side == .top || grip.side == .bottom
+            // A picture's grips stand only where they are clear of the corner handle.
+            let room = (across ? bounds.width : bounds.height) - outset * 2 >= Self.handleSize * 2
+            grip.isHidden = isEditing || !(hasGrip ? grip.side == .right : squeezes && room)
+            grip.center = switch grip.side {
+            case .top: CGPoint(x: bounds.midX, y: bounds.minY + outset / 2)
+            case .left: CGPoint(x: bounds.minX + outset / 2, y: bounds.midY)
+            case .bottom: CGPoint(x: bounds.midX, y: bounds.maxY - outset / 2)
+            case .right: CGPoint(x: bounds.maxX - outset / 2, y: bounds.midY)
+            }
+            grip.show(item, traits: traitCollection)
+        }
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.contains(point) || handle.frame.contains(point) || (!side.isHidden && side.frame.contains(point))
+        bounds.contains(point) || handle.frame.contains(point) || grips.contains { !$0.isHidden && $0.frame.contains(point) }
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
@@ -379,7 +393,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         var changed = changed
         changed.center.x = min(max(changed.center.x, 0), pageSize.width)
         changed.center.y = min(max(changed.center.y, 0), pageSize.height)
-        let others = (recognizers + [handlePan, sidePan]).contains { $0.state == .began || $0.state == .changed }
+        let others = (recognizers + [handlePan] + grips.map(\.pan)).contains { $0.state == .began || $0.state == .changed }
         switch state {
         case .changed:
             onChange?(changed, false)
@@ -449,16 +463,94 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         report(composed(from: base), state: gesture.state)
     }
 
-    /// The side grip changes the width: a text box wraps again and grows downwards, tape gets longer.
+    /// A side grip moves its side and holds the opposite one still: a picture is squeezed, a text box wraps again and
+    /// grows downwards, tape gets longer.
     @objc private func dragSide(_ gesture: UIPanGestureRecognizer) {
-        guard let superview else { return }
+        guard let superview, let side = (gesture.view as? SideGrip)?.side else { return }
         if gesture.state == .began { begin() }
         guard let base else { return }
-        let moved = gesture.translation(in: superview)
-        let along = (moved.x * cos(base.rotation) + moved.y * sin(base.rotation)) / max(scale, 0.01)
-        let width = min(max(base.size.width + along, 40), pageSize.width * 1.5)
-        report(base.resized(to: CGSize(width: width, height: base.text?.height(width: width) ?? base.size.height)), state: gesture.state)
+        let moved = gesture.translation(in: superview), turn = base.rotation
+        let along = side == .left || side == .right ? moved.x * cos(turn) + moved.y * sin(turn) : moved.y * cos(turn) - moved.x * sin(turn)
+        let outwards = side == .left || side == .top ? -along : along
+        report(stretched(base, side: side, by: outwards / max(scale, 0.01)), state: gesture.state)
     }
+
+    /// VoiceOver's swipes on a grip: a tenth wider or taller, or narrower or shorter, as one undo step.
+    private func step(_ side: Side, by direction: CGFloat) {
+        guard base == nil else { return }
+        let length = side == .left || side == .right ? item.size.width : item.size.height
+        var changed = stretched(item, side: side, by: length * 0.1 * direction)
+        changed.center.x = min(max(changed.center.x, 0), pageSize.width)
+        changed.center.y = min(max(changed.center.y, 0), pageSize.height)
+        onChange?(changed, true)
+    }
+
+    private func stretched(_ item: PageItem, side: Side, by amount: CGFloat) -> PageItem {
+        let limit = item.text != nil || item.tape != nil ? pageSize.width * 1.5 : max(pageSize.width, pageSize.height) * 1.5
+        return Self.stretched(item, side: side, by: amount, limit: limit, natural: naturalAspect())
+    }
+
+    /// `side` moved out by `amount` page points, or in for a negative amount, with the opposite side held still. A text box
+    /// or tape only gets wider. A picture is squeezed, and settles on its `natural` proportions within 3% of them.
+    static func stretched(_ item: PageItem, side: Side, by amount: CGFloat, limit: CGFloat, natural: CGFloat? = nil) -> PageItem {
+        if item.text != nil || item.tape != nil {
+            let width = min(max(item.size.width + amount, 40), limit)
+            return item.resized(to: CGSize(width: width, height: item.text?.height(width: width) ?? item.size.height))
+        }
+        let wide = side == .left || side == .right
+        var size = item.size
+        if wide { size.width += amount } else { size.height += amount }
+        if let natural, natural > 0, size.width > 0, size.height > 0, abs(size.width / size.height / natural - 1) < 0.03 {
+            if wide { size.width = size.height * natural } else { size.height = size.width / natural }
+        }
+        size.width = min(max(size.width, PageItem.minimumSide), limit)
+        size.height = min(max(size.height, PageItem.minimumSide), limit)
+        let held = switch side {
+        case .top: CGPoint(x: 0.5, y: 1)
+        case .left: CGPoint(x: 1, y: 0.5)
+        case .bottom: CGPoint(x: 0.5, y: 0)
+        case .right: CGPoint(x: 0, y: 0.5)
+        }
+        return item.resized(to: size, holding: held)
+    }
+}
+
+/// A grip on one side of the selection. VoiceOver hears the width or height it changes and swipes it a tenth at a time.
+private final class SideGrip: UIView {
+    let side: ItemSelectionView.Side
+    let pan = UIPanGestureRecognizer()
+    var onStep: ((CGFloat) -> Void)?
+    private let bar = UIView()
+
+    init(side: ItemSelectionView.Side) {
+        self.side = side
+        super.init(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
+        let across = side == .top || side == .bottom
+        bar.frame = across ? CGRect(x: 8, y: 17, width: 28, height: 10) : CGRect(x: 17, y: 8, width: 10, height: 28)
+        bar.backgroundColor = .surface
+        bar.layer.cornerRadius = 2
+        bar.layer.borderWidth = 1
+        bar.isUserInteractionEnabled = false
+        addSubview(bar)
+        addGestureRecognizer(pan)
+        accessibilityIdentifier = "page.grip.\(side)"
+        // VoiceOver needs one grip for the width and one for the height.
+        isAccessibilityElement = side == .right || side == .bottom
+        guard isAccessibilityElement else { return }
+        accessibilityLabel = across ? String(localized: "Change height") : String(localized: "Change width")
+        accessibilityTraits = .adjustable
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(_ item: PageItem, traits: UITraitCollection) {
+        bar.layer.borderColor = UIColor.ink.resolvedColor(with: traits).withAlphaComponent(0.35).cgColor
+        let length = side == .top || side == .bottom ? item.size.height : item.size.width
+        accessibilityValue = String(localized: "\(Int(length.rounded())) pt")
+    }
+
+    override func accessibilityIncrement() { onStep?(1) }
+    override func accessibilityDecrement() { onStep?(-1) }
 }
 
 /// Crop mode for a selected picture: all of it, what is cut off dimmed, and edges and corners to drag.

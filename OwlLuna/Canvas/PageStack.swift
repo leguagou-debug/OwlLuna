@@ -1429,6 +1429,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         slot.bringSubviewToFront(view)
         view.pageSize = slot.page.size
         view.scale = bakedScale
+        view.naturalAspect = { [weak slot, id = item.id] in slot?.itemViews[id]?.naturalAspect }
         if !view.isChanging { view.show(item) }
         view.onChange = { [weak self] item, final in self?.selectedItemChanged(item, final: final) }
         view.onTap = { [weak self] point in self?.tappedSelection(at: point) }

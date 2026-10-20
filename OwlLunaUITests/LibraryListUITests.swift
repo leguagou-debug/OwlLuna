@@ -22,12 +22,17 @@ final class LibraryListUITests: XCTestCase {
         app.launch()
         let notebook = app.buttons["notebook.Cell Biology 1"]
         XCTAssertTrue(notebook.waitForExistence(timeout: 30))
-        XCTAssertTrue(app.buttons["library.list.sort.title"].exists, "the list names its columns")
+        XCTAssertTrue(app.buttons["library.list.sort.title"].isSelected, "the list says which order it is in")
         XCTAssertTrue(app.buttons["library.layout.list"].isSelected, "the bar says which layout is on show")
         let next = app.buttons["notebook.Cell Biology 11"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
         XCTAssertLessThan(notebook.frame.minY, next.frame.minY, "A to Z, one row under another")
         XCTAssertEqual(notebook.frame.minX, next.frame.minX, accuracy: 1)
+        let order = app.buttons["library.list.order"]
+        XCTAssertEqual(order.value as? String, "A to Z")
+        order.tap()
+        XCTAssertEqual(order.value as? String, "Z to A", "the order turns round")
+        order.tap()
         attach(app, "library-list")
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.buttons["library.list.sort.modified"].waitForExistence(timeout: 5))
@@ -66,7 +71,7 @@ final class LibraryListUITests: XCTestCase {
         XCTAssertTrue(tag.label.contains("12 notebooks"), tag.label)
     }
 
-    /// At the accessibility text sizes the columns fold into a line under each title, and the selection bar still works.
+    /// At the accessibility text sizes folder and tags go under each title, and the selection bar still works.
     func testTheListAtTheLargestTextInTheDark() throws {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
@@ -75,7 +80,7 @@ final class LibraryListUITests: XCTestCase {
         app.launch()
         let notebook = app.buttons["notebook.Cell Biology 1"]
         XCTAssertTrue(notebook.waitForExistence(timeout: 30))
-        XCTAssertFalse(app.buttons["library.list.sort.title"].exists, "no room for columns, so no names over them")
+        XCTAssertFalse(app.buttons["library.list.sort.title"].exists, "at these sizes the orders stay in the bar's Sort menu")
         attach(app, "library-list-large-dark")
 
         app.buttons["Select"].tap()
@@ -84,5 +89,29 @@ final class LibraryListUITests: XCTestCase {
         attach(app, "library-list-large-dark-selected")
         app.buttons["library.selectAll"].tap()
         XCTAssertFalse(notebook.isSelected, "Deselect All")
+    }
+
+    /// At the accessibility text sizes the shelf becomes a ledger led by Continue writing, and still selects.
+    func testTheShelfAtTheLargestTextIsALedger() throws {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["-storageRoot", "librarylist", "-resetStorage", "-seedLibrary", "12", "-libraryLayout", "shelf", "-librarySort", "title",
+                               "-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
+        app.launch()
+        let notebook = app.buttons["notebook.Cell Biology 1"]
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["library.layout.shelf"].isSelected)
+        let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Continue writing Cell Biology 1")).firstMatch
+        XCTAssertTrue(resume.exists, "the ledger opens with Continue writing")
+        XCTAssertLessThan(resume.frame.minY, notebook.frame.minY)
+        XCTAssertFalse(app.cells.containing(.button, identifier: "notebook.Cell Biology 1").firstMatch.exists, "not the system's list")
+        attach(app, "library-shelf-large")
+
+        app.buttons["Select"].tap()
+        notebook.tap()
+        XCTAssertTrue(notebook.isSelected)
+        XCTAssertTrue(app.staticTexts["1 selected"].waitForExistence(timeout: 5))
+        XCTAssertFalse(resume.exists, "Continue writing steps aside while choosing")
+        attach(app, "library-shelf-large-selected")
     }
 }

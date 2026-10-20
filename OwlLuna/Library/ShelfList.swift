@@ -51,17 +51,19 @@ struct ShelfListSort: View {
                 tabs
                 order(worded: false)
             }
+            // Narrower still, the tabs take the whole width and their names wrap.
             VStack(alignment: .leading, spacing: Space.x2) {
-                tabs
+                picker
                 order(worded: true)
             }
         }
     }
 
-    private var tabs: some View {
+    private var tabs: some View { picker.fixedSize() }
+
+    private var picker: some View {
         OwlLunaSegmentedPicker("Sort By", selection: $sort, options: LibrarySortOrder.allCases,
                                identifier: { "library.list.sort.\($0.rawValue)" }) { Text($0.shortName) }
-            .fixedSize()
     }
 
     private func order(worded: Bool) -> some View {
