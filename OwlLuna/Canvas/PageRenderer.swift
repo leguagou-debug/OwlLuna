@@ -1,6 +1,8 @@
 import UIKit
 import PencilKit
 import os
+import ImageIO
+import UniformTypeIdentifiers
 
 /// A small least-recently-used cache that is safe to use from any thread. A memory warning empties it.
 final class LRUCache<Value: Sendable>: Sendable {
@@ -70,15 +72,44 @@ enum PageRenderer {
     /// Fills `rect` (whose size is the page size scaled by `rect.width / page.size.width`) with the page background.
     /// The editor passes `items: false`: there, pictures and stickers are live views that can be moved.
     /// At `night` light paper is drawn dark, as the screen shows it in Dark Mode. What is exported leaves it out.
+    /// Without `paper` a page has no colour or ruling of its own; an imported PDF page or a photo is still drawn.
     static func drawBackground(_ page: NotebookPage, assets: URL, in ctx: CGContext, size: CGSize, items: Bool = true, links: LinkTitles? = nil,
-                               night: Bool = false) {
+                               night: Bool = false, paper: Bool = true) {
         let night = page.turnsDark(night)
-        ctx.setFillColor(paperColor(page.effectivePaperColor, night: night).cgColor)
-        ctx.fill(CGRect(origin: .zero, size: size))
-        drawPaper(page, assets: assets, in: ctx, size: size, night: night)
-        if items, page.hasItems {
-            PageItemRenderer.draw(page.items, pageSize: page.size, assets: assets, in: ctx, size: size, onDark: page.isDark(night: night), links: links)
+        if paper {
+            ctx.setFillColor(paperColor(page.effectivePaperColor, night: night).cgColor)
+            ctx.fill(CGRect(origin: .zero, size: size))
+            drawPaper(page, assets: assets, in: ctx, size: size, night: night)
+        } else if page.template == nil {
+            drawPaper(page, assets: assets, in: ctx, size: size, night: false)
         }
+        if items, page.hasItems {
+            PageItemRenderer.draw(page.items, pageSize: page.size, assets: assets, in: ctx, size: size, onDark: paper && page.isDark(night: night), links: links)
+        }
+    }
+
+    /// While a PDF is written to be small, photos and scans go in no finer than this many pixels a point.
+    @TaskLocal static var pictureLimit: CGFloat?
+
+    /// The picture as it is, or under `pictureLimit` a copy no finer than that for `size` points, as a JPEG where it has no transparency.
+    static func limited(_ image: CGImage, for size: CGSize) -> CGImage {
+        guard let limit = pictureLimit, size.width > 0, size.height > 0 else { return image }
+        let factor = min(limit * size.width / CGFloat(image.width), limit * size.height / CGFloat(image.height))
+        guard factor < 1 else { return image }
+        let width = max(Int((CGFloat(image.width) * factor).rounded()), 1), height = max(Int((CGFloat(image.height) * factor).rounded()), 1)
+        let opaque = [.none, .noneSkipFirst, .noneSkipLast].contains(image.alphaInfo)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: opaque ? CGImageAlphaInfo.noneSkipLast.rawValue : CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let small = ctx.makeImage() else { return image }
+        let data = NSMutableData()
+        guard opaque, let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return small }
+        CGImageDestinationAddImage(destination, small, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
+        guard CGImageDestinationFinalize(destination), let source = CGImageSourceCreateWithData(data, nil),
+              let jpeg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return small }
+        return jpeg
     }
 
     /// The study tape on a page, which goes on after the ink. Tape that is lifted isn't drawn.
@@ -112,7 +143,7 @@ enum PageRenderer {
             ctx.translateBy(x: 0, y: size.height)
             ctx.scaleBy(x: 1, y: -1)
             ctx.interpolationQuality = .high
-            ctx.draw(image.image, in: CGRect(origin: .zero, size: size))
+            ctx.draw(limited(image.image, for: size), in: CGRect(origin: .zero, size: size))
             ctx.restoreGState()
         case .unknown:
             break
@@ -154,23 +185,24 @@ enum PageRenderer {
 
     /// Renders a page (background plus ink clipped to the page) to an image `width` points wide. Thread-safe.
     /// A whiteboard is drawn as the part of it that has something on it.
+    /// Without `paper` the picture is clear where the page has nothing on it.
     static func image(of page: NotebookPage, ink: PKDrawing, assets: URL, width: CGFloat, scale: CGFloat = 1,
-                      includeBackground: Bool = true, links: LinkTitles? = nil, lifted: Set<UUID> = [], night: Bool = false) -> UIImage {
+                      includeBackground: Bool = true, links: LinkTitles? = nil, lifted: Set<UUID> = [], night: Bool = false, paper: Bool = true) -> UIImage {
         let page = Whiteboard.whole(page, ink: ink)
         let factor = width / max(page.size.width, 1)
         let size = CGSize(width: width, height: (page.size.height * factor).rounded())
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
-        format.opaque = true
+        format.opaque = paper || !includeBackground
         var inkImage: UIImage?
         if !ink.strokes.isEmpty {
-            UITraitCollection(userInterfaceStyle: includeBackground ? page.inkAppearance(night: night) : .light).performAsCurrent {
+            UITraitCollection(userInterfaceStyle: includeBackground && paper ? page.inkAppearance(night: night) : .light).performAsCurrent {
                 inkImage = ink.image(from: page.inkRect, scale: factor * scale)
             }
         }
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             if includeBackground {
-                drawBackground(page, assets: assets, in: context.cgContext, size: size, links: links, night: night)
+                drawBackground(page, assets: assets, in: context.cgContext, size: size, links: links, night: night, paper: paper)
             } else {
                 UIColor.white.setFill()
                 context.fill(CGRect(origin: .zero, size: size))

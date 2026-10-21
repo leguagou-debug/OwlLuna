@@ -423,4 +423,25 @@ enum LibrarySeed {
         }
     }
 }
+
+/// `-seedPaper` puts a ruled lab sheet on the shelf of the user's own paper.
+enum PaperSeed {
+    static func write(root: StorageRoot) {
+        guard PaperShelf.list(root).isEmpty else { return }
+        let source = FileManager.default.temporaryDirectory.appending(path: "Lab Sheet.pdf")
+        let bounds = CGRect(origin: .zero, size: PageSize.a4.points)
+        try? UIGraphicsPDFRenderer(bounds: bounds).writePDF(to: source) { context in
+            context.beginPage()
+            ("LAB SHEET" as NSString).draw(at: CGPoint(x: 48, y: 40), withAttributes: [.font: UIFont.systemFont(ofSize: 22, weight: .heavy)])
+            UIColor(red: 0.2, green: 0.45, blue: 0.75, alpha: 1).setStroke()
+            for line in 0..<24 {
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: 48, y: 110 + CGFloat(line) * 28))
+                path.addLine(to: CGPoint(x: bounds.width - 48, y: 110 + CGFloat(line) * 28))
+                path.stroke()
+            }
+        }
+        _ = try? PaperShelf.add(file: source, to: root)
+    }
+}
 #endif

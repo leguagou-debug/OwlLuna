@@ -45,6 +45,12 @@ final class AppModel {
         sync.take = { DocumentRegistry.shared.take($0) }
         sync.release = { DocumentRegistry.shared.release($0) }
         sync.holdFolders = { [library] in try await library.holdingFolders($0) }
+        sync.holdShelves = { [library] in try await library.holdingShelves($0) }
+        sync.pens = { Toolbox.shared.shelf.synced }
+        sync.onPensArrived = { Toolbox.shared.takePens($0, since: $1) }
+        sync.editors = .shared
+        library.onShelvesSaved = { [sync] in sync.schedule() }
+        Toolbox.shared.shelf.onChanged = { [sync] in sync.schedule() }
         // What a sync brought in (a lock, a deletion) reaches Spotlight and the widgets as a change made here would.
         sync.onLibraryChanged = { [weak self, library, flashcards, spotlight] report in
             await library.reloadFromDisk(after: report)
@@ -88,6 +94,7 @@ final class AppModel {
             await DailyJournal.seedForTests(root: root)
         }
         if LaunchOptions.arguments.contains("-seedActivity") { await WritingActivity.seedForTests(root: root) }
+        if LaunchOptions.arguments.contains("-seedPaper") { PaperSeed.write(root: root) }
         if LaunchOptions.arguments.contains("-increaseContrast") {
             for case let scene as UIWindowScene in UIApplication.shared.connectedScenes { scene.traitOverrides.accessibilityContrast = .high }
         }
@@ -126,7 +133,7 @@ final class AppModel {
 
     func flushOpenDocuments() {
         let documents = DocumentRegistry.shared.openDocuments.filter(\.hasUnsavedChanges)
-        guard !documents.isEmpty else { return }
+        guard !documents.isEmpty || sync.hasWaitingSends else { return }
         var task = UIBackgroundTaskIdentifier.invalid
         task = UIApplication.shared.beginBackgroundTask(withName: "Save notebooks") {
             UIApplication.shared.endBackgroundTask(task)
@@ -135,6 +142,7 @@ final class AppModel {
         Task {
             for document in documents { await document.flush() }
             activity.flush()
+            await sync.sendWaiting()
             await sync.syncNow()
             if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
         }

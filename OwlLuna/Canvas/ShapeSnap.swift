@@ -5,6 +5,8 @@ import PencilKit
 /// What a hand-drawn stroke is tidied into when the pen rests before lifting.
 enum SnappedShape: Equatable {
     case line(CGPoint, CGPoint)
+    /// A line from its tail to its tip, with a barb `head` long either side of the tip.
+    case arrow(CGPoint, CGPoint, head: CGFloat)
     /// An open run of straight pieces, such as an L or a zigzag.
     case polyline([CGPoint])
     /// A closed figure with straight sides: a triangle, a rectangle, a diamond, a star.
@@ -14,6 +16,7 @@ enum SnappedShape: Equatable {
     var displayName: String {
         switch self {
         case .line: String(localized: "line")
+        case .arrow: String(localized: "arrow")
         case .polyline: String(localized: "straight lines")
         case .polygon(let corners):
             corners.count == 3 ? String(localized: "triangle") : corners.count == 4 ? String(localized: "rectangle") : String(localized: "shape")
@@ -49,7 +52,7 @@ enum ShapeRecognizer {
             let corners = simplified(points, tolerance: tolerance)
             guard (3...8).contains(corners.count), simplified(points, tolerance: tolerance / 3).count <= corners.count + 1,
                   fit(points, to: corners, closed: false) <= 0.022 * diagonal + 1.5 else { return nil }
-            return .polyline(corners)
+            return arrow(corners) ?? .polyline(corners)
         }
 
         let ellipse = bestEllipse(points, box: box)
@@ -130,6 +133,20 @@ enum ShapeRecognizer {
             }
         }
         return zip(points, keep).filter(\.1).map(\.0)
+    }
+
+    /// A line with a short hook turned back at its end, or a barb either side of its tip, is an arrow.
+    private static func arrow(_ corners: [CGPoint]) -> SnappedShape? {
+        guard corners.count == 3 || corners.count == 5 else { return nil }
+        let tail = corners[0], tip = corners[1], barbs = corners.count == 3 ? [corners[2]] : [corners[2], corners[4]]
+        if corners.count == 5, distance(corners[3], tip) > 0.4 * distance(corners[2], tip) { return nil }
+        let back = atan2(tail.y - tip.y, tail.x - tip.x), shaft = distance(tail, tip)
+        let turns = barbs.map { (atan2($0.y - tip.y, $0.x - tip.x) - back).remainder(dividingBy: 2 * .pi) }
+        let heads = barbs.map { distance(tip, $0) }
+        guard turns.allSatisfy({ (10 * .pi / 180...65 * .pi / 180).contains(abs($0)) }), heads.allSatisfy({ $0 <= 0.5 * shaft }),
+              turns.count == 1 || turns[0] * turns[1] < 0 else { return nil }
+        let (a, b) = squared(tail, tip)
+        return .arrow(a, b, head: heads.reduce(0, +) / CGFloat(heads.count))
     }
 
     /// A stroke that starts in the middle of a side leaves a corner there that isn't one.
@@ -255,6 +272,9 @@ extension SnappedShape {
         switch self {
         case .line(let a, let b):
             return through([a, b])
+        case .arrow(let tail, let tip, let head):
+            let (left, right) = Self.barbs(tail: tail, tip: tip, head: head)
+            return through([tail, tip, left, tip, right])
         case .polyline(let corners):
             return through(corners)
         case .polygon(let corners):
@@ -270,6 +290,13 @@ extension SnappedShape {
                 return ShapeRecognizer.rotate(point, about: centre, by: rotation)
             }
         }
+    }
+
+    /// Where an arrow's barbs end: `head` back from the tip, 30 degrees either side of the shaft.
+    static func barbs(tail: CGPoint, tip: CGPoint, head: CGFloat) -> (CGPoint, CGPoint) {
+        let back = atan2(tail.y - tip.y, tail.x - tip.x)
+        func barb(_ angle: CGFloat) -> CGPoint { CGPoint(x: tip.x + head * cos(angle), y: tip.y + head * sin(angle)) }
+        return (barb(back - .pi / 6), barb(back + .pi / 6))
     }
 }
 
@@ -459,12 +486,13 @@ extension ShapeSnap {
 
 /// A shape picked from the strip over the tray, drawn from where a drag starts to where it ends.
 enum ShapeKind: String, CaseIterable, Identifiable, Sendable {
-    case line, circle, rectangle, triangle
+    case line, arrow, circle, rectangle, triangle
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .line: String(localized: "Line")
+        case .arrow: String(localized: "Arrow")
         case .circle: String(localized: "Circle")
         case .rectangle: String(localized: "Rectangle")
         case .triangle: String(localized: "Triangle")
@@ -474,6 +502,7 @@ enum ShapeKind: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .line: "line.diagonal"
+        case .arrow: "arrow.up.right"
         case .circle: "circle"
         case .rectangle: "rectangle"
         case .triangle: "triangle"
@@ -481,13 +510,16 @@ enum ShapeKind: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// A circle is the ellipse in the drag's box, and a true circle when the box is nearly square. A triangle
-    /// stands on the box's foot.
-    func shape(from a: CGPoint, to b: CGPoint) -> SnappedShape {
+    /// stands on the box's foot. An arrow points where the drag ends, its head larger for a wider pen.
+    func shape(from a: CGPoint, to b: CGPoint, width: CGFloat = 0) -> SnappedShape {
         let box = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
         switch self {
         case .line:
             let (start, end) = ShapeRecognizer.squared(a, b)
             return .line(start, end)
+        case .arrow:
+            let (tail, tip) = ShapeRecognizer.squared(a, b)
+            return .arrow(tail, tip, head: min(14 + 3 * width, ShapeRecognizer.distance(tail, tip) / 3))
         case .circle:
             var radii = CGSize(width: box.width / 2, height: box.height / 2)
             if abs(radii.width - radii.height) < 0.14 * max(radii.width, radii.height) {

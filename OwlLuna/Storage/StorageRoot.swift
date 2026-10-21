@@ -16,6 +16,7 @@ struct StorageRoot: Sendable, Hashable {
     /// Where a notebook coming in from the synced copy is assembled before it is swapped into the library.
     var arriving: URL { url.appending(path: "Arriving", directoryHint: .isDirectory) }
     var stickers: URL { url.appending(path: "Stickers", directoryHint: .isDirectory) }
+    var papers: URL { url.appending(path: "Papers", directoryHint: .isDirectory) }
 
     func package(_ id: UUID) -> URL {
         library.appending(path: "\(id.uuidString).\(Self.packageExtension)", directoryHint: .isDirectory)

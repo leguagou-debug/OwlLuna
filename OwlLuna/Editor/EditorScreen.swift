@@ -446,6 +446,7 @@ struct EditorScreen: View {
 
     @Environment(LibraryStore.self) private var store
     @Environment(WritingActivity.self) private var activity
+    @Environment(AppModel.self) private var app: AppModel?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.editorPane) private var pane
     @Environment(EditorWindow.self) private var window: EditorWindow?
@@ -538,9 +539,11 @@ struct EditorScreen: View {
             return onClose()
         }
         do {
-            let opened = try await DocumentRegistry.shared.open(notebookID, root: store.root, scene: sceneID) { [weak store, weak activity] document in
+            let sync = app?.sync
+            let opened = try await DocumentRegistry.shared.open(notebookID, root: store.root, scene: sceneID) { [weak store, weak activity, weak sync] document in
                 let id = document.id
                 document.onSaved = { manifest in store?.index(manifest) }
+                document.onWritten = { sync?.sendSoon(id) }
                 document.onInkSaved = { pages, date in activity?.record(notebook: id, pages: pages, at: date) }
                 store?.reapplyChangesInFlight(to: document)
             }

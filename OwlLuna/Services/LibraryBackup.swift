@@ -10,7 +10,7 @@ extension UTType {
 }
 
 /// The whole library as one file: every notebook package, the folders, the smart shelves, the writing history and
-/// your own stickers, in an Apple Archive. Thumbnails are left out; they are made again when needed.
+/// your own stickers and paper, in an Apple Archive. Thumbnails are left out; they are made again when needed.
 enum LibraryBackup {
     static let fileExtension = "owllunabackup"
     static let infoFile = "backup.json"
@@ -30,11 +30,12 @@ enum LibraryBackup {
         var unreadable = 0
         var folders = 0
         var stickers = 0
+        var papers = 0
         var smartShelves = 0
         /// The notebook the backup's library used as its daily journal, if it was restored under its own ID.
         var journal: UUID?
 
-        var isEmpty: Bool { added + copies + cardsMerged + folders + stickers + smartShelves == 0 }
+        var isEmpty: Bool { added + copies + cardsMerged + folders + stickers + papers + smartShelves == 0 }
     }
 
     enum Failure: LocalizedError, Equatable {
@@ -125,7 +126,7 @@ enum LibraryBackup {
             return path.lastComponent?.string == "thumbs" ? .skip : .ok
         }
         try encode.writeDirectoryContents(archiveFrom: FilePath(staging.path(percentEncoded: false)), keySet: keys)
-        for folder in [root.library, root.stickers] where fileManager.fileExists(atPath: folder.path(percentEncoded: false)) {
+        for folder in [root.library, root.stickers, root.papers] where fileManager.fileExists(atPath: folder.path(percentEncoded: false)) {
             try encode.writeDirectoryContents(archiveFrom: FilePath(folder.deletingLastPathComponent().path(percentEncoded: false)),
                                               path: FilePath(folder.lastPathComponent), keySet: keys, selectUsing: filter)
         }
@@ -294,6 +295,14 @@ enum LibraryBackup {
             summary.stickers += 1
         }
 
+        for file in (try? fileManager.contentsOfDirectory(at: backup.papers, includingPropertiesForKeys: nil)) ?? [] where PaperShelf.paper(at: file) != nil {
+            let target = root.papers.appending(path: file.lastPathComponent)
+            guard !fileManager.fileExists(atPath: target.path(percentEncoded: false)) else { continue }
+            try fileManager.createDirectory(at: root.papers, withIntermediateDirectories: true)
+            try fileManager.moveItem(at: file, to: target)
+            summary.papers += 1
+        }
+
         if keepsHistory {
             var log = ActivityFile.read(root)
             let old = ActivityFile.read(backup)
@@ -363,6 +372,7 @@ extension LibraryBackup.Summary {
         if cardsMerged > 0 { parts.append(String(localized: "\(cardsMerged) notebooks were already here, and took in flashcards and reviews from the backup.")) }
         if folders > 0 { parts.append(String(localized: "\(folders) folders were added.")) }
         if stickers > 0 { parts.append(String(localized: "\(stickers) stickers were added.")) }
+        if papers > 0 { parts.append(String(localized: "\(papers) papers were added.")) }
         if smartShelves > 0 { parts.append(String(localized: "\(smartShelves) smart shelves were added.")) }
         if unreadable > 0 { parts.append(String(localized: "\(unreadable) notebooks in the backup couldn't be read and were left out.")) }
         return parts.isEmpty ? String(localized: "The backup had nothing in it.") : parts.joined(separator: " ")

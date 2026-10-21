@@ -896,6 +896,28 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(stickers, ["dog.png"])
     }
 
+    func testYourOwnPaperFollows() async throws {
+        let picture = UIGraphicsImageRenderer(size: CGSize(width: 60, height: 80)).pngData { $0.fill(CGRect(x: 0, y: 0, width: 30, height: 80)) }
+        let planner = try PaperShelf.add(image: picture, name: "Planner", to: a)
+        try await sync(a)
+        let first = try await sync(b)
+        XCTAssertTrue(first.papersChanged)
+        XCTAssertEqual(PaperShelf.list(b).map(\.id), [planner.id])
+
+        let moved = try PaperShelf.rename(try XCTUnwrap(PaperShelf.list(b).first), to: "Week Planner")
+        let sheet = try PaperShelf.add(image: picture, name: "Lab Sheet", to: b)
+        try await sync(b)
+        let back = try await sync(a)
+        XCTAssertTrue(back.papersChanged)
+        XCTAssertEqual(PaperShelf.list(a).map(\.name), ["Lab Sheet", "Week Planner"], "a rename and a new paper carry over")
+        XCTAssertEqual(PaperShelf.list(a).map(\.id).sorted(), [moved.id, sheet.id].sorted())
+
+        PaperShelf.remove(sheet)
+        try await sync(b)
+        try await sync(a)
+        XCTAssertEqual(PaperShelf.list(a).map(\.name), ["Week Planner"], "a paper deleted on one device goes from the other")
+    }
+
     // MARK: How a notebook is filed
 
     private nonisolated(nonsending) func library(_ id: UUID, on root: StorageRoot) async throws -> LibraryState {

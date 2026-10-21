@@ -519,6 +519,7 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
     let options: [Value]
     var inBar: Bool
     var identifier: ((Value) -> String)?
+    var padding: CGFloat
     @ViewBuilder var label: (Value) -> Label
     @Namespace private var thumb
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -527,12 +528,13 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(_ title: LocalizedStringKey, selection: Binding<Value>, options: [Value], inBar: Bool = false,
-         identifier: ((Value) -> String)? = nil, @ViewBuilder label: @escaping (Value) -> Label) {
+         identifier: ((Value) -> String)? = nil, padding: CGFloat = Space.x4, @ViewBuilder label: @escaping (Value) -> Label) {
         self.title = title
         self._selection = selection
         self.options = options
         self.inBar = inBar
         self.identifier = identifier
+        self.padding = padding
         self.label = label
     }
 
@@ -548,7 +550,7 @@ struct OwlLunaSegmentedPicker<Value: Hashable, Label: View>: View {
                         .foregroundStyle(selected ? Color.ink : Color.textSecondary)
                         .lineLimit(wraps ? 3 : (inBar ? 1 : 2))
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, Space.x4)
+                        .padding(.horizontal, padding)
                         .padding(.vertical, wraps ? Space.x3 : (inBar ? 0 : Space.x1))
                         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: .infinity)
                         .contentShape(Rectangle())

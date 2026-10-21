@@ -168,18 +168,44 @@ struct ToolPreset: Codable, Hashable, Identifiable, Sendable {
     var name: String { String(localized: "\(kindName), \(colorName)") }
 }
 
-/// The pens in the tool tray, the same in every notebook and window. Kept in the app's settings.
+/// The pens in the tray as sync carries them between devices: the list, and when it was last changed.
+struct SyncedPens: Sendable, Equatable {
+    var presets: [ToolPreset]
+    /// Nil for pens not changed since changes were stamped, which another device's changed pens win over.
+    var changedAt: Date?
+
+    /// Still the four pens a new tray starts with.
+    var isAsItStarted: Bool {
+        presets.count == ToolShelf.starters.count && zip(presets, ToolShelf.starters).allSatisfy { $0.isSameTool(as: $1) }
+    }
+
+    /// `first`, then the pens of `second` it lacks, as many as the tray has room for.
+    static func merged(_ first: [ToolPreset], _ second: [ToolPreset]) -> [ToolPreset] {
+        var result = first
+        for pen in second where !result.contains(where: { $0.isSameTool(as: pen) }) {
+            guard pen.inkType == nil || result.filter({ $0.inkType != nil }).count < ToolShelf.limit else { continue }
+            result.append(pen)
+        }
+        return result
+    }
+}
+
+/// The pens in the tool tray, the same in every notebook and window. Kept in the app's settings, and synced.
 @MainActor
 @Observable
 final class ToolShelf {
-    static let limit = 8
+    nonisolated static let limit = 8
 
     /// A new shelf starts with the app's own inks.
-    static let starters = [ToolPreset(ink: .pen, color: 0x1B22_30FF, width: 2.7), ToolPreset(ink: .pen, color: 0x2747_B8FF, width: 2.7),
+    nonisolated static let starters = [ToolPreset(ink: .pen, color: 0x1B22_30FF, width: 2.7), ToolPreset(ink: .pen, color: 0x2747_B8FF, width: 2.7),
                            ToolPreset(ink: .pen, color: 0xC945_2FFF, width: 2.7), ToolPreset(ink: .marker, color: 0xE8B0_23FF, width: 20)]
 
     private(set) var presets: [ToolPreset]
+    /// When the pens were last changed here, or on the device they came from.
+    @ObservationIgnored private(set) var changedAt: Date?
     @ObservationIgnored private let defaults: UserDefaults?
+    /// Called after a change made here, so a sync can follow it.
+    @ObservationIgnored var onChanged: (() -> Void)?
 
     /// Without `defaults` the shelf lasts as long as the app does.
     init(defaults: UserDefaults? = .standard) {
@@ -189,6 +215,20 @@ final class ToolShelf {
         #endif
         self.defaults = store
         presets = store?.data(forKey: SettingsKey.toolPresets).flatMap { try? JSONDecoder().decode([ToolPreset].self, from: $0) } ?? Self.starters
+        changedAt = store?.object(forKey: SettingsKey.toolPresetsChangedAt) as? Date
+    }
+
+    var synced: SyncedPens { SyncedPens(presets: presets, changedAt: changedAt) }
+
+    /// Takes the pens another device changed. False when they were changed here since `since`, the stamp the sync
+    /// read, or there is nothing usable among them: what is here then stays, and goes to the other device next time.
+    @discardableResult
+    func take(_ pens: SyncedPens, since: Date?) -> Bool {
+        guard changedAt == since, pens.presets.contains(where: { $0.inkType != nil }) else { return false }
+        presets = pens.presets
+        changedAt = pens.changedAt
+        write()
+        return true
     }
 
     /// The tools this build can use; one of a kind it doesn't know stays saved and isn't shown.
@@ -240,9 +280,7 @@ final class ToolShelf {
     }
 
     /// Holds the tools a new shelf starts with, and nothing else.
-    var isAsItStarted: Bool {
-        presets.count == Self.starters.count && zip(presets, Self.starters).allSatisfy { $0.isSameTool(as: $1) }
-    }
+    var isAsItStarted: Bool { synced.isAsItStarted }
 
     /// Back to the four tools a new shelf starts with; everything added or changed since goes.
     func reset() {
@@ -255,8 +293,15 @@ final class ToolShelf {
     }
 
     private func save() {
+        changedAt = .now
+        write()
+        onChanged?()
+    }
+
+    private func write() {
         guard let defaults, let data = try? JSONEncoder().encode(presets) else { return }
         defaults.set(data, forKey: SettingsKey.toolPresets)
+        defaults.set(changedAt, forKey: SettingsKey.toolPresetsChangedAt)
     }
 }
 
@@ -505,6 +550,24 @@ final class Toolbox {
         lastShape = kind
         if shape == nil { setShapesOut(true) }
         shape = kind
+    }
+
+    /// Takes the pens another device changed, unless they were changed here since the sync read them. A pen in hand
+    /// that went with them gives way to the one now in its place, or the first.
+    func takePens(_ pens: SyncedPens, since: Date?) {
+        let before = shelf.usable
+        guard shelf.take(pens, since: since) else { return }
+        let usable = shelf.usable
+        if case .pen(let id) = choice, !usable.contains(where: { $0.id == id }) {
+            let place = before.firstIndex { $0.id == id } ?? 0
+            if let pen = usable.indices.contains(place) ? usable[place] : usable.first {
+                choice = .pen(pen.id)
+                memory.select(choice, isEraser: false)
+                save()
+            }
+        }
+        if let lastPen, !usable.contains(where: { $0.id == lastPen }) { self.lastPen = nil }
+        post()
     }
 
     /// The Pencil's eraser switch: to the eraser, or from it back to what was in hand before.

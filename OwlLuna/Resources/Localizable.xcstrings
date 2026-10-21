@@ -994,6 +994,82 @@
         }
       }
     },
+    "%lld papers were added." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Papier wurde hinzugefügt."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Papiere wurden hinzugefügt."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld paper was added."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld papers were added."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Se añadió %lld papel."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Se añadieron %lld papeles."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld papier a été ajouté."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld papiers ont été ajoutés."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld pt" : {
       "localizations" : {
         "de" : {
@@ -1168,6 +1244,72 @@
         }
       }
     },
+    "Add a planner, a lab sheet or a letterhead to write on it in any notebook. A PDF gives its first page." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge einen Planer, ein Laborblatt oder einen Briefkopf hinzu, um in jedem Notizbuch darauf zu schreiben. Von einem PDF wird die erste Seite verwendet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade una agenda, una hoja de laboratorio o un membrete para escribir sobre ellos en cualquier cuaderno. De un PDF se usa la primera página."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez un agenda, une fiche de TP ou un papier à en-tête pour écrire dessus dans tous vos carnets. D’un PDF, seule la première page est utilisée."
+          }
+        }
+      }
+    },
+    "Add Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter du papier"
+          }
+        }
+      }
+    },
+    "Add Paper…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier hinzufügen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir papel…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter du papier…"
+          }
+        }
+      }
+    },
     "Adding recordings…" : {
       "localizations" : {
         "de" : {
@@ -1190,6 +1332,72 @@
         }
       }
     },
+    "Adding the paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier wird hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadiendo el papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout du papier"
+          }
+        }
+      }
+    },
+    "Adding…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird hinzugefügt …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadiendo…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout…"
+          }
+        }
+      }
+    },
+    "Adds a PDF or a picture as paper of your own" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fügt ein PDF oder ein Bild als eigenes Papier hinzu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade un PDF o una imagen como papel propio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoute un PDF ou une image comme papier personnel"
+          }
+        }
+      }
+    },
     "Adds this tag to every notebook" : {
       "localizations" : {
         "de" : {
@@ -1208,6 +1416,104 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajoute cette étiquette à tous les carnets"
+          }
+        }
+      }
+    },
+    "All %lld pages" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Seite"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Alle %lld Seiten"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld page"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "All %lld pages"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld página"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Las %lld páginas"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld page"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Les %lld pages"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "All Pages" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Seiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas las páginas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les pages"
           }
         }
       }
@@ -1354,6 +1660,28 @@
         }
       }
     },
+    "Delete Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le papier"
+          }
+        }
+      }
+    },
     "Deselect All" : {
       "localizations" : {
         "de" : {
@@ -1398,6 +1726,28 @@
         }
       }
     },
+    "Each notebook is copied whole to your private iCloud storage and from there to your other iPads, with your folders, smart shelves, stickers and pens. A notebook open here is sent a few seconds after you stop writing, and one open on another iPad then shows the newer version, unless it has changes of its own. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Notizbuch wird als Ganzes in deinen privaten iCloud-Speicher kopiert und von dort auf deine anderen iPads, zusammen mit deinen Ordnern, intelligenten Regalen, Stickern und Stiften. Ein hier geöffnetes Notizbuch wird einige Sekunden, nachdem du aufhörst zu schreiben, gesendet, und ist es auf einem anderen iPad geöffnet, zeigt es dort die neuere Version, sofern es dort keine eigenen Änderungen hat. Wurde eines auf zwei Geräten geändert, bevor sie synchronisieren konnten, bleibt die neuere Version erhalten und die ältere wird als Konfliktkopie daneben gesichert. Der Schreibverlauf wird nicht synchronisiert. Wenn du die Synchronisierung ausschaltest, bleibt die Kopie in iCloud. Um sie zu entfernen, schalte die Synchronisierung auf jedem Gerät aus und lösche dann die Daten von OwlLuna unter Einstellungen › dein Name › iCloud."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada cuaderno se copia entero en tu almacenamiento privado de iCloud y, desde allí, en tus otros iPad, junto con tus carpetas, estantes inteligentes, pegatinas y bolígrafos. Un cuaderno abierto aquí se envía unos segundos después de que dejes de escribir, y si está abierto en otro iPad, allí muestra la versión más reciente, salvo que tenga cambios propios. Si se modificó en dos dispositivos antes de que pudieran sincronizarse, se conserva la versión más reciente y la anterior se guarda a su lado como copia en conflicto. El historial de escritura no se sincroniza. Al desactivar la sincronización, la copia se queda en iCloud. Para eliminarla, desactiva la sincronización en todos los dispositivos y luego borra los datos de OwlLuna en Ajustes › tu nombre › iCloud."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque carnet est copié en entier dans votre espace de stockage iCloud privé, puis de là vers vos autres iPad, avec vos dossiers, étagères intelligentes, autocollants et stylos. Un carnet ouvert ici est envoyé quelques secondes après que vous avez cessé d’écrire, et s’il est ouvert sur un autre iPad, il y affiche la version la plus récente, sauf s’il a des modifications qui lui sont propres. S’il a été modifié sur deux appareils avant qu’ils aient pu se synchroniser, la version la plus récente est conservée et l’ancienne est enregistrée à côté sous forme de copie en conflit. L’historique d’écriture n’est pas synchronisé. Désactiver la synchronisation laisse la copie dans iCloud. Pour la supprimer, désactivez la synchronisation sur chaque appareil, puis supprimez les données d’OwlLuna dans Réglages › votre nom › iCloud."
+          }
+        }
+      }
+    },
     "Edited" : {
       "localizations" : {
         "de" : {
@@ -1416,6 +1766,82 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modifié"
+          }
+        }
+      }
+    },
+    "Export %lld Pages" : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Seite exportieren"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Seiten exportieren"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Export %lld Page"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Export %lld Pages"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exportar %lld página"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exportar %lld páginas"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exporter %lld page"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exporter %lld pages"
+                }
+              }
+            }
           }
         }
       }
@@ -1496,6 +1922,50 @@
         }
       }
     },
+    "Export Page %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite %lld exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar página %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter la page %lld"
+          }
+        }
+      }
+    },
+    "Export Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le texte"
+          }
+        }
+      }
+    },
     "Export as PDFs" : {
       "localizations" : {
         "de" : {
@@ -1536,6 +2006,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exporter les PDF"
+          }
+        }
+      }
+    },
+    "Export as Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als Text exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar como texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter en texte"
+          }
+        }
+      }
+    },
+    "From Files…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Dateien …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde Archivos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis Fichiers…"
+          }
+        }
+      }
+    },
+    "From Photos…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Fotos …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde Fotos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis Photos…"
           }
         }
       }
@@ -1584,6 +2120,50 @@
         }
       }
     },
+    "Keep Both" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beide behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar ambas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les deux"
+          }
+        }
+      }
+    },
+    "Last page" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Seite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última página"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière page"
+          }
+        }
+      }
+    },
     "Layout" : {
       "localizations" : {
         "de" : {
@@ -1602,6 +2182,452 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Présentation"
+          }
+        }
+      }
+    },
+    "Leaves out the colour and ruling. Imported PDF pages and photos stay." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lässt Farbe und Linien weg. Importierte PDF-Seiten und Fotos bleiben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita el color y la pauta. Las páginas de PDF importadas y las fotos se quedan."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retire la couleur et la réglure. Les pages PDF importées et les photos restent."
+          }
+        }
+      }
+    },
+    "Markdown" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown"
+          }
+        }
+      }
+    },
+    "Markdown gives the notebook and each page a heading." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Markdown bekommen das Notizbuch und jede Seite eine Überschrift."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con Markdown, el cuaderno y cada página llevan un título."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Markdown, le carnet et chaque page ont un titre."
+          }
+        }
+      }
+    },
+    "No Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ohne Papier"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans papier"
+          }
+        }
+      }
+    },
+    "Notebook as Text…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizbuch als Text …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuaderno como texto…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carnet en texte…"
+          }
+        }
+      }
+    },
+    "Pages %lld–%lld of %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seiten %1$lld–%2$lld von %3$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pages %1$lld–%2$lld of %3$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Páginas %1$lld–%2$lld de %3$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pages %1$lld à %2$lld sur %3$lld"
+          }
+        }
+      }
+    },
+    "Pages keep their colour and ruling." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Seiten behalten ihre Farbe und Linien."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las páginas conservan su color y su pauta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les pages gardent leur couleur et leur réglure."
+          }
+        }
+      }
+    },
+    "Paper On" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Papier"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avec papier"
+          }
+        }
+      }
+    },
+    "Pencil, highlighter, photos and scans go in as fine as they are." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleistift, Textmarker, Fotos und Scans kommen so fein hinein, wie sie sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El lápiz, el resaltador, las fotos y los escaneos van tan nítidos como son."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le crayon, le surligneur, les photos et les scans gardent toute leur finesse."
+          }
+        }
+      }
+    },
+    "Pencil, highlighter, photos and scans go in at screen sharpness." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleistift, Textmarker, Fotos und Scans kommen in Bildschirmschärfe hinein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El lápiz, el resaltador, las fotos y los escaneos van con la nitidez de la pantalla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le crayon, le surligneur, les photos et les scans sont mis à la netteté de l’écran."
+          }
+        }
+      }
+    },
+    "Plain Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiner Text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto sin formato"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte brut"
+          }
+        }
+      }
+    },
+    "Quality" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualität"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualité"
+          }
+        }
+      }
+    },
+    "Searchable Handwriting" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchsuchbare Handschrift"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escritura con búsqueda"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écriture interrogeable"
+          }
+        }
+      }
+    },
+    "Sharper Ink" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schärfere Tinte"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tinta más nítida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encre plus nette"
+          }
+        }
+      }
+    },
+    "Smaller File" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kleinere Datei"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo más pequeño"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichier plus léger"
+          }
+        }
+      }
+    },
+    "Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte"
+          }
+        }
+      }
+    },
+    "This Page" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Seite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta página"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette page"
+          }
+        }
+      }
+    },
+    "This Page as a PDF…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Seite als PDF …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta página como PDF…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette page en PDF…"
+          }
+        }
+      }
+    },
+    "Words read from your writing lie under it, so any PDF reader can find and select them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die aus deiner Schrift gelesenen Wörter liegen darunter, sodass jeder PDF-Reader sie finden und auswählen kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las palabras leídas de tu escritura quedan debajo, para que cualquier lector de PDF pueda encontrarlas y seleccionarlas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les mots lus dans votre écriture sont placés dessous : tout lecteur PDF peut les trouver et les sélectionner."
+          }
+        }
+      }
+    },
+    "Your text is ready." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Text ist fertig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu texto está listo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre texte est prêt."
           }
         }
       }
@@ -1836,6 +2862,28 @@
         }
       }
     },
+    "My Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mein Papier"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mi papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon papier"
+          }
+        }
+      }
+    },
     "Newest First" : {
       "localizations" : {
         "de" : {
@@ -1898,6 +2946,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucune liste"
+          }
+        }
+      }
+    },
+    "Not uploaded yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nicht hochgeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no se ha subido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore envoyé"
           }
         }
       }
@@ -2056,6 +3126,50 @@
         }
       }
     },
+    "Paper added" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papel añadido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier ajouté"
+          }
+        }
+      }
+    },
+    "Photo %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo %@"
+          }
+        }
+      }
+    },
     "Playback Speed" : {
       "localizations" : {
         "de" : {
@@ -2096,6 +3210,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vitesse de lecture"
+          }
+        }
+      }
+    },
+    "Preview: %@ cover for %@, on %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschau: %1$@ als Einband für %2$@, auf %3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preview: %1$@ cover for %2$@, on %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vista previa: cubierta %1$@, para %2$@; sobre %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu : couverture %1$@ pour %2$@, sur %3$@"
           }
         }
       }
@@ -2162,6 +3304,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retirer de tous"
+          }
+        }
+      }
+    },
+    "Rename Paper" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papier umbenennen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renombrar papel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer le papier"
           }
         }
       }
@@ -2254,24 +3418,24 @@
         }
       }
     },
-    "Shapes draws a line, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it." : {
+    "Shapes draws a line, arrow, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Formen zeichnet eine Linie, einen Kreis, ein Rechteck oder ein Dreieck, wo du ziehst. Oder zeichne eine Form von Hand und halte den Stift vor dem Abheben kurz still, um sie zu begradigen."
+            "value" : "Formen zeichnet eine Linie, einen Pfeil, einen Kreis, ein Rechteck oder ein Dreieck, wo du ziehst. Oder zeichne eine Form von Hand und halte den Stift vor dem Abheben kurz still, um sie zu begradigen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Figuras dibuja una línea, un círculo, un rectángulo o un triángulo donde arrastres. O dibuja una a mano y mantén el lápiz quieto un momento antes de levantarlo para enderezarla."
+            "value" : "Figuras dibuja una línea, una flecha, un círculo, un rectángulo o un triángulo donde arrastres. O dibuja una a mano y mantén el lápiz quieto un momento antes de levantarlo para enderezarla."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Formes trace une ligne, un cercle, un rectangle ou un triangle là où vous faites glisser. Ou tracez-en une à la main et restez immobile un instant avant de lever le crayon pour la redresser."
+            "value" : "Formes trace une ligne, une flèche, un cercle, un rectangle ou un triangle là où vous faites glisser. Ou tracez-en une à la main et restez immobile un instant avant de lever le crayon pour la redresser."
           }
         }
       }
@@ -2386,6 +3550,28 @@
         }
       }
     },
+    "Syncing %lld of %lld notebooks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierung: %lld von %lld Notizbüchern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizando %lld de %lld cuadernos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation : %lld sur %lld carnets"
+          }
+        }
+      }
+    },
     "Text Colour" : {
       "localizations" : {
         "de" : {
@@ -2452,6 +3638,72 @@
         }
       }
     },
+    "The version from another device is kept in your library as “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Version vom anderen Gerät ist in deiner Bibliothek als „%@“ gesichert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión del otro dispositivo se guarda en tu biblioteca como «%@»."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version de l’autre appareil est conservée dans votre bibliothèque sous le nom « %@ »."
+          }
+        }
+      }
+    },
+    "This is the newer version, from another device. Yours is kept in your library as “%@”." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist die neuere Version von einem anderen Gerät. Deine ist in deiner Bibliothek als „%@“ gesichert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es la versión más reciente, de otro dispositivo. La tuya se guarda en tu biblioteca como «%@»."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voici la version la plus récente, venue d’un autre appareil. La vôtre est conservée dans votre bibliothèque sous le nom « %@ »."
+          }
+        }
+      }
+    },
+    "This notebook was changed on another device too. Keep Both keeps the older version as a conflicted copy, as closing it would." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Notizbuch wurde auch auf einem anderen Gerät geändert. „Beide behalten“ sichert die ältere Version als Konfliktkopie, wie es auch beim Schließen geschieht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este cuaderno también se modificó en otro dispositivo. Conservar ambas guarda la versión anterior como copia en conflicto, igual que al cerrarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce carnet a aussi été modifié sur un autre appareil. Conserver les deux enregistre l’ancienne version sous forme de copie en conflit, comme à sa fermeture."
+          }
+        }
+      }
+    },
     "Tick" : {
       "localizations" : {
         "de" : {
@@ -2496,24 +3748,24 @@
         }
       }
     },
-    "Tie it on from Customise Tools, then pick a line, circle, rectangle or triangle and drag it out on the page." : {
+    "Tie it on from Customise Tools, then pick a line, arrow, circle, rectangle or triangle and drag it out on the page." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Über „Werkzeuge anpassen“ hinzufügen, dann eine Linie, einen Kreis, ein Rechteck oder ein Dreieck wählen und auf der Seite aufziehen."
+            "value" : "Über „Werkzeuge anpassen“ hinzufügen, dann eine Linie, einen Pfeil, einen Kreis, ein Rechteck oder ein Dreieck wählen und auf der Seite aufziehen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añádelo desde Personalizar herramientas; luego elige una línea, un círculo, un rectángulo o un triángulo y arrástralo en la página."
+            "value" : "Añádelo desde Personalizar herramientas; luego elige una línea, una flecha, un círculo, un rectángulo o un triángulo y arrástralo en la página."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoutez-le depuis Personnaliser les outils, puis choisissez une ligne, un cercle, un rectangle ou un triangle et faites-le glisser sur la page."
+            "value" : "Ajoutez-le depuis Personnaliser les outils, puis choisissez une ligne, une flèche, un cercle, un rectangle ou un triangle et faites-le glisser sur la page."
           }
         }
       }
@@ -2628,6 +3880,28 @@
         }
       }
     },
+    "Uploading %lld of %lld notebooks to iCloud" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hochladen in iCloud: %lld von %lld Notizbüchern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subiendo %lld de %lld cuadernos a iCloud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoi vers iCloud : %lld sur %lld carnets"
+          }
+        }
+      }
+    },
     "Your %lld PDFs are ready." : {
       "localizations" : {
         "de" : {
@@ -2700,6 +3974,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Your own paper keeps its own colours." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein eigenes Papier behält seine eigenen Farben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu propio papel conserva sus propios colores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre propre papier conserve ses propres couleurs."
           }
         }
       }
@@ -7048,28 +8344,6 @@
         }
       }
     },
-    "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In iCloud wartet eine neuere Version. Wenn du dieses Notizbuch schließt, werden beide behalten, die ältere als Konfliktkopie."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hay una versión más reciente esperando en iCloud. Cuando cierres este cuaderno, se guardarán las dos, la anterior como copia en conflicto."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une version plus récente attend dans iCloud. Quand vous fermerez ce carnet, les deux seront conservées, l’ancienne sous forme de copie en conflit."
-          }
-        }
-      }
-    },
     "A notebook from iCloud" : {
       "localizations" : {
         "de" : {
@@ -8264,6 +9538,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Flèche"
+          }
+        }
+      }
+    },
+    "arrow" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pfeil"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "flecha"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "flèche"
           }
         }
       }
@@ -11931,28 +13227,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dupliquer la page"
-          }
-        }
-      }
-    },
-    "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jedes Notizbuch wird als Ganzes in deinen privaten iCloud-Speicher kopiert und von dort auf deine anderen iPads. Ein hier geöffnetes Notizbuch wird synchronisiert, sobald du es schließt. Wurde eines auf zwei Geräten geändert, bevor sie synchronisieren konnten, bleibt die neuere Version erhalten und die ältere wird als Konfliktkopie daneben gesichert. Der Schreibverlauf wird nicht synchronisiert. Wenn du die Synchronisierung ausschaltest, bleibt die Kopie in iCloud. Um sie zu entfernen, schalte die Synchronisierung auf jedem Gerät aus und lösche dann die Daten von OwlLuna unter Einstellungen › dein Name › iCloud."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cada cuaderno se copia entero en tu almacenamiento privado de iCloud y, desde allí, en tus otros iPad. Un cuaderno abierto aquí se sincroniza al cerrarlo. Si se modificó en dos dispositivos antes de que pudieran sincronizarse, se conserva la versión más reciente y la anterior se guarda a su lado como copia en conflicto. El historial de escritura no se sincroniza. Al desactivar la sincronización, la copia se queda en iCloud. Para eliminarla, desactiva la sincronización en todos los dispositivos y luego borra los datos de OwlLuna en Ajustes › tu nombre › iCloud."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chaque carnet est copié en entier dans votre espace de stockage iCloud privé, puis de là vers vos autres iPad. Un carnet ouvert ici est synchronisé à sa fermeture. S’il a été modifié sur deux appareils avant qu’ils aient pu se synchroniser, la version la plus récente est conservée et l’ancienne est enregistrée à côté sous forme de copie en conflit. L’historique d’écriture n’est pas synchronisé. Désactiver la synchronisation laisse la copie dans iCloud. Pour la supprimer, désactivez la synchronisation sur chaque appareil, puis supprimez les données d’OwlLuna dans Réglages › votre nom › iCloud."
           }
         }
       }
@@ -25620,7 +26894,7 @@
         }
       }
     },
-    "Straightened into a %@" : {
+    "Straightened: %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {

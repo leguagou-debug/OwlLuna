@@ -20,6 +20,8 @@ final class DocumentRegistry {
     private var changing: [UUID: Int] = [:]
     /// Why a recording stopped as its notebook was put away with nobody looking, told when the notebook next opens.
     private var recordingStops: [UUID: String] = [:]
+    /// Where Keep Both put the other version, told to the editor that opens the newer one.
+    private var keptCopies: [UUID: String] = [:]
 
     /// The live document for a notebook: open in an editor, or closed with changes still waiting to be saved.
     func document(for id: UUID) -> NotebookDocument? {
@@ -50,6 +52,16 @@ final class DocumentRegistry {
         inHand.insert(id)
         NotificationCenter.default.post(name: .owlLunaReopenNotebook, object: id)
         return true
+    }
+
+    /// Takes an open notebook in hand so a sync can send what it has saved, and returns the package to copy it from,
+    /// whose writes wait while it is copied. Nil while it is opening, closing, recording or read-only, or has a change
+    /// from the library waiting.
+    func takeToSend(_ id: UUID) -> NotebookPackage? {
+        guard let document = entries[id]?.document, !document.isReadOnly, !document.isSetAside, document.recorder?.isRecording != true,
+              opening[id] == nil, changing[id] == nil, closing[id] == nil, !inHand.contains(id) else { return nil }
+        inHand.insert(id)
+        return document.package
     }
 
     /// The notebooks open in an editor, or in a tab behind the bar.
@@ -100,8 +112,14 @@ final class DocumentRegistry {
         recordingStops[id] = message
     }
 
+    /// Tells the notebook's editor where Keep Both put the other version, now or once it has opened the newer one.
+    func noteKeptCopy(_ message: String, in id: UUID) {
+        if let document = entries[id]?.document { document.noteKeptCopy(message) } else { keptCopies[id] = message }
+    }
+
     private func told(_ document: NotebookDocument) -> NotebookDocument {
         if let message = recordingStops.removeValue(forKey: document.id) { document.noteRecordingStopped(message) }
+        if let message = keptCopies.removeValue(forKey: document.id) { document.noteKeptCopy(message) }
         return document
     }
 

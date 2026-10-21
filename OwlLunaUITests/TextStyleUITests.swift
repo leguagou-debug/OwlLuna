@@ -60,4 +60,28 @@ final class TextStyleUITests: XCTestCase {
         app.buttons["editor.undo"].tap()
         XCTAssertTrue(box.waitForExistence(timeout: 5), "a tick is undone like any other change")
     }
+
+    /// The card through Apple's accessibility audit, light and at the default text size.
+    func testTheTextStyleCardPassesTheAccessibilityAudit() throws {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["-storageRoot", "textstyle-audit", "-resetStorage", "-seedLibrary", "3", "-drawingInput", "pencilOnly", "-appearance", "light"]
+        app.launch()
+        let notebook = app.buttons["notebook.Physics II 3"]
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30))
+        notebook.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["page.canvas.1"].waitForExistence(timeout: 20))
+
+        app.buttons["Add"].firstMatch.tap()
+        app.buttons["Text Box"].firstMatch.tap()
+        let editor = app.textViews["page.text.editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.typeText("Oats")
+        app.buttons["editor.arrange.style"].tap()
+        XCTAssertTrue(app.element("editor.text.list").waitForExistence(timeout: 5))
+        sleep(1)
+        attach(app, "text-style-card-audit")
+        continueAfterFailure = true
+        try audit(app, screen: "text style card", popover: true, bar: app.otherElements["editor.arrange.bar"], pageText: ["Oats", "Text box"])
+    }
 }

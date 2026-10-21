@@ -15,6 +15,8 @@ final class ShapeStripTests: XCTestCase {
         XCTAssertEqual(ShapeKind.line.shape(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 110, y: 12)),
                        .line(CGPoint(x: 10, y: 11), CGPoint(x: 110, y: 11)), "a line dragged nearly level is made level")
         XCTAssertEqual(ShapeKind.line.shape(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 60, y: 90)), .line(CGPoint(x: 10, y: 10), CGPoint(x: 60, y: 90)))
+        XCTAssertEqual(ShapeKind.arrow.shape(from: CGPoint(x: 110, y: 12), to: CGPoint(x: 10, y: 10), width: 2),
+                       .arrow(CGPoint(x: 110, y: 11), CGPoint(x: 10, y: 11), head: 20), "an arrow points where the drag ends, and is squared as a line is")
         XCTAssertEqual(ShapeKind.circle.shape(from: CGPoint(x: 100, y: 100), to: .zero),
                        .ellipse(center: CGPoint(x: 50, y: 50), radii: CGSize(width: 50, height: 50), rotation: 0))
         XCTAssertEqual(ShapeKind.circle.shape(from: .zero, to: CGPoint(x: 200, y: 100)),
@@ -29,10 +31,10 @@ final class ShapeStripTests: XCTestCase {
 
     func testAShapeIsDrawnInThePensInkAndReadsAsItself() throws {
         let tool = PKInkingTool(.monoline, color: ToolPreset.uiColor(0x2747_B8FF), width: 4)
-        let drawn: [(ShapeKind, String)] = [(.line, "line"), (.circle, "circle"), (.rectangle, "rectangle"), (.triangle, "triangle")]
+        let drawn: [(ShapeKind, String)] = [(.line, "line"), (.arrow, "arrow"), (.circle, "circle"), (.rectangle, "rectangle"), (.triangle, "triangle")]
         for (kind, name) in drawn {
             let start = CGPoint(x: 100, y: 80), end = CGPoint(x: 260, y: 200)
-            let stroke = ShapeSnap.stroke(kind.shape(from: start, to: end), tool: tool, startingNear: start)
+            let stroke = ShapeSnap.stroke(kind.shape(from: start, to: end, width: tool.width), tool: tool, startingNear: start)
             XCTAssertEqual(stroke.ink.inkType, .monoline)
             XCTAssertEqual(ToolPreset.bytes(of: stroke.ink.color), 0x2747_B8FF, "in the pen's colour")
             XCTAssertEqual(try XCTUnwrap(stroke.path.first).size.width, 4, accuracy: 0.01, "as wide as the pen")
@@ -44,6 +46,30 @@ final class ShapeStripTests: XCTestCase {
             // Draw and hold would leave it as it is.
             let points = stroke.path.interpolatedPoints(by: .distance(3)).map(\.location)
             XCTAssertEqual(ShapeRecognizer.recognize(points)?.displayName, name == "circle" ? "ellipse" : name)
+        }
+    }
+
+    func testAnArrowHasABarbEitherSideOfItsTipAsLargeAsThePenIsWide() throws {
+        let tail = CGPoint(x: 100, y: 300), tip = CGPoint(x: 400, y: 300)
+        guard case .arrow(_, _, let fine) = ShapeKind.arrow.shape(from: tail, to: tip, width: 2.7),
+              case .arrow(_, _, let broad) = ShapeKind.arrow.shape(from: tail, to: tip, width: 20),
+              case .arrow(_, _, let short) = ShapeKind.arrow.shape(from: tail, to: CGPoint(x: 160, y: 300), width: 20) else { return XCTFail() }
+        XCTAssertEqual(fine, 22.1, accuracy: 0.01)
+        XCTAssertGreaterThan(broad, fine, "a wider pen has a larger head")
+        XCTAssertEqual(short, 20, accuracy: 0.01, "never more than a third of the arrow")
+
+        let (left, right) = SnappedShape.barbs(tail: tail, tip: tip, head: 26)
+        XCTAssertEqual(left.x, 400 - 26 * cos(.pi / 6), accuracy: 0.01, "the barbs turn back 30 degrees from the shaft")
+        XCTAssertEqual(right.x, left.x, accuracy: 0.01)
+        XCTAssertEqual(left.y + right.y, 600, accuracy: 0.01, "one either side")
+        XCTAssertEqual(abs(left.y - 300), 13, accuracy: 0.01)
+
+        let tool = PKInkingTool(.pen, color: .black, width: 4)
+        let stroke = ShapeSnap.stroke(ShapeKind.arrow.shape(from: tail, to: tip, width: tool.width), tool: tool, startingNear: tip)
+        let outline = stroke.path.interpolatedPoints(by: .distance(2)).map(\.location)
+        XCTAssertEqual(try XCTUnwrap(outline.first).x, 100, accuracy: 1.5, "it is drawn from the tail")
+        for corner in [tail, tip, left, right] {
+            XCTAssertLessThan(outline.map { ShapeRecognizer.distance($0, corner) }.min() ?? 99, 1.5, "one stroke, sharp at the tip and the barbs")
         }
     }
 

@@ -76,7 +76,11 @@ struct NotebookPage: Sendable, Hashable, Identifiable {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         let dayKey = day.map { "|d:\($0)" } ?? ""
         let itemsKey = extra["items"].flatMap { try? $0.serialized(pretty: false) }.map { "|i:" + String(decoding: $0, as: UTF8.self) } ?? ""
-        for byte in "\(backgroundKey)|\(paperColorRaw)|\(Int(size.width))x\(Int(size.height))\(dayKey)\(itemsKey)".utf8 {
+        // Builds before text styles drew these boxes plainly and cached that under the same key.
+        let styled = extra["items"]?.arrayValue?.contains { item in
+            item["kind"]?.stringValue == "text" && ["face", "italic", "underline", "list", "highlight"].contains { item[$0] != nil }
+        } == true
+        for byte in "\(backgroundKey)|\(paperColorRaw)|\(Int(size.width))x\(Int(size.height))\(dayKey)\(itemsKey)\(styled ? "|styled" : "")".utf8 {
             hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3
         }
         return String(hash, radix: 16).prefix(8).description
@@ -88,6 +92,17 @@ extension NotebookPage {
     var day: String? {
         get { extra["date"]?.stringValue }
         set { extra["date"] = newValue.map(JSONValue.string) }
+    }
+
+    /// The user's own paper that the page's PDF or picture is a copy of. Older builds keep it as an unknown key.
+    var paperID: String? {
+        get { extra["paper"]?.stringValue }
+        set { extra["paper"] = newValue.map(JSONValue.string) }
+    }
+
+    var notebookPaper: NotebookPaper? {
+        guard let paperID, background.assetFile != nil else { return nil }
+        return NotebookPaper(id: paperID, background: background, size: size)
     }
 }
 
@@ -117,7 +132,25 @@ struct PageDefaults: Sendable, Hashable {
     var paperColor: PaperColor { PaperColor(rawValue: paperColorRaw) ?? .white }
     var pageSize: PageSize { PageSize(rawValue: pageSizeRaw) ?? .letter }
 
-    func newPage() -> NotebookPage { .template(template, color: paperColor, size: pageSize) }
+    func newPage() -> NotebookPage { paper?.page() ?? .template(template, color: paperColor, size: pageSize) }
+}
+
+extension PageDefaults {
+    /// A notebook started on the user's own paper makes new pages on its copy. Older builds keep it as an unknown key and use the template.
+    var paper: NotebookPaper? {
+        get {
+            guard let object = extra["paper"]?.objectValue, let id = object["id"]?.stringValue,
+                  case let background = ManifestCodec.decodeBackground(object["background"]), background.assetFile != nil,
+                  let width = object["width"]?.doubleValue, let height = object["height"]?.doubleValue, width >= 1, height >= 1 else { return nil }
+            return NotebookPaper(id: id, background: background, size: CGSize(width: width, height: height))
+        }
+        set {
+            extra["paper"] = newValue.map { paper in
+                .object(["id": .string(paper.id), "background": ManifestCodec.encodeBackground(paper.background),
+                         "width": .number(paper.size.width), "height": .number(paper.size.height)])
+            }
+        }
+    }
 }
 
 struct RecordingEntry: Sendable, Hashable, Identifiable {

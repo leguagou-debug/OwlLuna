@@ -173,6 +173,7 @@ struct ShelfView: View {
                     .background(Color.paper)
             }
         }
+        .overlay(alignment: .top) { if let sync = app?.sync, sync.isEnabled { SyncThread(sync: sync) } }
         .onGeometryChange(for: CGFloat.self) { proxy in
             let frame = proxy.frame(in: .global)
             return frame.width - (frame.minX > 1 ? 0 : 130)
@@ -606,7 +607,7 @@ struct ShelfView: View {
     private func exportSelection(_ chosen: [NotebookRecord]) {
         Task {
             do {
-                export = try await ExportJob.pdfs(of: chosen, root: store.root)
+                export = try await ExportJob.pdfs(of: chosen, root: store.root, choosing: true)
                 endSelection()
             } catch {
                 errorMessage = error.localizedDescription
@@ -731,6 +732,7 @@ struct ShelfView: View {
             Button { onOpen(record) } label: { Label("Open", systemImage: "book") }
             Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
             Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
+            Button { startExport(record, as: .text) } label: { Label("Export as Text", systemImage: "doc.plaintext") }
             MenuBreak()
             Button(role: .destructive) { changes.moveToTrash([record], in: store, undoManager: undoManager) } label: { Label("Delete", systemImage: "trash") }
                 .accessibilityIdentifier("notebook.menu.delete")
@@ -759,6 +761,7 @@ struct ShelfView: View {
             Button { tagging = record } label: { Label("Tags…", systemImage: "tag") }
             Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
             Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
+            Button { startExport(record, as: .text) } label: { Label("Export as Text", systemImage: "doc.plaintext") }
             Toggle(isOn: Binding(get: { journalID == record.id.uuidString }, set: { store.setDailyJournal($0 ? record.id : nil) })) {
                 Label("Use as Daily Journal", systemImage: "calendar")
             }
@@ -774,7 +777,7 @@ struct ShelfView: View {
         let id = record.id, title = record.title, locked = record.isLocked
         Task {
             if locked, !(await NotebookLock.shared.confirm(String(localized: "Export “\(title)”"))) { return }
-            do { export = try await ExportJob.forNotebook(id, root: store.root, format: format) } catch { errorMessage = error.localizedDescription }
+            do { export = try await ExportJob.forNotebook(id, root: store.root, format: format, choosing: true) } catch { errorMessage = error.localizedDescription }
         }
     }
 

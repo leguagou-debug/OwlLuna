@@ -203,3 +203,87 @@ extension CloudUploads.Problem {
         }
     }
 }
+
+/// While a pass moves notebooks, a cobalt thread runs along the foot of the library's bar. One over in a blink shows
+/// nothing; with Reduce Motion the thread stands still and grows as the pass goes.
+struct SyncThread: View {
+    let sync: SyncCenter
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    private static let lap: Double = 1.4
+
+    var body: some View {
+        let moving = sync.isSyncing && (sync.progress?.total ?? 0) > 0
+        GeometryReader { proxy in
+            if shown {
+                if reduceMotion {
+                    let progress = sync.progress ?? SyncProgress(done: 0, total: 1)
+                    Rectangle().fill(Color.primaryCloth)
+                        .frame(width: proxy.size.width * max(Double(progress.done) / Double(max(progress.total, 1)), 0.04))
+                } else {
+                    TimelineView(.animation) { context in
+                        let width = proxy.size.width * 0.3
+                        let along = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.lap) / Self.lap
+                        Rectangle().fill(Color.primaryCloth)
+                            .frame(width: width)
+                            .offset(x: -width + (proxy.size.width + width) * along)
+                    }
+                }
+            }
+        }
+        .frame(height: 3)
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: moving) {
+            try? await Task.sleep(for: moving ? .milliseconds(300) : .milliseconds(500))
+            if !Task.isCancelled { shown = moving }
+        }
+    }
+}
+
+/// Said under a notebook that iCloud hasn't uploaded all of yet.
+struct UploadMark: View {
+    let id: UUID
+    @Environment(AppModel.self) private var app: AppModel?
+
+    var body: some View {
+        if app?.sync.isUploading(id) == true {
+            HStack(spacing: Space.x1) {
+                Image(systemName: "icloud.and.arrow.up")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+                Text("Not uploaded yet")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .accessibilityIdentifier("notebook.notUploaded")
+        }
+    }
+}
+
+/// How far notebooks are along, as a row of square ticks, cobalt for each one done. Past twenty, each tick stands
+/// for a share.
+struct SyncTicks: View {
+    let title: Text
+    let progress: SyncProgress
+
+    private static let most = 20
+
+    var body: some View {
+        let count = min(progress.total, Self.most)
+        let filled = progress.total <= Self.most ? progress.done : progress.done * count / max(progress.total, 1)
+        VStack(alignment: .leading, spacing: Space.x2) {
+            title.font(.subheadline).foregroundStyle(Color.textSecondary)
+            HStack(spacing: 3) {
+                ForEach(0..<count, id: \.self) { index in
+                    Rectangle().fill(index < filled ? Color.primaryCloth : Color.well).frame(height: 8)
+                }
+            }
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}

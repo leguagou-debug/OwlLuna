@@ -9,6 +9,8 @@ struct OwlLunaSettingsView: View {
     @AppStorage(SettingsKey.defaultTemplate) private var template: PaperTemplate = .narrowRuled
     @AppStorage(SettingsKey.defaultPaperColor) private var color: PaperColor = .white
     @AppStorage(SettingsKey.defaultPageSize) private var size: PageSize = .letter
+    @AppStorage(SettingsKey.defaultPaper) private var ownPaper = ""
+    @State private var ownPaperName: String?
     @AppStorage(SettingsKey.darkPaper) private var darkPaper = true
     @AppStorage(SettingsKey.dailyJournalID) private var journalID = ""
     @AppStorage(SettingsKey.showsOnThisDay) private var showsOnThisDay = true
@@ -200,12 +202,17 @@ struct OwlLunaSettingsView: View {
 
     private var paperSection: some View {
         SettingsSection("New Notebooks") {
-            SettingsChoiceRow(title: "Template", value: template.displayName, selection: $template) {
+            SettingsChoiceRow(title: "Template", value: ownPaperName ?? template.displayName,
+                              selection: Binding(get: { template }, set: { template = $0; ownPaper = "" })) {
                 ForEach(PaperFamily.allCases) { family in
                     Section(family.displayName) {
                         ForEach(family.templates) { Text($0.displayName).tag($0) }
                     }
                 }
+            }
+            .task(id: ownPaper) {
+                let id = ownPaper, root = store.root
+                ownPaperName = id.isEmpty ? nil : await Task.detached(priority: .userInitiated) { PaperShelf.paper(id, in: root)?.name }.value
             }
             SettingsChoiceRow(title: "Paper Colour", value: color.displayName, selection: $color) {
                 ForEach(PaperColor.allCases) { Text($0.displayName).tag($0) }
@@ -261,7 +268,7 @@ struct OwlLunaSettingsView: View {
     @ViewBuilder
     private var syncSection: some View {
         if let sync = app?.sync {
-            SettingsSection("iCloud", note: "Each notebook is copied whole to your private iCloud storage and from there to your other iPads. A notebook open here syncs when you close it. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud.") {
+            SettingsSection("iCloud", note: "Each notebook is copied whole to your private iCloud storage and from there to your other iPads, with your folders, smart shelves, stickers and pens. A notebook open here is sent a few seconds after you stop writing, and one open on another iPad then shows the newer version, unless it has changes of its own. If one was changed on two devices before they could sync, the newer version is kept and the older is saved beside it as a conflicted copy. Writing history is not synced. Turning sync off leaves the copy in iCloud. To remove it, turn sync off on every device, then delete OwlLuna's data in Settings › your name › iCloud.") {
                 Toggle("Sync with iCloud", isOn: Bindable(sync).isEnabled)
                     .accessibilityIdentifier("settings.sync.toggle")
                     .settingsRow()
@@ -287,6 +294,16 @@ struct OwlLunaSettingsView: View {
                     }
                     .disabled(sync.isSyncing)
                     .accessibilityIdentifier("settings.sync.now")
+                    if sync.isSyncing, let progress = sync.progress, progress.total > 1 {
+                        SyncTicks(title: Text("Syncing \(min(progress.done + 1, progress.total)) of \(progress.total) notebooks"), progress: progress)
+                            .accessibilityIdentifier("settings.sync.progress")
+                            .settingsRow()
+                    }
+                    if let count = sync.uploadCount {
+                        SyncTicks(title: Text("Uploading \(min(count.done + 1, count.total)) of \(count.total) notebooks to iCloud"), progress: count)
+                            .accessibilityIdentifier("settings.sync.uploading")
+                            .settingsRow()
+                    }
                     if let date = sync.lastSynced {
                         let when = SyncCenter.formatted(date)
                         // What a pass did is shown once one has finished since launch, and not beside an error.

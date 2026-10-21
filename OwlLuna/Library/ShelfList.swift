@@ -128,6 +128,7 @@ struct NotebookCatalogueRow: View {
                         .foregroundStyle(Color.ink)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                     Text(record.metaLine).metaStyle(.footnote)
+                    UploadMark(id: record.id)
                     if !showsSide { filing }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -250,6 +251,7 @@ struct NotebookLedgerRow: View {
                     Text(record.metaLine)
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(Color.textSecondary)
+                    UploadMark(id: record.id)
                     let folder = showsFolder ? record.folder : nil
                     if folder != nil || !record.tags.isEmpty {
                         NotebookFiling(folder: folder, tags: record.tags)

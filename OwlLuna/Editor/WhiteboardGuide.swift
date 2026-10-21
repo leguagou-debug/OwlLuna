@@ -106,7 +106,7 @@ struct WhiteboardGuide: View {
          Entry(symbol: "slider.horizontal.3", title: String(localized: "Customise Tools"),
                detail: String(localized: "Chooses the shortcuts that stand beside the tools, like Picture and Text Box.")),
          Entry(symbol: "square.on.circle", title: String(localized: "Shapes"),
-               detail: String(localized: "Tie it on from Customise Tools, then pick a line, circle, rectangle or triangle and drag it out on the page."))]
+               detail: String(localized: "Tie it on from Customise Tools, then pick a line, arrow, circle, rectangle or triangle and drag it out on the page."))]
     }
 
     var body: some View {

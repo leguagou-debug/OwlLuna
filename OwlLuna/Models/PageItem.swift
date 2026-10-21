@@ -51,7 +51,7 @@ extension TextBox {
 
     /// A line with nothing written on it is passed over by a list: it has no bullet, number or box.
     static func isItem(_ line: String) -> Bool {
-        !line.trimmingCharacters(in: .whitespaces).isEmpty
+        !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Each line's number in a numbered list; one that is passed over has none.
@@ -70,11 +70,12 @@ extension TextBox {
         if checked.remove(line) == nil { checked.insert(line) }
     }
 
-    /// Replaces part of the text, each tick staying with the line it was on. New lines have none.
+    /// Replaces part of the text, each tick staying with the line it was on. New lines and emptied ones have none.
     mutating func replaceCharacters(in range: NSRange, with text: String) {
         let old = string as NSString, new = text as NSString
         checked = Self.carried(checked, in: old, range: range, with: new, NSRange(location: 0, length: new.length))
         string = old.replacingCharacters(in: range, with: text)
+        dropStrayChecks()
     }
 
     /// The same, for text that was changed somewhere: what the old and new share at either end is what was kept.
@@ -88,6 +89,61 @@ extension TextBox {
         checked = Self.carried(checked, in: old, range: NSRange(location: start, length: old.length - start - end), with: new,
                                NSRange(location: start, length: new.length - start - end))
         string = newString
+        dropStrayChecks()
+    }
+
+    /// Only the ticks of lines that are there and are items.
+    fileprivate mutating func dropStrayChecks() {
+        guard !checked.isEmpty else { return }
+        let lines = lines
+        checked = checked.filter { lines.indices.contains($0) && Self.isItem(lines[$0]) }
+    }
+
+    /// Ticks set against the lines of `old`, on the same lines of `new`: a line both have keeps its tick, and a run between
+    /// two of those that was changed line for line keeps its ticks in order. The rest are dropped.
+    static func checks(_ checked: Set<Int>, carriedFrom old: String, to new: String) -> Set<Int> {
+        guard !checked.isEmpty else { return checked }
+        let a = (old as NSString).components(separatedBy: "\n"), b = (new as NSString).components(separatedBy: "\n")
+        var head = 0, tail = 0
+        while head < a.count, head < b.count, a[head] == b[head] { head += 1 }
+        while tail < a.count - head, tail < b.count - head, a[a.count - 1 - tail] == b[b.count - 1 - tail] { tail += 1 }
+        let n = a.count - head - tail, m = b.count - head - tail
+        guard n * m <= 1_000_000 else {
+            var box = TextBox(string: old)
+            box.checked = checked
+            box.carryChecks(to: new)
+            return box.checked
+        }
+        let w = m + 1
+        var common = [Int32](repeating: 0, count: (n + 1) * w)
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            for j in stride(from: m - 1, through: 0, by: -1) {
+                common[i * w + j] = a[head + i] == b[head + j] ? common[(i + 1) * w + j + 1] + 1 : max(common[(i + 1) * w + j], common[i * w + j + 1])
+            }
+        }
+        var matches = (0..<head).map { ($0, $0) }, i = 0, j = 0
+        while i < n, j < m {
+            if a[head + i] == b[head + j] {
+                matches.append((head + i, head + j))
+                i += 1
+                j += 1
+            } else if common[(i + 1) * w + j] >= common[i * w + j + 1] {
+                i += 1
+            } else {
+                j += 1
+            }
+        }
+        matches += (0..<tail).map { (a.count - tail + $0, b.count - tail + $0) }
+        var moved: Set<Int> = [], last = (-1, -1)
+        for match in matches + [(a.count, b.count)] {
+            let gap = match.0 - last.0 - 1
+            if gap == match.1 - last.1 - 1 {
+                for k in 0..<gap where checked.contains(last.0 + 1 + k) { moved.insert(last.1 + 1 + k) }
+            }
+            if match.0 < a.count, checked.contains(match.0) { moved.insert(match.1) }
+            last = match
+        }
+        return moved
     }
 
     private static func newlines(in text: NSString, _ range: NSRange) -> Int {
@@ -331,6 +387,8 @@ struct PageItem: Sendable, Hashable, Identifiable {
             box.list = object["list"]?.stringValue.flatMap(TextBox.List.init(rawValue:))
             box.highlight = object["highlight"]?.stringValue.flatMap(TextBox.Highlight.init(rawValue:))
             box.checked = Set(object["checked"]?.arrayValue?.compactMap { $0.intValue.flatMap { (0..<100_000).contains($0) ? $0 : nil } } ?? [])
+            if let was = object["checkedText"]?.stringValue, was != string { box.checked = TextBox.checks(box.checked, carriedFrom: was, to: string) }
+            box.dropStrayChecks()
             content = .text(box)
         case ("link", _, _):
             let label = object["label"]?.stringValue ?? ""
@@ -349,6 +407,7 @@ struct PageItem: Sendable, Hashable, Identifiable {
         default: content = .unknown
         }
         raw = object
+        if case .text(let box) = content, let stored = object["fit"], stored != Self.fit(box, size: size) { self = fittedToText() }
     }
 
     var json: JSONValue {
@@ -371,14 +430,17 @@ struct PageItem: Sendable, Hashable, Identifiable {
             object["text"] = .string(box.string)
             object["fs"] = .number(Double(box.fontSize))
             object["bold"] = .bool(box.isBold)
-            object["color"] = .string(box.tint.rawValue)
-            object["align"] = .string(box.alignment.rawValue)
+            object["color"] = Self.kept(box.tint, fallback: .ink, was: object["color"])
+            object["align"] = Self.kept(box.alignment, fallback: .leading, was: object["align"])
             object["face"] = Self.optional(box.face == .system ? nil : box.face, was: object["face"])
             object["italic"] = box.isItalic ? .bool(true) : nil
             object["underline"] = box.isUnderlined ? .bool(true) : nil
             object["list"] = Self.optional(box.list, was: object["list"])
             object["highlight"] = Self.optional(box.highlight, was: object["highlight"])
             object["checked"] = box.checked.isEmpty ? nil : .array(box.checked.sorted().map { .number(Double($0)) })
+            object["checkedText"] = box.checked.isEmpty ? nil : .string(box.string)
+            let foreign = box.face == .system && object["face"] != nil || box.list == nil && object["list"] != nil
+            if !foreign { object["fit"] = box.face != .system || box.isItalic || box.list != nil ? Self.fit(box, size: size) : nil }
         case .link(let link):
             object["kind"] = .string("link")
             object["label"] = .string(link.label)
@@ -408,6 +470,21 @@ struct PageItem: Sendable, Hashable, Identifiable {
         if let value { return .string(value.rawValue) }
         guard let old, old.stringValue.flatMap(Value.init(rawValue:)) == nil else { return nil }
         return old
+    }
+
+    /// The same for a key that is always written: a newer version's value stays while the box holds the fallback for it.
+    private static func kept<Value: RawRepresentable<String>>(_ value: Value, fallback: Value, was old: JSONValue?) -> JSONValue {
+        if value.rawValue == fallback.rawValue, let old, old.stringValue.flatMap(Value.init(rawValue:)) == nil { return old }
+        return .string(value.rawValue)
+    }
+
+    /// A fingerprint of everything an older build rewrites when it refits a box by its own plainer measure.
+    private static func fit(_ box: TextBox, size: CGSize) -> JSONValue {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in "\(Double(size.width))|\(Double(size.height))|\(Double(box.fontSize))|\(box.isBold)|\(box.string)".utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3
+        }
+        return .string(String(hash, radix: 16))
     }
 }
 

@@ -15,8 +15,8 @@ final class PageItemView: UIView {
     private var linkResolved = true
     private var isLifted = false
     var onActivate: ((UUID) -> Void)?
-    /// Ticks a line of a checklist, or takes its tick off, for VoiceOver.
-    var onTick: ((UUID, Int) -> Void)?
+    /// Ticks a line of a checklist, or takes its tick off, for VoiceOver. False when the page can't be changed now.
+    var onTick: ((UUID, Int) -> Bool)?
 
     init(item: PageItem, assets: URL) {
         self.item = item
@@ -115,8 +115,7 @@ final class PageItemView: UIView {
                 let name = box.checked.contains(line) ? String(localized: "Untick \(text)") : String(localized: "Tick \(text)")
                 return UIAccessibilityCustomAction(name: name) { [weak self] _ in
                     guard let self, let onTick = self.onTick else { return false }
-                    onTick(self.item.id, line)
-                    return true
+                    return onTick(self.item.id, line)
                 }
             }
         case .link(let link):
@@ -226,8 +225,27 @@ final class TextMarkersView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        fitScale()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        fitScale()
+    }
+
+    /// The same pixel budget as the item's own art, however far the page is zoomed.
+    private func fitScale() {
+        let screen = window?.traitCollection.displayScale ?? traitCollection.displayScale
+        guard screen > 0 else { return }
+        let wanted = PageItemView.drawingScale(for: bounds.size, screen: screen)
+        if contentScaleFactor != wanted { contentScaleFactor = wanted }
+    }
+
     func show(_ box: TextBox?, onDark: Bool, scale: CGFloat) {
         isHidden = box == nil
+        fitScale()
         guard box != self.box || onDark != self.onDark || scale != self.scale else { return }
         self.box = box
         self.onDark = onDark

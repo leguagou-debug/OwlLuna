@@ -98,7 +98,7 @@ enum InkTimelapse {
         let directory = try ExportFolder.make(.export)
         let url = directory.appending(path: NotebookExporter.fileName(input.title, extension: "mp4"))
         do {
-            try await film(page, ink: ink, plan: plan, assets: input.package.assetsDirectory, links: LinkTitles(pages: input.pages), to: url, progress: progress)
+            try await film(page, ink: ink, plan: plan, assets: input.package.assetsDirectory, links: LinkTitles(pages: input.allPages), to: url, progress: progress)
         } catch {
             try? FileManager.default.removeItem(at: directory)
             throw error

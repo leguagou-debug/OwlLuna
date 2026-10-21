@@ -46,14 +46,14 @@ export function Writing() {
               <h3 className={`display ${styles.title}`}>Rest the pen and the shape straightens.</h3>
               <p className={styles.text}>
                 Draw a line, a circle, an ellipse, a rectangle, a triangle or any figure with straight sides, and rest
-                the pen a moment before lifting.
+                the pen a moment before lifting. A line with a hook at its end becomes an arrow.
               </p>
               <p className={styles.text}>
                 Undo gives your own stroke back, and Settings&nbsp;&rsaquo;&nbsp;Apple Pencil turns it off.
               </p>
               <p className={styles.text}>
-                Or keep Shapes in the tray: tie it on from Customise&nbsp;Tools, then pick a line, a circle, a rectangle
-                or a triangle on the strip over the tray and drag it out on the page.
+                Or keep Shapes in the tray: tie it on from Customise&nbsp;Tools, then pick a line, an arrow, a circle, a
+                rectangle or a triangle on the strip over the tray and drag it out on the page.
               </p>
               <p className={styles.hint}>
                 <span className={styles.pointer} aria-hidden="true" />

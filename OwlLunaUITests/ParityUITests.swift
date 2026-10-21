@@ -62,6 +62,8 @@ final class ParityUITests: XCTestCase {
         let note = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "notebook.Note ")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 20))
         contextMenu(note, choose: "Export as PDF", in: app)
+        XCTAssertTrue(app.buttons["export.start"].waitForExistence(timeout: 10))
+        app.buttons["export.start"].tap()
         XCTAssertTrue(app.staticTexts["Your PDF is ready."].waitForExistence(timeout: 30), "export from the library")
         attach(app, "library-export")
         app.buttons["Done"].firstMatch.tap()

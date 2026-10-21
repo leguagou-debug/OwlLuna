@@ -73,25 +73,26 @@ final class ShapeStripUITests: XCTestCase {
         XCTAssertEqual(strokeCount(canvas), before + 1, "a drag draws the circle")
         for (kind, from, to) in [("rectangle", CGVector(dx: 0.55, dy: 0.2), CGVector(dx: 0.85, dy: 0.35)),
                                  ("triangle", CGVector(dx: 0.15, dy: 0.42), CGVector(dx: 0.4, dy: 0.58)),
-                                 ("line", CGVector(dx: 0.55, dy: 0.5), CGVector(dx: 0.85, dy: 0.51))] {
+                                 ("line", CGVector(dx: 0.55, dy: 0.5), CGVector(dx: 0.85, dy: 0.51)),
+                                 ("arrow", CGVector(dx: 0.55, dy: 0.64), CGVector(dx: 0.85, dy: 0.58))] {
             let button = app.buttons["editor.tools.shape.\(kind)"]
             button.tap()
             waitUntilSelected(button)
             XCTAssertFalse(circle.isSelected)
             drag(canvas, from, to)
         }
-        XCTAssertEqual(strokeCount(canvas), before + 4, "each drag is one stroke")
+        XCTAssertEqual(strokeCount(canvas), before + 5, "each drag is one stroke")
         sleep(1)
         attach(app, "light-shapes")
 
         app.buttons["editor.tools.shapes.undo"].tap()
-        XCTAssertEqual(strokeCount(canvas), before + 3, "the strip's Undo takes the last shape away whole")
+        XCTAssertEqual(strokeCount(canvas), before + 4, "the strip's Undo takes the last shape away whole")
 
         shapes.tap()
         XCTAssertTrue(circle.waitForNonExistence(timeout: 5), "Shapes again puts the strip away")
         waitUntilSelected(shapes, false)
         drag(canvas, CGVector(dx: 0.15, dy: 0.7), CGVector(dx: 0.6, dy: 0.75))
-        XCTAssertEqual(strokeCount(canvas), before + 4, "and a drag writes again")
+        XCTAssertEqual(strokeCount(canvas), before + 5, "and a drag writes again")
     }
 
     func testTheEraserPutsTheStripAwayAndShapesBringsAPenBack() throws {

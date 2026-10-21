@@ -86,6 +86,8 @@ final class BackupTests: XCTestCase {
         await store.finishWritingShelves()
         try FileManager.default.createDirectory(at: store.root.stickers, withIntermediateDirectories: true)
         try Data([9, 9]).write(to: store.root.stickers.appending(path: "mine.png"))
+        let planner = try PaperShelf.add(image: UIGraphicsImageRenderer(size: CGSize(width: 50, height: 70)).pngData { $0.fill(CGRect(x: 0, y: 0, width: 20, height: 70)) },
+                                         name: "Planner", to: store.root)
 
         let backup = try await store.makeBackup()
         addTeardownBlock { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) }
@@ -97,6 +99,7 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(summary.added, 2)
         XCTAssertEqual(summary.folders, 2)
         XCTAssertEqual(summary.stickers, 1)
+        XCTAssertEqual(summary.papers, 1)
         XCTAssertEqual(summary.copies + summary.unchanged + summary.unreadable, 0)
 
         let restored = try XCTUnwrap(fresh.record(notes.id))
@@ -111,6 +114,7 @@ final class BackupTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: package.thumbURL(notes.pages[0].id, key: "cache").path(percentEncoded: false)),
                        "thumbnails are left out of a backup")
         XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.root.stickers.appending(path: "mine.png").path(percentEncoded: false)))
+        XCTAssertEqual(PaperShelf.list(fresh.root).map(\.id), [planner.id], "your own paper comes back too")
 
         let again = try await fresh.restoreBackup(from: backup)
         XCTAssertEqual(again.unchanged, 2, "restoring the same backup twice adds nothing")

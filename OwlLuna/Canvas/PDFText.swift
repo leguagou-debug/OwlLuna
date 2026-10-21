@@ -18,6 +18,28 @@ enum PDFText {
         page.selection(for: page.bounds(for: .cropBox)).map { rects(of: $0, on: page, pageSize: pageSize) } ?? []
     }
 
+    /// A picture of a page, such as a scan or slides saved as images, has next to no text of its own.
+    static func isPicture(withText text: String?) -> Bool {
+        (text ?? "").unicodeScalars.count(where: CharacterSet.alphanumerics.contains) < 40
+    }
+
+    /// The page drawn on white, its long side 2,400 px like a scan's, for the recogniser to read.
+    static func picture(of page: PDFPage) -> UIImage? {
+        guard let sheet = page.pageRef else { return nil }
+        let shown = PageRenderer.displaySize(of: sheet)
+        guard shown.width > 0, shown.height > 0 else { return nil }
+        let factor = 2400 / max(shown.width, shown.height)
+        let size = CGSize(width: (shown.width * factor).rounded(), height: (shown.height * factor).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            PageRenderer.drawPDFPage(sheet, in: context.cgContext, size: size)
+        }
+    }
+
     /// Where a touch is taken to be in the text: on the line it is on or nearest to, and never past that line's ends.
     /// Given a point off the text, PDFKit picks a letter that can be lines away, or none.
     static func settled(_ point: CGPoint, among lines: [CGRect]) -> (point: CGPoint, line: CGRect)? {

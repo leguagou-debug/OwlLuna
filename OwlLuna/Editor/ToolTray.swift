@@ -256,7 +256,7 @@ private struct ShortcutOptions: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
                 Image(systemName: ToolExtra.shapes.symbol).font(.footnote.weight(.semibold)).foregroundStyle(Color.accentColor)
-                Text("Shapes draws a line, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it.")
+                Text("Shapes draws a line, arrow, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it.")
                     .font(.footnote)
                     .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

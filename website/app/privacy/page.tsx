@@ -233,17 +233,17 @@ export default function PrivacyPolicy() {
                 Every notebook, whole: everything listed under &ldquo;Your notebooks&rdquo; above, the words read from
                 its pages, and its flashcards. Locked notebooks are copied like any other.
               </li>
-              <li>Your folders, and the stickers you made.</li>
+              <li>Your folders and smart shelves, the pens in your tray, and the stickers you made.</li>
               <li>
                 A small file holding a random ID that names this copy of your library. It lets a device tell when the
                 copy was erased, or is another account&rsquo;s.
               </li>
             </ul>
-            <p>Your writing history, smart shelves, settings and the search index are not copied.</p>
+            <p>Your writing history, your other settings and the search index are not copied.</p>
             <p>
               To tell what has changed since last time, each device also keeps a small record of what it last synced:
               the random IDs of its notebooks, with when each was last written in and last moved into or out of
-              Recently Deleted, the IDs of its folders, the file names of its stickers, the ID of the iCloud copy, and
+              Recently Deleted, the IDs of its folders and smart shelves, the file names of its stickers, the ID of the iCloud copy, and
               the account marker described under <a href="#collected">What I collect</a>. That record stays on the
               device.
             </p>

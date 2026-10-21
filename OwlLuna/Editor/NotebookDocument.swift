@@ -52,7 +52,7 @@ enum UndoBudget {
 }
 
 struct DocumentNotice: Identifiable, Hashable, Sendable {
-    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion, recordingStopped, onlyPencilDraws }
+    enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion, keptCopy, recordingStopped, onlyPencilDraws }
     let id = UUID()
     let kind: Kind
     let message: String
@@ -90,6 +90,8 @@ final class NotebookDocument {
     @ObservationIgnored var onSaved: ((NotebookManifest) -> Void)?
     /// Called after a save that wrote ink, with the pages left holding ink and when they were written.
     @ObservationIgnored var onInkSaved: (([UUID], Date) -> Void)?
+    /// Called after every save that wrote something, so a sync can send the notebook while it is open.
+    @ObservationIgnored var onWritten: (() -> Void)?
     @ObservationIgnored var retryBase: Duration = .seconds(1)
     @ObservationIgnored var saveDelay: Duration = .seconds(1.2)
     /// However often edits push the debounce back, a pending save starts within this long.
@@ -447,28 +449,62 @@ final class NotebookDocument {
         return position + 1
     }
 
-    /// A new page for inserting after `index`: it matches that page's paper when it's a template page,
+    /// A new page for inserting after `index`: it matches that page's paper when it's a template page or the user's own paper,
     /// and otherwise uses the notebook's defaults.
     func newPage(after index: Int?, template: PaperTemplate? = nil) -> NotebookPage {
         var page = manifest.defaults.newPage()
-        if let index, manifest.pages.indices.contains(index), manifest.pages[index].template != nil, !manifest.pages[index].isBoard {
+        if let index, manifest.pages.indices.contains(index), !manifest.pages[index].isBoard,
+           manifest.pages[index].template != nil || manifest.pages[index].notebookPaper != nil {
             let anchor = manifest.pages[index]
             page.size = anchor.size
             page.paperColor = anchor.paperColor
             page.background = anchor.background
+            page.paperID = anchor.paperID
         }
-        if let template { page.background = .template(template) }
+        if let template {
+            page.background = .template(template)
+            if page.paperID != nil {
+                page.paperID = nil
+                page.paperColor = manifest.defaults.paperColor
+            }
+        }
         return page
     }
 
     /// Template and colour together, as one undo step.
     func setPaper(template: PaperTemplate, color: PaperColor, forPage pageID: UUID) {
-        guard let index = index(of: pageID), let current = manifest.pages[index].template,
-              current != template || manifest.pages[index].paperColor != color else { return }
+        guard let index = index(of: pageID) else { return }
+        let page = manifest.pages[index]
+        guard page.template != nil || page.notebookPaper != nil, page.template != template || page.paperColor != color else { return }
         updatePage(pageID, actionName: String(localized: "Change Paper")) {
             $0.background = .template(template)
             $0.paperColor = color
+            $0.paperID = nil
         }
+    }
+
+    /// The user's own paper on a page, which keeps its width, as one undo step.
+    func setPaper(_ paper: NotebookPaper, forPage pageID: UUID) {
+        guard let index = index(of: pageID) else { return }
+        let page = manifest.pages[index]
+        guard !page.isBoard, page.template != nil || page.notebookPaper != nil, page.paperID != paper.id || page.background != paper.background else { return }
+        let size = CGSize(width: page.size.width, height: (page.size.width * paper.size.height / max(paper.size.width, 1)).rounded())
+        updatePage(pageID, actionName: String(localized: "Change Paper")) {
+            $0.background = paper.background
+            $0.paperColor = .white
+            $0.size = size
+            $0.paperID = paper.id
+        }
+    }
+
+    /// The notebook's copy of the user's paper, made the first time a page uses it.
+    func keepCopy(of paper: CustomPaper) async throws -> NotebookPaper {
+        let kept = ([manifest.defaults.paper] + manifest.pages.map(\.notebookPaper)).lazy.compactMap { $0 }.first { $0.id == paper.id }
+        if let kept, let file = kept.background.assetFile, FileManager.default.fileExists(atPath: package.assetURL(file).path(percentEncoded: false)) {
+            return NotebookPaper(id: paper.id, background: kept.background, size: paper.size)
+        }
+        let file = try await package.importAsset(from: paper.url, ext: paper.url.pathExtension)
+        return NotebookPaper(id: paper.id, background: paper.background(file: file), size: paper.size)
     }
 
     func updatePage(_ pageID: UUID, actionName: String, _ change: (inout NotebookPage) -> Void) {
@@ -623,10 +659,16 @@ final class NotebookDocument {
         notices.append(DocumentNotice(kind: .onlyPencilDraws, message: String(localized: "Only Apple Pencil draws right now.")))
     }
 
-    /// Another device wrote in the notebook since, and so did this one: closing it keeps both.
+    /// Another device wrote in the notebook since, and so did this one: Keep Both, or closing it, keeps both.
     func noteNewerVersion() {
         guard !notices.contains(where: { $0.kind == .newerVersion }) else { return }
-        notices.append(DocumentNotice(kind: .newerVersion, message: String(localized: "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy.")))
+        notices.append(DocumentNotice(kind: .newerVersion, message: String(localized: "This notebook was changed on another device too. Keep Both keeps the older version as a conflicted copy, as closing it would.")))
+    }
+
+    /// Keep Both kept the other version as a notebook of its own.
+    func noteKeptCopy(_ message: String) {
+        notices.removeAll { $0.kind == .newerVersion || $0.kind == .keptCopy }
+        notices.append(DocumentNotice(kind: .keptCopy, message: message))
     }
 
     /// Nothing is unsaved, under way or being recorded, so a newer version can take its place.
@@ -760,6 +802,7 @@ final class NotebookDocument {
                 onSaved?(receipt.manifest)
             }
             if hasUnsavedChanges { scheduleSave() }
+            onWritten?()
             return !hasUnsavedChanges
         } catch {
             failures += 1

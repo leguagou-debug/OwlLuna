@@ -371,6 +371,9 @@ actor NotebookPackage {
 
     // MARK: Maintenance
 
+    /// Runs `work` with nothing written to the package meanwhile, as a sync copies an open notebook.
+    func hold<T: Sendable>(_ work: @Sendable () throws -> T) throws -> T { try work() }
+
     /// Removes ink, text, thumbnails and assets that the saved manifest no longer references.
     /// Only call once the manifest is on disk and no undo history can bring those pages back.
     /// Nothing but stale thumbnails is removed while a damaged manifest is set aside or the manifest was

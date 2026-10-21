@@ -73,6 +73,16 @@ struct TextStyleControls: View {
                 .panel("Text Style", isPresented: $showing) { TextStylePanel(session: session) }
                 .accessibilityIdentifier("editor.arrange.style")
         }
+        .background {
+            if shortcuts && !roomy {
+                ForEach(Emphasis.allCases) { emphasis in
+                    Button(emphasis.title) { session.updateText { $0[keyPath: emphasis.path].toggle() } }
+                        .keyboardShortcut(KeyboardShortcut(emphasis.key))
+                }
+                .hidden()
+                .accessibilityHidden(true)
+            }
+        }
     }
 }
 
@@ -84,6 +94,8 @@ struct TextStylePanel: View {
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var height: CGFloat?
+    @ScaledMetric(relativeTo: .title3) private var sampleSize: CGFloat = 20
+    private static let width: CGFloat = 344
 
     /// As tall as it needs, and scrolls where the screen is shorter than that.
     var body: some View {
@@ -92,18 +104,19 @@ struct TextStylePanel: View {
                 card(box).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(width: 344)
+            .frame(width: Self.width)
             .frame(idealHeight: height)
         }
     }
 
     private func card(_ box: TextBox) -> some View {
         VStack(alignment: .leading, spacing: Space.x3) {
+            let named = faceNamesFit()
             OwlLunaSegmentedPicker("Typeface", selection: Binding(get: { box.face }, set: { face in session.updateText { $0.face = face } }),
-                                   options: TextBox.Face.allCases) { face in
+                                   options: TextBox.Face.allCases, padding: Space.x2) { face in
                 VStack(spacing: 0) {
                     Text(verbatim: "Ag").font(Font(sample(box, face: face)))
-                    Text(face.displayName).font(.caption).lineLimit(1).minimumScaleFactor(0.7)
+                    if named { Text(face.displayName).font(.caption).lineLimit(1) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(face.displayName))
@@ -133,18 +146,51 @@ struct TextStylePanel: View {
     private func sample(_ box: TextBox, face: TextBox.Face) -> UIFont {
         var sample = box
         sample.face = face
-        sample.fontSize = 20
+        sample.fontSize = sampleSize
         return sample.font()
     }
 
-    /// The four sizes, and the box's own when it has been scaled to one of its own.
+    /// Whether every face's name fits whole under its sample; where one doesn't, the samples stand alone.
+    private func faceNamesFit() -> Bool {
+        guard !textSize.isAccessibilitySize else { return true }
+        let font = UIFont.preferredFont(forTextStyle: .caption1, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(textSize)))
+        let room = (Self.width - 2 * Space.x4) / CGFloat(TextBox.Face.allCases.count) - 2 * Space.x2
+        return TextBox.Face.allCases.allSatisfy { ($0.displayName as NSString).size(withAttributes: [.font: font]).width.rounded(.up) <= room }
+    }
+
+    /// The four sizes, and the box's own when it has been scaled to one of its own: named, or in points where a name won't fit.
     private func sizes(_ box: TextBox) -> some View {
         let presets = TextBox.sizes.map(\.points)
+        let options = presets.contains(box.fontSize) ? presets : presets + [box.fontSize]
+        let name: (CGFloat) -> String = { points in
+            TextBox.sizes.first { $0.points == points }?.name ?? String(localized: "\(Int(points.rounded())) pt")
+        }
+        let named = namesFit(options.map(name))
         return OwlLunaSegmentedPicker("Size", selection: Binding(get: { box.fontSize }, set: { size in session.updateText { $0.fontSize = size } }),
-                                      options: presets.contains(box.fontSize) ? presets : presets + [box.fontSize]) { points in
-            Text(TextBox.sizes.first { $0.points == points }?.name ?? String(localized: "\(Int(points.rounded())) pt"))
+                                      options: options) { points in
+            if named {
+                Text(name(points))
+            } else {
+                Text(Int(points.rounded()), format: .number).accessibilityLabel(Text(name(points)))
+            }
         }
         .accessibilityIdentifier("editor.text.size")
+    }
+
+    /// Whether every name keeps its words whole on a segment's two lines, measured as the chosen segment sets it.
+    private func namesFit(_ names: [String]) -> Bool {
+        guard !textSize.isAccessibilitySize else { return true }
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(textSize))
+        let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traits).pointSize, weight: .semibold)
+        let room = (Self.width - 2 * Space.x4) / CGFloat(max(names.count, 1)) - 2 * Space.x4
+        return names.allSatisfy { name in
+            let words = name.split(whereSeparator: \.isWhitespace).allSatisfy {
+                (String($0) as NSString).size(withAttributes: [.font: font]).width.rounded(.up) <= room
+            }
+            let height = (name as NSString).boundingRect(with: CGSize(width: room, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin],
+                                                         attributes: [.font: font], context: nil).height
+            return words && height <= font.lineHeight * 2 + 1
+        }
     }
 
     private func emphasis(_ box: TextBox) -> some View {
@@ -183,7 +229,7 @@ struct TextStylePanel: View {
 
     /// A list keeps to the left, so turning one of the others on takes the list away.
     private func alignment(_ box: TextBox) -> some View {
-        OwlLunaSegmentedPicker("Alignment", selection: Binding(get: { box.alignment }, set: { alignment in
+        OwlLunaSegmentedPicker("Alignment", selection: Binding(get: { box.list == nil ? box.alignment : .leading }, set: { alignment in
             session.updateText {
                 $0.alignment = alignment
                 if alignment != .leading { $0.list = nil }

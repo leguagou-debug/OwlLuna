@@ -138,7 +138,8 @@ actor FindReader {
         let key = file.path(percentEncoded: false)
         if pdfs[key] == nil { pdfs[key] = PDFDocument(url: file) }
         guard let page = pdfs[key]?.page(at: index) else { return [] }
-        return NotebookFind.pdfRects(for: query, on: page, pageSize: pageSize)
+        guard PDFText.isPicture(withText: page.string) else { return NotebookFind.pdfRects(for: query, on: page, pageSize: pageSize) }
+        return rects(for: query, key: "pdf-\(file.lastPathComponent)#\(index)", pageSize: pageSize) { PDFText.picture(of: page) }
     }
 }
 
@@ -221,11 +222,11 @@ final class NotebookFinder {
         if !unsaved, let text = await package.readText(page.id), text.hasPrefix(HandwritingIndexer.header(for: page)),
            !NotebookFind.contains(text, needle) { return rects }
         switch page.background {
-        case .pdf(let file, let index):
+        case .pdf(let file, let index) where page.hasPDFText:
             rects += await reader.pdfRects(for: needle, file: package.assetURL(file), index: index, pageSize: page.size)
-        case .image(let file):
+        case .image(let file) where page.hasPicture:
             rects += await reader.pictureRects(for: needle, file: package.assetURL(file), pageSize: page.size)
-        case .template, .unknown:
+        default:
             break
         }
         if page.inkHash != nil || unsaved {

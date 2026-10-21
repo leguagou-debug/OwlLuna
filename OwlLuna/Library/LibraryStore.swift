@@ -46,6 +46,8 @@ final class LibraryStore {
     @ObservationIgnored var onSearchTextChanged: ((UUID) -> Void)?
     /// Called with this device's journal when it gave way to one begun earlier on another device.
     @ObservationIgnored var onJournalSetAside: ((UUID) -> Void)?
+    /// Called once a change to the smart shelves is on disk, so a sync can follow it.
+    @ObservationIgnored var onShelvesSaved: (() -> Void)?
     /// This device's settings, and which notebook it uses as the daily journal.
     @ObservationIgnored let defaults: UserDefaults
 
@@ -71,12 +73,19 @@ final class LibraryStore {
 
     @discardableResult
     func createNotebook(id: UUID = UUID(), title: String, cover: CoverSpec, defaults: PageDefaults, folder: FolderRecord?,
-                        startsWithBoard: Bool = false) async throws -> UUID {
-        let first = startsWithBoard ? NotebookPage.board(template: defaults.template, color: defaults.paperColor) : defaults.newPage()
-        var manifest = NotebookManifest(id: id, title: title, cover: cover, defaults: defaults, pages: [first])
-        manifest.library.folderID = folder?.id
-        manifest.library.lastOpenedAt = .now
-        try await assemble(id) { package in
+                        startsWithBoard: Bool = false, paper: CustomPaper? = nil) async throws -> UUID {
+        let folderID = folder?.id
+        let manifest = try await assemble(id) { package in
+            var defaults = defaults
+            if let paper, !startsWithBoard {
+                // The notebook keeps its own copy, so it stays whole when it is backed up, synced or shared.
+                let file = try await package.importAsset(from: paper.url, ext: paper.url.pathExtension)
+                defaults.paper = NotebookPaper(id: paper.id, background: paper.background(file: file), size: paper.newPageSize(width: defaults.pageSize.points.width))
+            }
+            let first = startsWithBoard ? NotebookPage.board(template: defaults.template, color: defaults.paperColor) : defaults.newPage()
+            var manifest = NotebookManifest(id: id, title: title, cover: cover, defaults: defaults, pages: [first])
+            manifest.library.folderID = folderID
+            manifest.library.lastOpenedAt = .now
             try await package.create(manifest)
             return manifest
         }
@@ -111,10 +120,11 @@ final class LibraryStore {
         let template = defaults.string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled
         let color = defaults.string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white
         let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let paper = defaults.string(forKey: SettingsKey.defaultPaper).flatMap { PaperShelf.paper($0, in: root) }
         let id = UUID()
         return try await createNotebook(id: id, title: String(localized: "Note \(Date.now.formatted(date: .abbreviated, time: .shortened))"),
                                         cover: .defaultCloth(for: id), defaults: PageDefaults(template: template, paperColor: color, pageSize: size),
-                                        folder: folder)
+                                        folder: folder, paper: paper)
     }
 
     /// A notebook that opens on a whiteboard, created without the sheet.
@@ -601,22 +611,36 @@ final class LibraryStore {
         smartShelves = await Task.detached(priority: .userInitiated) { SmartShelfFile.read(root).shelves }.value
     }
 
-    /// Replaces the saved filters. Writes are chained so they land in order, and each keeps what the file holds
-    /// that this version can't read.
+    /// Replaces the saved filters. Writes are chained so they land in order, with a sync's shelf pass among them, and
+    /// each takes only the shelves that changed, stamped, into the file as it is, keeping what this version can't read
+    /// and what a sync brought in meanwhile.
     func saveSmartShelves(_ shelves: [SmartShelf]) {
         guard shelves != smartShelves else { return }
+        let before = smartShelves, now = Date.now
         smartShelves = shelves
         let root = root, previous = smartShelfWrite
         smartShelfWrite = Task { [weak self] in
             await previous?.value
             let failure = await Task.detached(priority: .utility) { () -> String? in
                 var file = SmartShelfFile.read(root)
-                file.shelves = shelves
+                file.apply(from: before, to: shelves, at: now)
                 do { try file.write(root) } catch { return error.localizedDescription }
                 return nil
             }.value
             if let failure { self?.lastError = String(localized: "Smart shelves couldn't be saved: \(failure)") }
+            self?.onShelvesSaved?()
         }
+    }
+
+    /// Runs `work` in turn with the smart shelf writes, so neither reads the file while the other is changing it.
+    func holdingShelves<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value) async throws -> Value {
+        let previous = smartShelfWrite
+        let turn = Task.detached(priority: .utility) { () -> Result<Value, any Error> in
+            await previous?.value
+            return Result { try work() }
+        }
+        smartShelfWrite = Task { _ = await turn.value }
+        return try await turn.value.get()
     }
 
     /// A tag was renamed or removed across the library: searches are redone now, and a tag shelf lists its pages

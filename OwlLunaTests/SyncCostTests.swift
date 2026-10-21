@@ -136,7 +136,7 @@ final class SyncCostTests: XCTestCase {
 
     /// The small files every pass looks at, which aren't a notebook's pages.
     private func isDeciding(_ url: URL) -> Bool {
-        ["manifest.json", "cards.json", "copy-id", "folders.json"].contains(url.lastPathComponent)
+        ["manifest.json", "cards.json", "copy-id", "folders.json", "smart-shelves.json", "pens.json"].contains(url.lastPathComponent)
             || [cloud.tombstones, cloud.stickers].contains { $0.lastPathComponent == url.deletingLastPathComponent().lastPathComponent }
     }
 

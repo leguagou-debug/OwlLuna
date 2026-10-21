@@ -392,6 +392,7 @@ final class EditorSession {
             change(&box)
             items[index].content = .text(box)
             items[index] = items[index].fittedToText()
+            items[index].raw["agenda"] = nil
         }
     }
 
@@ -599,6 +600,7 @@ fileprivate struct EditorContent: View {
 
     @Environment(LibraryStore.self) private var store
     @Environment(FlashcardLibrary.self) private var flashcards
+    @Environment(AppModel.self) private var app: AppModel?
     @Environment(EditorWindow.self) private var window: EditorWindow?
     @Environment(\.editorPane) private var pane
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1124,11 +1126,11 @@ fileprivate struct EditorContent: View {
     private var undoButtons: some View {
         Button { document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z"))
-            .disabled(!session.canUndo)
+            .disabled(!session.canUndo || session.isEditingText)
             .accessibilityIdentifier("editor.undo")
         Button { document.undoManager.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z", [.command, .shift]))
-            .disabled(!session.canRedo)
+            .disabled(!session.canRedo || session.isEditingText)
             .accessibilityIdentifier("editor.redo")
     }
 
@@ -1157,14 +1159,27 @@ fileprivate struct EditorContent: View {
                 Button { tagging = .notebook } label: { Label("Tags…", systemImage: "tag") }
             }
             OwlLunaMenu {
-                Button { export = ExportJob(document: document) } label: { Label("Notebook as a PDF…", systemImage: "doc.richtext") }
-                Button { export = ExportJob(document: document, format: .images) } label: { Label("Every Page as an Image…", systemImage: "photo.on.rectangle") }
+                let here = currentPage == nil ? nil : session.currentPage
+                Button { export = ExportJob(document: document, choosing: true, current: here) } label: {
+                    Label("Notebook as a PDF…", systemImage: "doc.richtext")
+                }
+                if currentPage != nil {
+                    Button { export = ExportJob(document: document, choosing: true, current: here, thisPage: true) } label: {
+                        Label("This Page as a PDF…", systemImage: "doc")
+                    }
+                }
+                Button { export = ExportJob(document: document, format: .images, choosing: true, current: here) } label: {
+                    Label("Every Page as an Image…", systemImage: "photo.on.rectangle")
+                }
                 if let page = currentPage {
                     Button { export = ExportJob(document: document, format: .images, pages: [page]) } label: { Label("This Page as an Image…", systemImage: "photo") }
                     Button { export = ExportJob(document: document, format: .timelapse, pages: [page]) } label: {
                         Label("This Page as a Time-lapse Video…", systemImage: "film")
                     }
                     .disabled(document.loadedInk(page.id)?.strokes.isEmpty ?? (page.inkHash == nil))
+                }
+                Button { export = ExportJob(document: document, format: .text, choosing: true, current: here) } label: {
+                    Label("Notebook as Text…", systemImage: "doc.plaintext")
                 }
             } label: { Label("Export", systemImage: "square.and.arrow.up") }
             if let window, pane != .secondary {
@@ -1711,12 +1726,26 @@ fileprivate struct EditorContent: View {
     private var banners: some View {
         VStack(spacing: Space.x2) {
             ForEach(document.notices) { notice in
-                let letFingersDraw = NoticeBanner.Action(title: "Let Fingers Draw") { session.drawingInput = .anyInput }
-                NoticeBanner(notice: notice, action: notice.kind == .onlyPencilDraws ? letFingersDraw : nil) { document.dismissNotice(notice) }
+                NoticeBanner(notice: notice, action: bannerAction(notice.kind)) { document.dismissNotice(notice) }
             }
         }
         .padding(.top, Space.x2)
         .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: document.notices)
+    }
+
+    private func bannerAction(_ kind: DocumentNotice.Kind) -> NoticeBanner.Action? {
+        switch kind {
+        case .onlyPencilDraws:
+            NoticeBanner.Action(title: "Let Fingers Draw") { session.drawingInput = .anyInput }
+        case .newerVersion where app != nil && document.recorder?.isRecording != true:
+            NoticeBanner.Action(title: "Keep Both") {
+                let document = document, sync = app?.sync
+                // Said again when both can't be kept yet, so closing still does it.
+                Task { if await sync?.keepBoth(document.id) != true { document.noteNewerVersion() } }
+            }
+        default:
+            nil
+        }
     }
 
     private var recordButton: some View {
@@ -1767,7 +1796,7 @@ fileprivate struct EditorContent: View {
                 .disabled(document.isReadOnly)
                 MenuBreak()
             }
-            if let current, current.template != nil, !document.isReadOnly {
+            if let current, current.template != nil || current.notebookPaper != nil, !document.isReadOnly {
                 Button { paperMode = .change(pageID: current.id) } label: { Label("Change Paper…", systemImage: "paintpalette") }
             }
             Group {
@@ -1992,10 +2021,10 @@ private extension View {
 }
 
 enum PhotoImport {
-    /// A picture for placing on a page: at most 1,600 px on the long side, PNG when it has transparency.
-    static func picture(_ image: UIImage) throws -> (data: Data, size: CGSize, ext: String) {
+    /// A picture for placing on a page: at most `longSide` px on the long side, PNG when it has transparency.
+    static func picture(_ image: UIImage, longSide: CGFloat = 1600) throws -> (data: Data, size: CGSize, ext: String) {
         guard image.size.width > 0, image.size.height > 0 else { throw ImportError.unreadable }
-        let scale = min(1, 1600 / max(image.size.width * image.scale, image.size.height * image.scale))
+        let scale = min(1, longSide / max(image.size.width * image.scale, image.size.height * image.scale))
         let target = CGSize(width: (image.size.width * image.scale * scale).rounded(), height: (image.size.height * image.scale * scale).rounded())
         let alpha = image.cgImage?.alphaInfo ?? .none
         let transparent = ![.none, .noneSkipFirst, .noneSkipLast].contains(alpha)
@@ -2051,7 +2080,8 @@ struct NoticeBanner: View {
         let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.x2)) : AnyLayout(HStackLayout(spacing: Space.x3))
         layout {
             HStack(spacing: Space.x3) {
-                Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down" : "info.circle")
+                Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down"
+                                  : notice.kind == .keptCopy ? "doc.on.doc" : "info.circle")
                     .foregroundStyle(notice.kind == .saveFailed ? Color.tomato : Color.accentColor)
                 Text(notice.message).font(.subheadline).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)

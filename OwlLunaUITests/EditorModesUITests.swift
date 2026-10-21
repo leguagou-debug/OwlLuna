@@ -561,6 +561,9 @@ final class EditorModesUITests: XCTestCase {
         app.buttons["editor.title"].tap()
         app.buttons["Export"].firstMatch.tap()
         app.buttons["Every Page as an Image…"].firstMatch.tap()
+        let start = app.buttons["export.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10), "the pages are chosen first")
+        start.tap()
         let ready = app.staticTexts["Your 3 images are ready."]
         XCTAssertTrue(ready.waitForExistence(timeout: 30), "one image for each of the notebook's three pages")
         attach(app, "export-images")

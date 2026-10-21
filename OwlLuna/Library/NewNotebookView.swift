@@ -14,6 +14,7 @@ struct NewNotebookView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("newNotebookCoverStyle") private var style: CoverStyle = .cloth
     @State private var template: PaperTemplate
+    @State private var paper: CustomPaper?
     @State private var paperColor: PaperColor
     @State private var pageSize: PageSize
     @State private var useForQuickNote = false
@@ -55,7 +56,7 @@ struct NewNotebookView: View {
     }
 
     private var previewPage: URL {
-        FileManager.default.temporaryDirectory.appending(path: "cover-preview-\(template.rawValue)-\(paperColor.rawValue)-\(pageSize.rawValue).png")
+        FileManager.default.temporaryDirectory.appending(path: "cover-preview-\(paper?.id ?? template.rawValue)-\(paperColor.rawValue)-\(pageSize.rawValue).png")
     }
 
     private var request: CoverRequest {
@@ -103,6 +104,10 @@ struct NewNotebookView: View {
                 Button("OK", role: .cancel) {}
             }
             .task {
+                if let id = UserDefaults.standard.string(forKey: SettingsKey.defaultPaper) {
+                    let root = store.root
+                    paper = await Task.detached(priority: .userInitiated) { PaperShelf.paper(id, in: root) }.value
+                }
                 try? await Task.sleep(for: .milliseconds(350))
                 titleFocused = true
             }
@@ -115,23 +120,30 @@ struct NewNotebookView: View {
     private var preview: some View {
         VStack(spacing: Space.x3) {
             let coverWidth = Self.coverWidth
-            let page = NotebookPage.template(template, color: paperColor, size: pageSize)
+            let page = paper?.preview ?? NotebookPage.template(template, color: paperColor, size: pageSize)
+            let assets = paper?.url.deletingLastPathComponent() ?? FileManager.default.temporaryDirectory
             let aspect = page.size.width / max(page.size.height, 1)
             HStack(alignment: .bottom, spacing: 0) {
                 let pageFile = previewPage
                 CoverView(request: request, persist: false) {
                     await Task.detached(priority: .userInitiated) {
-                        let image = PageRenderer.image(of: page, ink: .init(), assets: FileManager.default.temporaryDirectory,
-                                                       width: PageThumbnailer.pixelWidth)
+                        let image = PageRenderer.image(of: page, ink: .init(), assets: assets, width: PageThumbnailer.pixelWidth)
                         try? image.pngData()?.write(to: pageFile, options: .atomic)
                     }.value
                 }
                 .frame(width: coverWidth)
                 .accessibilityHidden(false)
-                .accessibilityLabel(Text("Preview: \(style.displayName) cover for \(displayTitle), \(template.displayName) \(paperColor.displayName) paper"))
-                PaperPreview(template: template, color: paperColor, pageSize: page.size, renderWidth: 200)
-                    .frame(width: min(coverWidth * 1.25, coverWidth * 4 / 3 * aspect))
-                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .accessibilityLabel(paper.map { Text("Preview: \(style.displayName) cover for \(displayTitle), on \($0.name)") }
+                                    ?? Text("Preview: \(style.displayName) cover for \(displayTitle), \(template.displayName) \(paperColor.displayName) paper"))
+                Group {
+                    if let paper {
+                        PaperPreview(paper: paper, renderWidth: 200)
+                    } else {
+                        PaperPreview(template: template, color: paperColor, pageSize: page.size, renderWidth: 200)
+                    }
+                }
+                .frame(width: min(coverWidth * 1.25, coverWidth * 4 / 3 * aspect))
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             }
             .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: pageSize)
             ShuffleButton(style: style, action: shuffle)
@@ -173,8 +185,11 @@ struct NewNotebookView: View {
 
             label("Paper")
             PaperGallery(template: $template, color: paperColor, pageSize: pageSize.points,
-                         hint: { _ in String(localized: "Sets the first page's paper") }, onPick: { _ in }, compact: true)
+                         hint: { _ in String(localized: "Sets the first page's paper") }, onPick: { _ in paper = nil }, compact: true,
+                         own: PaperGallery.Own(root: store.root, chosen: paper?.id, hint: String(localized: "Sets the first page's paper")) { paper = $0 })
             PaperColorChips(selection: $paperColor)
+                .disabled(paper != nil)
+                .opacity(paper != nil ? 0.45 : 1)
             if withPageOptions { pageOptions }
         }
     }
@@ -218,6 +233,7 @@ struct NewNotebookView: View {
             self.starter = starter
             style = spec.style
             template = starter.template
+            paper = nil
             paperColor = starter.paperColor
             if spec.style == .print {
                 inkPair = RisoInk.pairs.firstIndex { $0.0 == spec.inks.0 && $0.1 == spec.inks.1 } ?? inkPair
@@ -242,12 +258,14 @@ struct NewNotebookView: View {
         do {
             let created = try await store.createNotebook(id: id, title: displayTitle, cover: spec,
                                                          defaults: PageDefaults(template: template, paperColor: paperColor, pageSize: pageSize),
-                                                         folder: folder, startsWithBoard: starter?.startsWithBoard(template: template) ?? false)
+                                                         folder: folder, startsWithBoard: paper == nil && starter?.startsWithBoard(template: template) == true,
+                                                         paper: paper)
             if useForQuickNote {
                 let defaults = UserDefaults.standard
                 defaults.set(template.rawValue, forKey: SettingsKey.defaultTemplate)
                 defaults.set(paperColor.rawValue, forKey: SettingsKey.defaultPaperColor)
                 defaults.set(pageSize.rawValue, forKey: SettingsKey.defaultPageSize)
+                defaults.set(paper?.id, forKey: SettingsKey.defaultPaper)
             }
             dismiss()
             onCreated(created)

@@ -109,17 +109,19 @@ These values were chosen in the simulator and need judging with a real hand. The
 | Zoom window: rest before it moves on | 0.8 s | `ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`; used at `OwlLuna/Canvas/PageStack.swift:2771` | [Pencil 8](#pencil-8) |
 | Zoom window: the band | the last 30% of the window (`advanceZone` 0.7); moves 55% of its width (`stride`); windows of 30, 42 or 60% of the page (`widths`) | `OwlLuna/Canvas/ZoomWindow.swift:9`, `:11`, `:7` | [Pencil 8](#pencil-8) |
 | Handwriting to Text: rest before it is set as type | 1.0 s (`InkTyping.pause`), with the reading begun 0.4 s into it (`InkTyping.lookAhead`). It was 1.2 s before | `OwlLuna/Canvas/InkTyping.swift:13`, `:17`; the timer at `OwlLuna/Canvas/PageStack.swift:1142`. A Debug build takes `-inkTypingPause <seconds>` (`InkTyping.swift:11`) | [Pencil 9](#pencil-9) |
-| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:278`; used at `OwlLuna/Canvas/PageStack.swift:1209` (loop) and `:1241` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
-| Draw and hold: how still a rest is | 6 pt (`TouchRests.slop`) | `OwlLuna/Canvas/ShapeSnap.swift:304` | [Pencil 7](#pencil-7) |
-| Draw and hold: which touch's rest counts | the Pencil's; a finger's only when fingers draw and it was alone on the pages; only for a stroke begun while that touch was down | `TouchRests.began`, `OwlLuna/Canvas/ShapeSnap.swift:322`; `TouchRests.take`, `:353` | [Pencil 3](#pencil-3) |
-| Draw and hold: smallest shape | 24 pt across | `OwlLuna/Canvas/ShapeSnap.swift:32` | [Pencil 7](#pencil-7) |
+| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:305`; used at `OwlLuna/Canvas/PageStack.swift:1209` (loop) and `:1241` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
+| Draw and hold: how still a rest is | 6 pt (`TouchRests.slop`) | `OwlLuna/Canvas/ShapeSnap.swift:331` | [Pencil 7](#pencil-7) |
+| Draw and hold: which touch's rest counts | the Pencil's; a finger's only when fingers draw and it was alone on the pages; only for a stroke begun while that touch was down | `TouchRests.began`, `OwlLuna/Canvas/ShapeSnap.swift:349`; `TouchRests.take`, `:380` | [Pencil 3](#pencil-3) |
+| Draw and hold: smallest shape | 24 pt across | `OwlLuna/Canvas/ShapeSnap.swift:35` | [Pencil 7](#pencil-7) |
+| Draw and hold: an arrow | a hook, or a barb either side of the tip, no longer than half the line and turned back 10° to 65° from it; redrawn with barbs 30° either side | `ShapeRecognizer.arrow`, `OwlLuna/Canvas/ShapeSnap.swift:139`; the barbs at `:296` | [Pencil 7](#pencil-7) |
+| Shapes: an arrow's head | 14 pt and 3 times the pen's width, at most a third of the arrow | `OwlLuna/Canvas/ShapeSnap.swift:522` | [Pencil 7](#pencil-7) |
 | Scribble to erase | at least 5 turns (`minimumReversals`), travelling 4 times its own diagonal (`density`), over half of a stroke (`cover`) | `OwlLuna/Canvas/PencilGestures.swift:7`, `:9`, `:11` | [Pencil 6](#pencil-6) |
 | Loop to select | its ends within 30% of its size, or 20 pt | `OwlLuna/Canvas/PencilGestures.swift:105` | [Pencil 6](#pencil-6) |
 | Undo budget | 48 MB, between 20 and 200 steps (`UndoBudget`) | `OwlLuna/Editor/NotebookDocument.swift:46`, `:47`; applied after a save at `:705` | [Measure 3](#measure-3) |
 
 ## iCloud sync
 
-One sitting on two iPads, called A and B. The steps build on each other, so run them in order. Allow about three and a half hours, plus an overnight wait if you try the optional storage step in [Sync 8](#sync-8).
+One sitting on two iPads, called A and B. The steps build on each other, so run them in order. Allow about four hours, plus an overnight wait if you try the optional storage step in [Sync 8](#sync-8).
 
 Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iCloud by the maintainer in October 2026, on iPads signed in to one Apple Account. The rest are still open. A new sitting still runs them in order, since the later checks use the notebooks they make. Those results came before sync stopped downloading the whole iCloud folder at every pass (CHANGELOG, Unreleased), which changes what Sync 1, 5, 7 and 8 rely on: run them again, with [Sync 14](#sync-14).
 
@@ -132,7 +134,7 @@ Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iClou
 - Console on the Mac, one window per iPad, filtered to `subsystem:com.owais.OwlLuna category:sync`.
 - A note of the time (by the iPad's clock) at each step, so logs can be matched to it.
 
-**"Sync A"** in the steps means: on A, close any open notebook with **Library** (a notebook syncs when it is closed), open Settings (the library sidebar's **Settings**), tap **Sync Now** under iCloud, and wait until the line below it ends "Last synced" with the time now. Screenshot that line. **"Wait"** means a minute; iCloud carries files between devices in its own time.
+**"Sync A"** in the steps means: on A, close any open notebook with **Library** (a pass leaves an open notebook for later; one being written in is sent on its own once writing pauses, see [Sync 15](#sync-15)), open Settings (the library sidebar's **Settings**), tap **Sync Now** under iCloud, and wait until the line below it ends "Last synced" with the time now. Screenshot that line. **"Wait"** means a minute; iCloud carries files between devices in its own time.
 
 **Evidence for every step:** Console `category:sync` on both iPads, a screen recording of each iPad, the Settings › iCloud screenshot after each sync, and a sysdiagnose on both iPads at the first failure. On a Debug build, Download Container on both iPads after a failure too.
 
@@ -151,6 +153,7 @@ Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iClou
 
 **Pass:**
 - A's line says how many notebooks were sent: eight, if A started empty.
+- During step 5 a cobalt thread runs along the foot of A's library bar, Settings shows "Syncing … of 8 notebooks" over a row of ticks, then "Uploading … of 8 notebooks to iCloud" with the ticks filling as they go up, and each cover says "Not uploaded yet" under it until it is up. Screenshot the count once part-way.
 - B didn't copy anything before you answered.
 - B's library shows all eight, with the same covers. "Sync 1" opens on B with both pages, the ink and the photo.
 - B's line says the notebooks were received, then, after another Sync Now, "Everything is up to date".
@@ -169,14 +172,14 @@ Sync 1, 4, 5 and 7, and the lock and folder in Sync 3, were tested on real iClou
 1. On A, open "Sync 1" and leave it open at page 1 without writing. Go to the Home Screen.
 2. On B, open "Sync 1", write "from B" on page 2, tap **Library**. Sync B. Wait.
 3. On A, open OwlLuna again (it comes back in "Sync 1").
-4. On A, still in "Sync 1", write "from A" on page 1 and go to the Home Screen without leaving the notebook.
+4. On A, still in "Sync 1", tap **Record Audio** and leave it recording (a notebook being recorded into isn't sent), write "from A" on page 1 and go to the Home Screen without leaving the notebook.
 5. On B, open "Sync 1", write "B again" on page 1, tap **Library**. Sync B. Wait.
-6. On A, open OwlLuna again. Read the banner, then tap **Library**.
+6. On A, open OwlLuna again. Read the banner, stop the recording, then tap **Library**.
 7. Sync A, wait, Sync B.
 
 **Pass:**
 - Step 3: within a few seconds A's editor shows "from B" on page 2, at the same page, with no conflicted copy.
-- Step 6: A keeps "from A" and its banner says "A newer version is waiting in iCloud. When you close this notebook, both are kept, the older as a conflicted copy."
+- Step 6: A keeps "from A" and its banner says "This notebook was changed on another device too. Keep Both keeps the older version as a conflicted copy, as closing it would." **Keep Both** shows only once the recording has stopped.
 - Step 7: both iPads have "Sync 1" and "Sync 1 (conflicted copy)", and between them they hold "from B", "from A" and "B again". The library's iCloud plate (cobalt) lists the copy with **Open**.
 
 **Common failures:**
@@ -270,7 +273,7 @@ A pass that would take more than three notebooks out of the library, or more tha
 
 **Done:** tested on real iCloud by the maintainer, October 2026.
 
-There is no progress figure for a large upload yet (ARCHITECTURE › iCloud sync › Not done), so this check times it by hand.
+One notebook isn't counted in Settings (two or more are), so this check times it by hand, with "Not uploaded yet" under its cover as the mark.
 
 **Setup:** a PDF of 200 pages or more, such as a textbook.
 
@@ -282,7 +285,7 @@ There is no progress figure for a large upload yet (ARCHITECTURE › iCloud sync
 5. Note when A stops saying the notebook is still uploading, and when it opens whole on B.
 
 **Pass:**
-- A says the notebook is still uploading until it has, then "Everything is up to date".
+- A says the notebook is still uploading until it has, then "Everything is up to date". Its cover says "Not uploaded yet" for the same time, and not after.
 - B says it is still downloading, and the notebook only appears once all of it is there. On B every page, the PDF, the ink and the recording are there and play.
 - The upload carries on by itself after the Wi-Fi break.
 - Record the two times; there is no target yet.
@@ -416,6 +419,49 @@ A pass brings down each notebook's manifest and cards first, then only what a no
 
 **Common failures:** "couldn't evict" lines (note the error text from Xcode's console on a Debug build); the space used not dropping, which may mean iCloud keeps a package as one item; B taking as long as a whole download, or downloading the PDF again; blank PDF pages or a missing recording on B; the pass with no network taking a minute or more.
 
+<a id="sync-15"></a>
+### Sync 15. A notebook open on both iPads
+
+A notebook open in an editor is sent on its own a few seconds after writing pauses, and one open on the other iPad with nothing unsaved takes it in place (ARCHITECTURE › iCloud sync › A notebook open on two devices). Only the tests' plain folder has seen this so far.
+
+**Steps:**
+1. On both iPads, open "Sync 4" at page 1. Leave B alone.
+2. On A, write "live A" on page 1, lift the Pencil and wait 10 seconds. Note the time.
+3. Watch B for a minute.
+4. On B, write "live B" under it, wait 10 seconds, and watch A for a minute.
+5. On A, write without stopping for a minute (a line of loops will do), then stop. Watch B.
+6. On A, tap **Record Audio** and leave it recording. Write "A recording". On B, write "B meanwhile" and wait 10 seconds. Watch A for a minute.
+7. On A, stop the recording. Read the banner, then tap **Keep Both**.
+8. Wait a minute. On both iPads, tap **Library** and open the library's iCloud plate where there is one. Sync A, wait, Sync B.
+
+**Pass:**
+- Step 3: B shows "live A" within about half a minute of step 2, in place at page 1, with no banner and no conflicted copy.
+- Step 4: A shows "live B" the same way.
+- Step 5: B catches up at least every half minute while A writes, and has all of it soon after A stops. B's page jumps back to page 1 at most when it does.
+- Step 6: A's banner says "This notebook was changed on another device too…" with no **Keep Both** while it records.
+- Step 7: **Keep Both** appears once the recording stops. After it, A stays on its own writing with "The version from another device is kept in your library as “Sync 4 (conflicted copy)”." B, with nothing unsaved, shows A's writing in place within half a minute.
+- Step 8: both libraries have "Sync 4" with "A recording" and the recording, and "Sync 4 (conflicted copy)" with "B meanwhile". A's iCloud plate lists the copy with **Open**. Nothing else is copied, lost or doubled.
+
+**Common failures:** B never catching up until A closes the notebook; B reloading while it has writing of its own, losing it; a conflicted copy made where only one iPad wrote; a notebook on B with pages missing or blank after it caught up (note the time, as two iPads sending within seconds of each other is a known gap); **Keep Both** doing nothing, or making two copies.
+
+<a id="sync-16"></a>
+### Sync 16. Smart shelves and the pens in the tray
+
+**Steps:**
+1. On A, make a smart shelf "Device shelf" for the tag "device-check" (sidebar, **New Smart Shelf**). On B, open any notebook and add a pen to the tray in a colour A doesn't have; tap **Library**.
+2. Sync A, wait, Sync B, wait, Sync A.
+3. On B, rename "Device shelf" to "Device shelf 2". On A, make a second smart shelf "Other shelf" for any tag. Sync B, wait, Sync A, wait, Sync B.
+4. On A, open a notebook and pick the pen B added. On B, remove that pen from its tray. Sync B, wait, Sync A.
+5. On A, delete "Other shelf". Sync A, wait, Sync B.
+
+**Pass:**
+- Step 2: B has "Device shelf" with "Sync 4" on it, and A's tray has B's new pen, in the same place as on B.
+- Step 3: both have "Device shelf 2" and "Other shelf".
+- Step 4: the pen is gone from A's tray too, and A has the pen that took its place in hand rather than nothing.
+- Step 5: "Other shelf" is gone on both. No smart shelf comes back after it was deleted, and none is doubled.
+
+**Common failures:** a shelf twice or coming back; a rename going back; a pen from one iPad wiping out changes made on the other in the same minute (the tray goes as one list, so the later change wins); the tray empty or the eraser in hand after pens arrive.
+
 **To finish the sitting:** Sync both, compare the two libraries notebook by notebook, and screenshot both Settings › iCloud lines.
 
 ## Apple Pencil
@@ -460,7 +506,7 @@ A pass brings down each notebook's manifest and cards first, then only what a no
 <a id="pencil-3"></a>
 ### Pencil 3. Palm rejection
 
-A resting palm or thumb must never draw, scroll, or count as the Pencil resting for draw and hold (`TouchRests`, `OwlLuna/Canvas/ShapeSnap.swift:303` to `:359`). How often a palm gets past iPadOS's own palm rejection has never been seen.
+A resting palm or thumb must never draw, scroll, or count as the Pencil resting for draw and hold (`TouchRests`, `OwlLuna/Canvas/ShapeSnap.swift:330` to `:386`). How often a palm gets past iPadOS's own palm rejection has never been seen.
 
 **Steps:**
 1. With **⋯** › **Draw With** › **Apple Pencil Only**, write a paragraph with the side of your hand on the glass, as on paper: on the lower half of the page, and close to the tray.
@@ -532,7 +578,7 @@ These have only been recognised from strokes drawn by tests.
 
 **Common failures:** a scribble left as a zigzag (too strict); "m" or "w" erasing (too loose); a loop selecting without the hold; the loop's own stroke left behind.
 
-**Tunable:** scribble needs at least 5 turns (`ScribbleRecognizer.minimumReversals`, `OwlLuna/Canvas/PencilGestures.swift:7`), 4 times its diagonal in length (`density`, `:9`) and half of a stroke under it (`cover`, `:11`). A loop's ends must meet within 30% of its size or 20 pt (`:105`), then rest 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:278`). Note which way each miss went.
+**Tunable:** scribble needs at least 5 turns (`ScribbleRecognizer.minimumReversals`, `OwlLuna/Canvas/PencilGestures.swift:7`), 4 times its diagonal in length (`density`, `:9`) and half of a stroke under it (`cover`, `:11`). A loop's ends must meet within 30% of its size or 20 pt (`:105`), then rest 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:305`). Note which way each miss went.
 
 **Evidence:** a screen recording and the counts.
 
@@ -543,7 +589,7 @@ These have only been recognised from strokes drawn by tests.
 
 **Steps:**
 1. Draw a line, rest the Pencil for half a second and lift. Then draw one and lift without resting.
-2. With a rest each time: a circle, an ellipse, a rectangle, a triangle, a five-sided shape, and an open zigzag of three straight pieces.
+2. With a rest each time: a circle, an ellipse, a rectangle, a triangle, a five-sided shape, an open zigzag of three straight pieces, a line with a short hook turned back at its end, and a line with a barb either side of its tip.
 3. After each one that straightens, Undo twice.
 4. Draw a shape smaller than a fingertip (under 24 pt) and rest.
 5. Write a page of handwriting with your usual pauses at the ends of words.
@@ -551,11 +597,11 @@ These have only been recognised from strokes drawn by tests.
 7. Tie Shapes on from the tray's Customise Tools and tap it. Pick each shape on the strip over the tray and drag one out with the Pencil, quickly and slowly. Then do the same with a finger, with Draw With set to Pencil Only and then to Any Input.
 8. Tap Undo on the strip, then tap Shapes and write a word.
 
-**Pass:** shapes straighten only after a rest, into the kind drawn. The first Undo gives your own stroke back and the second removes it. Step 4 and step 6 are left as drawn. Nothing in step 5 straightens. In step 7 the outline keeps up with the tip and lands as the shape picked, in the pen's ink and about as wide as a stroke of the same pen; a finger scrolls with Pencil Only and draws a shape with Any Input. In step 8 one Undo takes the last shape away whole, and the word is ink as written.
+**Pass:** shapes straighten only after a rest, into the kind drawn. The first Undo gives your own stroke back and the second removes it. Both of the last two in step 2 become an arrow with a barb either side, about as long as the hook you drew. Step 4 and step 6 are left as drawn. Nothing in step 5 straightens. In step 7 the outline keeps up with the tip and lands as the shape picked, in the pen's ink and about as wide as a stroke of the same pen; a finger scrolls with Pencil Only and draws a shape with Any Input. In step 8 one Undo takes the last shape away whole, and the word is ink as written.
 
-**Common failures:** a pause at the end of a word turning a letter into a line; a held shape not straightening; Undo removing the stroke at once; a dragged-out shape much thinner or bolder than the pen writes, or its outline trailing the tip.
+**Common failures:** a pause at the end of a word turning a letter into a line; an L or a tick turning into an arrow, or a hook you meant as an arrow staying two straight pieces; a held shape not straightening; Undo removing the stroke at once; a dragged-out shape much thinner or bolder than the pen writes, or its outline trailing the tip.
 
-**Tunable:** the rest is 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:278`). Too short: letters and ticks you pause on become lines. Too long: you hold and wait and are unsure it took. A rest only counts while the tip stays within 6 pt (`TouchRests.slop`, `:304`); if a steady hold still fails, the tip is drifting further than that. It must be taken within 2 s of lifting (`takeHold(for:within:)`, `:403`). Count, of 20 deliberate holds, how many straightened, and on the handwriting page how many straightened by mistake.
+**Tunable:** the rest is 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:305`). Too short: letters and ticks you pause on become lines. Too long: you hold and wait and are unsure it took. A rest only counts while the tip stays within 6 pt (`TouchRests.slop`, `:331`); if a steady hold still fails, the tip is drifting further than that. It must be taken within 2 s of lifting (`takeHold(for:within:)`, `:430`). Count, of 20 deliberate holds, how many straightened, and on the handwriting page how many straightened by mistake.
 
 **Evidence:** a screen recording and the counts.
 
@@ -636,10 +682,11 @@ This has only read block letters drawn by a test.
 3. In the library, **New** › **Scan Documents…** and scan two sheets.
 4. Wait a minute, then search the library for a word printed on a scan and open the result.
 5. In that notebook, ⌘F (or **⋯** › **Find in Notebook…**) for the same word.
+6. **Import PDF…** a scanned book of about 100 pages with no text of its own. Write on its first pages straight away, then after a few minutes search for a word printed near its end, and ⌘F for it there.
 
-**Pass:** the prompt reads "OwlLuna uses the camera to scan paper into your notebooks." The sheets go in after the current page, straight and cropped, as tall as the paper was, and one Undo removes all three. The library's scan makes a notebook of its own with the first page as its cover. Search finds the word and opens at its page, and Find marks it.
+**Pass:** the prompt reads "OwlLuna uses the camera to scan paper into your notebooks." The sheets go in after the current page, straight and cropped, as tall as the paper was, and one Undo removes all three. The library's scan makes a notebook of its own with the first page as its cover. Search finds the word and opens at its page, and Find marks it. The scanned book stays smooth to write in while it is read, search finds the word, and Find marks it where it is printed.
 
-**Common failures:** soft or low-resolution pages (a scan is kept at up to 2,400 px); a page on its side; pages out of order; the printed words never found.
+**Common failures:** soft or low-resolution pages (a scan is kept at up to 2,400 px); a page on its side; pages out of order; the printed words never found; the iPad growing warm or the pen lagging while a scanned book is read (each of its pages is an "OCR page" signpost).
 
 **Evidence:** screenshots of the pages and of the search result.
 

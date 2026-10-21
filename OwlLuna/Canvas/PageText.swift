@@ -143,9 +143,10 @@ extension TextBox {
         var gap: CGFloat = 0
     }
 
-    /// A list's lines start with their marker and a tab across to the indent the rest of the line keeps to; a checklist's
-    /// boxes are drawn in the room its tab leaves. With `markersOnly` the words are there but clear, for drawing under the
-    /// editor's own; `editing` leaves the markers out and stands every line at the indent, as the editor holds the words.
+    /// A list's lines start with their marker and a tab across to the indent the rest of the line keeps to, each tab joined
+    /// to what follows so a long first word can't leave its marker alone on a line; a checklist's boxes are drawn in the
+    /// room its tab leaves. With `markersOnly` the words are there but clear, for drawing under the editor's own; `editing`
+    /// leaves the markers out and stands every line at the indent, as the editor holds the words.
     private func typeset(_ string: String, color: UIColor, highlight: UIColor? = nil, scale: CGFloat = 1, markersOnly: Bool = false,
                          editing: Bool = false) -> Typeset {
         let font = font(scale: scale)
@@ -156,6 +157,10 @@ extension TextBox {
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = alignment.textAlignment
             paragraph.lineBreakMode = .byWordWrapping
+            if scale != 1 {
+                paragraph.tabStops = paragraph.tabStops?.map { NSTextTab(textAlignment: $0.alignment, location: $0.location * scale, options: $0.options) }
+                paragraph.defaultTabInterval *= scale
+            }
             words[.paragraphStyle] = paragraph
             let text = NSMutableAttributedString(string: string, attributes: words)
             if words.count > 3 { Self.plainNewlines(in: text) }
@@ -194,7 +199,7 @@ extension TextBox {
             if list == .check, checked.contains(index), !markersOnly { look[.foregroundColor] = color.withAlphaComponent(0.5) }
             if let marker = markers[index], !editing {
                 if list == .check { checks.append((index, text.length)) }
-                text.append(NSAttributedString(string: list == .check ? "\t" : "\t\(marker)\t",
+                text.append(NSAttributedString(string: list == .check ? "\t\u{2060}" : "\t\u{2060}\(marker)\t\u{2060}",
                                                attributes: [.font: font, .foregroundColor: color, .paragraphStyle: item]))
             }
             text.append(NSAttributedString(string: index < lines.count - 1 ? line + "\n" : line, attributes: look))

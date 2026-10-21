@@ -28,7 +28,8 @@ private enum LegacyText {
         UIGraphicsPopContext()
     }
 
-    /// What those builds read of a text box and wrote back: everything they were given, with their own keys set over it.
+    /// What those builds read of a text box and wrote back: everything they were given, with their own keys set over it and
+    /// the box refitted to their own measure, growing downwards.
     static func roundTrip(_ object: [String: JSONValue], edit: (inout String, inout Bool) -> Void) -> [String: JSONValue] {
         var string = object["text"]?.stringValue ?? "", bold = object["bold"]?.boolValue ?? false
         edit(&string, &bold)
@@ -38,6 +39,13 @@ private enum LegacyText {
         written["bold"] = .bool(bold)
         written["color"] = object["color"] ?? .string("ink")
         written["align"] = object["align"] ?? .string("leading")
+        let box = TextBox(string: string, fontSize: CGFloat(written["fs"]?.doubleValue ?? 17), isBold: bold,
+                          alignment: written["align"]?.stringValue.flatMap(TextBox.Alignment.init(rawValue:)) ?? .leading)
+        let fitted = Double(height(box, width: CGFloat(object["w"]?.doubleValue ?? 1)))
+        let dy = (fitted - (object["h"]?.doubleValue ?? fitted)) / 2, turn = object["r"]?.doubleValue ?? 0
+        written["h"] = .number(fitted)
+        written["x"] = .number((object["x"]?.doubleValue ?? 0) - dy * sin(turn))
+        written["y"] = .number((object["y"]?.doubleValue ?? 0) + dy * cos(turn))
         return written
     }
 }

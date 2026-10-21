@@ -30,6 +30,7 @@ struct NotebookCoverItem: View {
     let action: () -> Void
     @Environment(LibraryStore.self) private var store
     @Environment(LibraryChangeCenter.self) private var changes
+    @Environment(AppModel.self) private var app: AppModel?
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -64,6 +65,7 @@ struct NotebookCoverItem: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(record.accessibilityDescription)
+        .accessibilityValue(app?.sync.isUploading(record.id) == true ? String(localized: "Not uploaded yet") : "")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
         .accessibilityActions {
@@ -87,6 +89,7 @@ struct NotebookCoverItem: View {
             Text(parts.joined(separator: " · "))
                 .font(.footnote.weight(.medium).monospacedDigit())
                 .foregroundStyle(Color.textSecondary)
+            UploadMark(id: record.id)
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(width: width, alignment: .leading)

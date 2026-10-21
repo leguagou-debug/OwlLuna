@@ -57,6 +57,8 @@ enum SettingsKey {
     static let defaultTemplate = "defaultTemplate"
     static let defaultPaperColor = "defaultPaperColor"
     static let defaultPageSize = "defaultPageSize"
+    /// The user's own paper for Quick Note, by its ID; the template stands in when it is gone.
+    static let defaultPaper = "defaultPaper"
     static let darkPaper = "darkPaper"
     static let librarySort = "librarySort"
     static let librarySortReversed = "librarySortReversed"
@@ -83,6 +85,7 @@ enum SettingsKey {
     static let journalAgenda = "journalAgenda"
     static let spotlight = "showsInSpotlight"
     static let toolPresets = "toolPresets"
+    static let toolPresetsChangedAt = "toolPresetsChangedAt"
     static let snapsHighlighter = "snapsHighlighter"
     static let highlightColor = "highlightColor"
     static let toolbox = "toolbox"

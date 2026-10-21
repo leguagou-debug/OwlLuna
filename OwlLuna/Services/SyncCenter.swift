@@ -32,8 +32,12 @@ final class SyncCenter {
     }
     private(set) var lastError: String?
     private(set) var lastReport: SyncReport?
+    /// How far the pass under way has got through the notebooks it moves; nil while none is under way.
+    private(set) var progress: SyncProgress?
     /// What iCloud still has to upload from the synced copy, as last looked at.
     private(set) var uploads = CloudUploads()
+    /// How many of the notebooks iCloud has been uploading since it last had none to upload are up; nil with none left.
+    private(set) var uploading: SyncProgress?
     /// What the library shows about sync: failures, and conflicted copies made since it was last put away.
     private(set) var news = SyncNews()
     /// The switch in Settings. It can be set while iCloud is unavailable, and takes effect once it isn't.
@@ -69,6 +73,9 @@ final class SyncCenter {
     @ObservationIgnored private var pulls = 0
     @ObservationIgnored private var isPulling = false
     @ObservationIgnored private var uploadCheck: Task<Void, Never>?
+    @ObservationIgnored private var uploadBatch: Set<UUID> = []
+    /// Open notebooks saved since they were last sent, each with when the first of those saves was.
+    @ObservationIgnored private var sends: [UUID: (task: Task<Void, Never>, since: ContinuousClock.Instant)] = [:]
     @ObservationIgnored private var stopped: String?
     /// Conflicted copies the library hasn't shown yet, kept across launches so a quit doesn't lose them.
     @ObservationIgnored private var newCopies: [UUID] = [] {
@@ -99,6 +106,14 @@ final class SyncCenter {
     @ObservationIgnored var release: @MainActor (UUID) -> Void = { _ in }
     /// A pass settles the folders inside this, which the library uses to keep its own folder writes out of the way.
     @ObservationIgnored var holdFolders: @MainActor (@escaping @Sendable () throws -> FolderPass?) async throws -> FolderPass? = { try $0() }
+    /// And the smart shelves inside this.
+    @ObservationIgnored var holdShelves: @MainActor (@escaping @Sendable () throws -> FolderPass?) async throws -> FolderPass? = { try $0() }
+    /// This device's pens, read as a pass begins; nil leaves them out.
+    @ObservationIgnored var pens: @MainActor () -> SyncedPens? = { nil }
+    /// Called with pens another device changed, and the stamp this device's had when the pass read them.
+    @ObservationIgnored var onPensArrived: (@MainActor (SyncedPens, Date?) -> Void)?
+    /// The open notebooks: sent while they are written in, and brought up to date after every pass.
+    @ObservationIgnored var editors: DocumentRegistry?
 
     init(root: StorageRoot, defaults: UserDefaults = .standard) {
         self.root = root
@@ -250,7 +265,10 @@ final class SyncCenter {
         guard canSync else { return }
         guard !isSyncing else { wantsAnotherPass = true; return }
         isSyncing = true
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            progress = nil
+        }
         repeat {
             wantsAnotherPass = false
             var done: SyncReport?, failure: (any Error)?
@@ -277,6 +295,8 @@ final class SyncCenter {
             switch failure {
             case nil:
                 if let done { await onSynced?(done) }
+                // A notebook open here was left alone: one with nothing unsaved takes a newer version in place.
+                if let done, let editors, !done.open.isEmpty { await catchUp(open: editors, only: Set(done.open)) }
                 await checkUploads()
             case is CancellationError:
                 // Stopped part-way because sync was turned off or the copy moved. Whoever stopped it decides what follows.
@@ -301,17 +321,21 @@ final class SyncCenter {
         while pulls > 0 { try? await Task.sleep(for: .milliseconds(20)) }
         guard canSync, let cloud else { return nil }
         let root = root, account = account, keeping = keeping, lettingGo = lettingGo, replacing = replacingFolders
-        let take = take, release = release, holdFolders = holdFolders
+        let take = take, release = release, holdFolders = holdFolders, holdShelves = holdShelves, pens = pens()
         let signedIn: @Sendable () -> String? = { SyncCenter.marker(for: FileManager.default.ubiquityIdentityToken) }
+        let advance: @Sendable (SyncProgress) -> Void = { [weak self] step in Task { @MainActor in self?.advance(step) } }
+        progress = nil
         let task = Task.detached(priority: .utility) {
             try await LibrarySync.run(root: root, cloud: cloud, account: account, keeping: keeping, lettingGo: lettingGo, replacingFolders: replacing,
                                       take: { await take($0) }, release: { await release($0) },
-                                      holdingFolders: { try await holdFolders($0) }, signedIn: cloud.isUbiquitous ? signedIn : nil)
+                                      holdingFolders: { try await holdFolders($0) }, signedIn: cloud.isUbiquitous ? signedIn : nil,
+                                      pens: pens, holdingShelves: { try await holdShelves($0) }, progress: advance)
         }
         running = task
         defer { running = nil }
         do {
             let report = try await task.value
+            if let received = report.pensReceived { onPensArrived?(received, pens?.changedAt) }
             self.keeping.subtract(keeping)
             // One the pass left for later is still let go when it comes back to it.
             self.lettingGo.subtract(lettingGo.subtracting(report.waiting))
@@ -319,10 +343,18 @@ final class SyncCenter {
             return report
         } catch let stopped as StoppedPass {
             // What was agreed was saved, kept notebooks and all.
+            if let received = stopped.report.pensReceived { onPensArrived?(received, pens?.changedAt) }
             self.keeping.subtract(keeping)
             self.lettingGo.subtract(stopped.report.removedHere + stopped.report.removedThere)
             throw stopped
         }
+    }
+
+    /// Steps can reach the main actor out of order: one behind the last shown is dropped.
+    private func advance(_ step: SyncProgress) {
+        guard isSyncing else { return }
+        if let progress, progress.total == step.total, progress.done > step.done { return }
+        progress = step
     }
 
     /// The notebooks the last pass wouldn't take as deleted are wanted after all: the next pass brings them back
@@ -360,11 +392,7 @@ final class SyncCenter {
         let deadline = ContinuousClock.now + limit
         pulls += 1
         defer { pulls -= 1 }
-        while isEnabled, availability == .checking || reviewing > 0 || running != nil || isPulling, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(50))
-        }
-        guard canSync, let cloud, running == nil, !isPulling else { return [:] }
-        isPulling = true
+        guard let cloud = await takeTurn(by: deadline) else { return [:] }
         defer { isPulling = false }
         let root = root, take = take ?? self.take, release = release
         var outcome: [UUID: LibrarySync.Newer] = [:]
@@ -381,16 +409,116 @@ final class SyncCenter {
         return outcome
     }
 
+    /// Waits until no pass or other pull is under way, up to `deadline`, and takes the turn: `isPulling` is then the
+    /// caller's to put back. Nil when sync can't run, or time ran out.
+    private func takeTurn(by deadline: ContinuousClock.Instant) async -> CloudFolder? {
+        while isEnabled, availability == .checking || reviewing > 0 || running != nil || isPulling, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        guard canSync, let cloud, running == nil, !isPulling else { return nil }
+        isPulling = true
+        return cloud
+    }
+
     /// Notebooks open in an editor that another device has written in since: one with nothing unsaved takes that version
-    /// and its editor opens it again, and one with writing of its own is told that a newer version is waiting.
-    func catchUp(open registry: DocumentRegistry, within limit: Duration = .seconds(10)) async {
-        let ids = registry.openNotebooks
+    /// and its editor opens it again, and one with writing of its own is told that a newer version is waiting. `only`
+    /// limits it to those notebooks.
+    func catchUp(open registry: DocumentRegistry, within limit: Duration = .seconds(10), only: Set<UUID>? = nil) async {
+        let ids = registry.openNotebooks.filter { only?.contains($0) ?? true }
         guard isEnabled, !ids.isEmpty else { return }
         // Saved first, so what is on the device says whether it was written in here.
         for id in ids { await registry.document(for: id)?.flush() }
         let outcome = await pullNewer(ids, within: limit) { registry.takeOpen($0) }
         for (id, newer) in outcome where newer == .waiting { registry.document(for: id)?.noteNewerVersion() }
     }
+
+    /// How long an open notebook waits after a save before it is sent, and the longest that writing on can put it off.
+    static let sendDelay: Duration = .seconds(5)
+    static let sendLatency: Duration = .seconds(30)
+
+    /// A notebook open here was saved: it is sent once writing pauses, and every half minute while it doesn't, so
+    /// another device with it open can take it in place.
+    func sendSoon(_ id: UUID) {
+        guard canSync, editors != nil else { return }
+        let now = ContinuousClock.now, since = sends[id]?.since ?? now
+        let deadline = min(now + Self.sendDelay, since + Self.sendLatency)
+        sends[id]?.task.cancel()
+        let task = Task { [weak self] in
+            try? await Task.sleep(until: deadline, clock: .continuous)
+            guard !Task.isCancelled, let self else { return }
+            sends[id] = nil
+            await sendOpen(id)
+        }
+        sends[id] = (task, since)
+    }
+
+    /// Whether an open notebook is waiting for writing to pause before it is sent.
+    var hasWaitingSends: Bool { !sends.isEmpty }
+
+    /// Sends at once the open notebooks waiting for writing to pause, as the app leaves the front.
+    func sendWaiting() async {
+        for id in Array(sends.keys) {
+            sends.removeValue(forKey: id)?.task.cancel()
+            await sendOpen(id)
+        }
+    }
+
+    /// Sends a notebook open here that was written in since it last agreed with the synced copy. One another device
+    /// wrote in as well is told that a newer version is waiting.
+    func sendOpen(_ id: UUID) async {
+        guard let editors, canSync else { return }
+        pulls += 1
+        defer { pulls -= 1 }
+        guard let cloud = await takeTurn(by: .now + .seconds(30)) else { return }
+        defer { isPulling = false }
+        let root = root, release = release
+        let hold: @MainActor (UUID) -> NotebookPackage? = { editors.takeToSend($0) }
+        let outcome = try? await Task.detached(priority: .utility) {
+            try await LibrarySync.pushNewer(id, root: root, cloud: cloud, timeout: .seconds(10), hold: { await hold($0) }, release: { await release($0) })
+        }.value
+        switch outcome?.sent {
+        case .sent?:
+            if outcome?.cardsReceived == true { await onLibraryChanged?(SyncReport(cardsReceived: [id])) }
+            await checkUploads()
+        case .waiting?:
+            editors.document(for: id)?.noteNewerVersion()
+        default:
+            break
+        }
+    }
+
+    /// Keeps both versions of a notebook open here that another device wrote in too, as closing it would: the older as
+    /// a conflicted copy. The editor stays on this device's version when it is the newer, and opens the other's when
+    /// that is. False when it can't be done yet: sync is off, a save or recording is under way, or the other version
+    /// hasn't all come down.
+    @discardableResult
+    func keepBoth(_ id: UUID) async -> Bool {
+        guard let editors, let document = editors.document(for: id), canSync else { return false }
+        await document.flush()
+        pulls += 1
+        defer { pulls -= 1 }
+        guard let cloud = await takeTurn(by: .now + .seconds(30)) else { return false }
+        defer { isPulling = false }
+        let root = root, release = release
+        let take: @MainActor (UUID, Bool) -> NotebookPackage? = { id, replacing in
+            replacing ? (editors.takeOpen(id) ? NotebookPackage(root: root, id: id) : nil) : editors.takeToSend(id)
+        }
+        let outcome = try? await Task.detached(priority: .userInitiated) {
+            try await LibrarySync.keepBoth(id, root: root, cloud: cloud, timeout: .seconds(20), take: { await take($0, $1) }, release: { await release($0) })
+        }.value
+        guard let kept = outcome ?? nil else { return false }
+        newCopies.append(kept.copy)
+        refreshNews()
+        await onLibraryChanged?(SyncReport(pushed: kept.pulled ? [] : [id], pulled: kept.pulled ? [id] : [], conflictCopies: [kept.copy]))
+        let title = (try? await NotebookPackage(root: root, id: kept.copy).readManifest().manifest.title) ?? ""
+        editors.noteKeptCopy(kept.pulled ? String(localized: "This is the newer version, from another device. Yours is kept in your library as “\(title)”.")
+                                         : String(localized: "The version from another device is kept in your library as “\(title)”."), in: id)
+        schedule(after: .zero)
+        return true
+    }
+
+    /// Whether a notebook has something iCloud hasn't uploaded yet.
+    func isUploading(_ id: UUID) -> Bool { isEnabled && uploads.pending.contains(id) }
 
     /// Notebooks, flashcards and stickers arriving from another device show up as changes to the container's files.
     private func startWatching() {
@@ -415,11 +543,18 @@ final class SyncCenter {
         uploadCheck?.cancel()
         guard let cloud else { return }
         let read = readUploads
-        uploads = await Task.detached(priority: .utility) { read(cloud) }.value
+        let fresh = await Task.detached(priority: .utility) { read(cloud) }.value
+        // Set only when it changed, so the covers that show it aren't drawn again for nothing.
+        if fresh != uploads { uploads = fresh }
+        if uploads.pending.isEmpty { uploadBatch = [] } else { uploadBatch.formUnion(uploads.pending) }
+        let count = uploads.pending.isEmpty ? nil : SyncProgress(done: uploadBatch.count - uploads.pending.count, total: uploadBatch.count)
+        if count != uploading { uploading = count }
         refreshNews()
         guard !uploads.isClear else { return }
+        // Looked at more often while notebooks are going up, so the count moves.
+        let wait: Duration = uploads.pending.isEmpty || uploads.problem != nil ? .seconds(20) : .seconds(5)
         uploadCheck = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(20))
+            try? await Task.sleep(for: wait)
             guard !Task.isCancelled else { return }
             await self?.checkUploads()
         }
@@ -436,11 +571,19 @@ final class SyncCenter {
         return date.formatted(Calendar.current.isDate(date, equalTo: now, toGranularity: .year) ? style : style.year())
     }
 
-    /// The Settings line for the last pass: what it did, what it left, and what iCloud still has to upload.
+    /// How far iCloud is through uploading two or more notebooks, while nothing is stopping it.
+    var uploadCount: SyncProgress? {
+        guard let uploading, uploading.total > 1, uploads.problem == nil else { return nil }
+        return uploading
+    }
+
+    /// The Settings line for the last pass: what it did, what it left, and what iCloud still has to upload, unless
+    /// that is counted beside it.
     var status: String? {
         guard let lastReport else { return nil }
-        let parts = lastReport.parts + uploads.parts
-        return parts.isEmpty ? String(localized: "Everything is up to date") : parts.joined(separator: ", ")
+        let parts = lastReport.parts + (uploadCount == nil ? uploads.parts : [])
+        guard !parts.isEmpty else { return uploadCount == nil ? String(localized: "Everything is up to date") : nil }
+        return parts.joined(separator: ", ")
     }
 
     /// What is shown now, less what was put away and hasn't changed since.
@@ -477,6 +620,8 @@ final class SyncCenter {
         pending?.cancel()
         running?.cancel()
         uploadCheck?.cancel()
+        sends.values.forEach { $0.task.cancel() }
+        sends = [:]
         query?.stop()
         query = nil
         observers.forEach(NotificationCenter.default.removeObserver)

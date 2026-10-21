@@ -13,7 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A text box can be highlighted in any of the highlighter's four colours.
 - Crop a picture on the page: choose Crop, then drag an edge or a corner. Reset Crop brings the whole picture back, and exports keep only the part you kept.
 - Squeeze or stretch a picture on the page from the grip on any of its sides. The corner handle and a pinch still keep its proportions, and a picture settles back on its own shape as you near it.
-- Shapes in the tool tray: tie it on from Customise Tools, then pick a line, circle, rectangle or triangle on the strip over the tray and drag it out on the page in the pen's ink. The strip has Undo too, and Customise Tools says how draw and hold straightens a shape you draw by hand.
+- Shapes in the tool tray: tie it on from Customise Tools, then pick a line, arrow, circle, rectangle or triangle on the strip over the tray and drag it out on the page in the pen's ink. The strip has Undo too, and Customise Tools says how draw and hold straightens a shape you draw by hand.
+- Draw and hold makes an arrow of a line with a short hook at its end, or with a barb either side of its tip.
 - Settings › Appearance: follow the iPad's Light or Dark, or always use one of them, in every window.
 - Settings › Input › Left-Handed moves the page ribbon, the zoom window's buttons and the panels beside the page to the left.
 - Settings › Recently Deleted: empty it after 7, 30 or 90 days. Each iPad keeps to its own length, and sync leaves a notebook on an iPad that keeps it longer.
@@ -23,6 +24,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The sort menu can turn the order round.
 - Select several notebooks, or Select All, then favourite, tag, move, lock, export as PDFs or delete them together.
 - Drag a notebook from the library into another app as a PDF. Locked notebooks and those in Recently Deleted stay behind.
+- A notebook open on two iPads keeps up with itself. One you write in is sent a few seconds after you stop, and the other iPad shows the new writing in place if it has nothing unsaved. Where both were written in, the notice offers Keep Both, which keeps the older as a conflicted copy at once rather than when the notebook closes.
+- Sync progress. A thread runs along the library's bar while notebooks are syncing, a notebook says "Not uploaded yet" under its cover until iCloud has it, and Settings counts the notebooks being synced and uploaded, "Uploading 3 of 12", over a row of ticks.
+- Smart shelves and the pens in the tray sync with iCloud. A smart shelf changed on two iPads keeps the later change, and the tray's pens go as one set, the last changed winning.
+- Scanned PDFs, and slides saved as pictures, are read for search too: their words turn up in the library's search, Find in Notebook, Spotlight and the study guide.
+- Paper of your own. In the paper drawer or New Notebook, Add Paper… takes the first page of a PDF, or a picture, from Files or Photos: a planner, a lab sheet, score paper, a letterhead. It waits under My Paper with a miniature for every notebook; touch and hold it to rename or delete it. A page on it keeps its own copy in the notebook, a new page after it carries on with it, and your paper syncs and is backed up along with your stickers.
+- Choose what a PDF export takes: drag the mustard ends along a strip of the pages, or tap a page, This Page or All Pages; keep the paper or leave out its colour and ruling; and pick Smaller File or Sharper Ink. Exporting images asks which pages and about the paper too.
+- This Page as a PDF, in the editor's Export menu.
+- Exported PDFs can be searched: the words read from your handwriting, and from scans and photos, lie under them as text that any PDF reader can find and select. Searchable Handwriting turns it off.
+- Notebook as Text, in the editor's Export menu, and Export as Text in the library: the words of each page, read first where they haven't been yet, as plain text or as Markdown with a heading for each page.
 
 ### Changed
 
@@ -35,6 +45,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - On a Mac, fingers and the pointer draw from the start.
 - A recording carries on when the iPad locks or you switch apps. A notebook with a lock still stops recording when it locks, and keeps the iPad awake until then.
 - At the accessibility text sizes, Shelf is now a list in OwlLuna's own style, led by Continue writing and the desk cards, with each notebook's folder and tags under its title.
+- Pen, fineliner and fountain pen go into an exported PDF as shapes rather than a picture, so they stay sharp at any zoom and usually take less room than the picture of them did.
 
 ### Fixed
 
@@ -45,6 +56,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A change made after syncing with an iPad whose clock runs fast now wins, as it should.
 - A notebook reopened at launch, or open when you come back to the app, first takes in writing done on another iPad. If that isn't ready, the editor says a newer version is waiting, and closing keeps both.
 - Typing in a text box while zoomed in now wraps the lines where the page does.
+- Today's events on a journal page are no longer replaced when the page moves to a new day once you have typed in them, ticked them or restyled them.
 - A notebook you close no longer stays in memory until the app quits.
 - A recording is kept if OwlLuna quits, crashes or runs out of battery before Stop. It joins the list, as long as it got, the next time the notebook opens.
 - If a recording stops without Stop, the editor says when and why.
@@ -54,6 +66,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - With Settings › Appearance set to always Light or always Dark, a notebook opens at the right page and a whiteboard opens ready to write on.
 - At the largest text sizes, the library's title is no longer cut off.
 - In Dark Mode, the grips and corner handle on a selected picture or text box, and the knobs of a crop, are easy to see. Increase Contrast gives them a darker edge.
+- Highlighter in an exported PDF no longer hides the writing and printed words under it.
+- A link to another page in an export of one page, or of some pages, shows that page's name rather than "Missing page", and bookmarks keep their page numbers.
 
 ## [1.0.0-build.2] - 2026-10-15
 

@@ -396,6 +396,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var typing: ItemSelection?
     /// What has been typed and the ticks that followed its lines; the box's style is read from the page.
     private var typed: TextBox?
+    /// The edit the text view asked to make: where, what goes in, and the text it should leave.
+    private var pendingEdit: (range: NSRange, text: String, result: String)?
+    /// The ticks each text has had while it is typed, for when the text view's own undo brings one back.
+    private var typedTicks: [String: Set<Int>] = [:]
+    private lazy var checkTap = UITapGestureRecognizer(target: self, action: #selector(tappedTypedCheckbox))
     private var typingMarkers: TextMarkersView?
     private var keyboardOverlap: CGFloat = 0
     private var mirrored: String?
@@ -1243,7 +1248,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
               let before, canvas.drawing.strokes.count == before.strokes.count + 1, let drawn = canvas.drawing.strokes.last,
               let snapped = ShapeSnap.snapped(drawn) else { return }
         replaceLastStroke(drawn, with: snapped.stroke, on: canvas, pageID: pageID, actionName: String(localized: "Straighten Shape"),
-                          announcement: String(localized: "Straightened into a \(snapped.shape.displayName)"))
+                          announcement: String(localized: "Straightened: \(snapped.shape.displayName)"))
     }
 
     /// A highlighter stroke drawn along a line of a PDF page's own text is laid over that line: straight, and as tall
@@ -1365,8 +1370,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         }
         for view in slot.itemViews.values where view.item.text?.list == .check {
             view.onTick = { [weak self, weak slot] itemID, line in
-                guard let self, let slot else { return }
-                self.toggleCheck(ItemSelection(pageID: slot.page.id, itemID: itemID), line: line)
+                guard let self, let slot else { return false }
+                return self.toggleCheck(ItemSelection(pageID: slot.page.id, itemID: itemID), line: line)
             }
         }
         if let typing, typing.pageID == slot.page.id { slot.itemViews[typing.itemID]?.isHidden = true }
@@ -1521,6 +1526,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === shapePan { return !isLocked && !document.isReadOnly && toolbox.pen != nil }
+        if gestureRecognizer === checkTap { return typedCheckbox(at: gestureRecognizer.location(in: textView)) != nil }
         guard gestureRecognizer === tapeTap else { return true }
         return replay == nil && inkLasso == nil && textOverlay == nil && !isOnSelection(gestureRecognizer)
             && item(at: gestureRecognizer.location(in: scrollView), tapeOnly: true) != nil
@@ -1547,7 +1553,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         let hit = isPresenting || !fingersDraw ? item(at: gesture.location(in: scrollView)) : nil
         if let hit, item(hit)?.tape != nil { return }
         if let hit, let link = item(hit)?.link { return session.follow(link, from: hit.pageID) }
-        if let hit, let line = checklistLine(hit, at: gesture.location(in: scrollView)) { return toggleCheck(hit, line: line) }
+        if let hit, let line = checklistLine(hit, at: gesture.location(in: scrollView)) { toggleCheck(hit, line: line); return }
         guard !isPresenting, !document.isReadOnly else { return }
         if hit != nil || session.selection != nil { select(hit) }
     }
@@ -1562,23 +1568,27 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         return box.checkbox(at: CGPoint(x: x + item.size.width / 2, y: y + item.size.height / 2), width: item.size.width)
     }
 
-    /// Ticks a line of a checklist, or takes its tick off, as one undo step.
-    private func toggleCheck(_ selection: ItemSelection, line: Int) {
-        guard !isLocked, !document.isReadOnly, let box = item(selection)?.text else { return }
+    /// Ticks a line of a checklist, or takes its tick off, as one undo step. A box ticked by hand is no longer a printed agenda.
+    @discardableResult
+    private func toggleCheck(_ selection: ItemSelection, line: Int) -> Bool {
+        guard !isLocked, !document.isReadOnly, let box = item(selection)?.text else { return false }
         let ticking = !box.checked.contains(line)
         document.updateItems(onPage: selection.pageID, actionName: ticking ? String(localized: "Tick") : String(localized: "Untick")) { items in
             guard let index = items.firstIndex(where: { $0.id == selection.itemID }), var box = items[index].text else { return }
             box.toggleCheck(line: line)
             items[index].content = .text(box)
+            items[index].raw["agenda"] = nil
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        return true
     }
 
     /// A tap on the box that is picked up ticks a line of its checklist, or starts typing in it.
     private func tappedSelection(at point: CGPoint) {
         if let selection = session.selection, let item = item(selection), item.text?.list == .check,
            let line = item.text?.checkbox(at: point, width: item.size.width) {
-            return toggleCheck(selection, line: line)
+            toggleCheck(selection, line: line)
+            return
         }
         editText()
     }
@@ -1610,10 +1620,15 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         view.delegate = self
         view.accessibilityIdentifier = "page.text.editor"
         view.accessibilityLabel = String(localized: "Text box")
+        checkTap.delegate = self
+        checkTap.cancelsTouchesInView = false
+        checkTap.delaysTouchesEnded = false
+        view.addGestureRecognizer(checkTap)
         slot.addSubview(view)
         textView = view
         typing = selection
         typed = box
+        typedTicks = [box.string: box.checked]
         let markers = TextMarkersView()
         slot.insertSubview(markers, belowSubview: view)
         typingMarkers = markers
@@ -1645,6 +1660,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         textView.transform = CGAffineTransform(rotationAngle: item.rotation)
         selectionView?.show(item)
         slot.bringSubviewToFront(textView)
+        textView.accessibilityCustomActions = box.list == .check ? typedTickActions(box) : nil
         if let typingMarkers {
             typingMarkers.transform = .identity
             typingMarkers.bounds = textView.bounds
@@ -1671,10 +1687,85 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             ? storage.attributes(at: caret - 1, effectiveRange: nil) : box.typingAttributes(scale: bakedScale, onDark: onDark)
     }
 
+    /// An edit across several ranges is left to the text view; its ticks are worked out from before and after.
+    func textView(_ textView: UITextView, shouldChangeTextInRanges ranges: [NSValue], replacementText text: String) -> Bool {
+        guard ranges.count == 1, let range = ranges.first?.rangeValue else {
+            pendingEdit = nil
+            return true
+        }
+        return self.textView(textView, shouldChangeTextIn: range, replacementText: text)
+    }
+
+    /// Notes each edit so ticks follow their lines exactly. Pasted line breaks of any kind come in as returns.
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        let current = (textView.text ?? "") as NSString
+        let undoing = textView.undoManager?.isUndoing == true || textView.undoManager?.isRedoing == true
+        let breaks = !undoing && textView.markedTextRange == nil && text.unicodeScalars.contains { $0 == "\r" || $0 == "\u{2029}" }
+        let clean = breaks ? text.replacingOccurrences(of: "\\r\\n?|\\u2029", with: "\n", options: .regularExpression) : text
+        let known = NSMaxRange(range) <= current.length && typed.map { current.isEqual(to: $0.string) } == true
+        pendingEdit = known ? (range: range, text: clean, result: current.replacingCharacters(in: range, with: clean)) : nil
+        guard breaks, let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+              let end = textView.position(from: start, offset: range.length), let span = textView.textRange(from: start, to: end) else { return true }
+        textView.replace(span, withText: clean)
+        if let typed, !((textView.text ?? "") as NSString).isEqual(to: typed.string) { textViewDidChange(textView) }
+        pendingEdit = nil
+        return false
+    }
+
     func textViewDidChange(_ textView: UITextView) {
-        typed?.carryChecks(to: textView.text)
+        let text = textView.text ?? ""
+        let undoing = textView.undoManager?.isUndoing == true || textView.undoManager?.isRedoing == true
+        if undoing, let ticks = typedTicks[text] {
+            typed?.string = text
+            typed?.checked = ticks
+        } else if let edit = pendingEdit, (text as NSString).isEqual(to: edit.result) {
+            typed?.replaceCharacters(in: edit.range, with: edit.text)
+        } else {
+            typed?.carryChecks(to: text)
+        }
+        pendingEdit = nil
+        if let typed {
+            if typedTicks.count >= 200 { typedTicks.removeAll() }
+            typedTicks[typed.string] = typed.checked
+        }
         layoutTextEditor()
         revealTextEditor()
+    }
+
+    /// The line of the checklist being typed in whose box is at a point in its text view.
+    private func typedCheckbox(at point: CGPoint) -> Int? {
+        guard bakedScale > 0, let (_, item) = liveTextItem(), let box = item.text, box.list == .check else { return nil }
+        return box.checkbox(at: CGPoint(x: point.x / bakedScale, y: point.y / bakedScale), width: item.size.width)
+    }
+
+    /// Only a touch on a box of the checklist being typed in is a tick; every other touch is the text view's.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        gestureRecognizer !== checkTap || typedCheckbox(at: touch.location(in: textView)) != nil
+    }
+
+    @objc private func tappedTypedCheckbox(_ gesture: UITapGestureRecognizer) {
+        guard let line = typedCheckbox(at: gesture.location(in: textView)) else { return }
+        tickTyped(line: line)
+    }
+
+    /// Ticks a line of the checklist being typed in, or takes its tick off. It is saved with what was typed.
+    @discardableResult
+    private func tickTyped(line: Int) -> Bool {
+        guard textView != nil, !isLocked, !document.isReadOnly, liveTextItem()?.item.text?.list == .check, var box = typed else { return false }
+        box.toggleCheck(line: line)
+        typed = box
+        typedTicks = [box.string: box.checked]
+        layoutTextEditor()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        return true
+    }
+
+    /// VoiceOver's Tick and Untick for each item of the checklist being typed in, as the box offers them on the page.
+    private func typedTickActions(_ box: TextBox) -> [UIAccessibilityCustomAction] {
+        box.lines.enumerated().filter { TextBox.isItem($0.element) }.map { line, text in
+            let name = box.checked.contains(line) ? String(localized: "Untick \(text)") : String(localized: "Tick \(text)")
+            return UIAccessibilityCustomAction(name: name) { [weak self] _ in self?.tickTyped(line: line) ?? false }
+        }
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
@@ -1698,9 +1789,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         } else {
             document.updateItems(onPage: typing.pageID, actionName: String(localized: "Edit Text")) { items in
                 guard let index = items.firstIndex(where: { $0.id == typing.itemID }), var box = items[index].text else { return }
+                let before = box
                 box.string = string
                 box.checked = checked ?? box.checked
                 items[index].content = .text(box)
+                if box != before { items[index].raw["agenda"] = nil }
                 items[index] = items[index].fittedToText()
             }
         }
@@ -1710,12 +1803,15 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         guard let textView else { return }
         self.textView = nil
         textView.delegate = nil
+        textView.removeGestureRecognizer(checkTap)
         textView.removeFromSuperview()
         typingMarkers?.removeFromSuperview()
         typingMarkers = nil
         if let typing { slots[typing.pageID]?.itemViews[typing.itemID]?.isHidden = false }
         typing = nil
         typed = nil
+        pendingEdit = nil
+        typedTicks = [:]
         selectionView?.isEditing = false
         if session.isEditingText { session.isEditingText = false }
         updateInsets()
@@ -2116,13 +2212,13 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             if session.selection != nil { select(nil) }
             fallthrough
         case .changed:
-            guard let (shape, frame, _) = draggedShape(kind, to: point) else { return }
+            guard let (shape, frame, _) = draggedShape(kind, to: point, width: tool.width) else { return }
             let points = shape.controlPoints(startingNear: .zero).map { CGPoint(x: ($0.x + frame.minX) * bakedScale, y: ($0.y + frame.minY) * bakedScale) }
             overlay.show(points, color: shapeColor(tool), width: max(tool.width, 1) * bakedScale)
         case .ended:
             overlay.clear()
             defer { shapeDrag = nil }
-            guard let (shape, _, id) = draggedShape(kind, to: point), let start = shapeDrag?.start, let ink = document.loadedInk(id) else { return }
+            guard let (shape, _, id) = draggedShape(kind, to: point, width: tool.width), let start = shapeDrag?.start, let ink = document.loadedInk(id) else { return }
             let stroke = ShapeSnap.stroke(shape, tool: tool, startingNear: start)
             guard document.updateInk([id: PKDrawing(strokes: ink.strokes + [stroke])], actionName: String(localized: "Draw Shape")) else { return }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -2135,11 +2231,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     /// The shape from where the drag began to `point`, in its page's points, with the page's frame in the stack.
     /// Nothing smaller than a tap.
-    private func draggedShape(_ kind: ShapeKind, to point: CGPoint) -> (SnappedShape, CGRect, UUID)? {
+    private func draggedShape(_ kind: ShapeKind, to point: CGPoint, width: CGFloat) -> (SnappedShape, CGRect, UUID)? {
         guard let drag = shapeDrag, let frame = stackFrames[drag.pageID] else { return nil }
         let end = CGPoint(x: min(max(point.x - frame.minX, 0), frame.width), y: min(max(point.y - frame.minY, 0), frame.height))
         guard hypot(end.x - drag.start.x, end.y - drag.start.y) >= 4 else { return nil }
-        return (kind.shape(from: drag.start, to: end), frame, drag.pageID)
+        return (kind.shape(from: drag.start, to: end, width: width), frame, drag.pageID)
     }
 
     /// The pen's ink as the page shows it: lighter where the page is dark.
@@ -2959,7 +3055,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        [laserGesture, itemTap, itemHold, strokeHold, tapeTap].contains { $0 === gestureRecognizer || $0 === other }
+        [laserGesture, itemTap, itemHold, strokeHold, tapeTap, checkTap].contains { $0 === gestureRecognizer || $0 === other }
     }
 
     /// Two fingers are scrolling or zooming, not pointing.

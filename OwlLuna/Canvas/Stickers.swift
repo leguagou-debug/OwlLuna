@@ -721,7 +721,7 @@ enum PageItemRenderer {
                     ctx.translateBy(x: 0, y: rect.maxY + rect.minY)
                     ctx.scaleBy(x: 1, y: -1)
                     ctx.interpolationQuality = .high
-                    ctx.draw(image, in: rect)
+                    ctx.draw(PageRenderer.limited(image, for: rect.size), in: rect)
                 }
             case .text(let box):
                 ctx.scaleBy(x: scale, y: scale)

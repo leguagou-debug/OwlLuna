@@ -90,6 +90,37 @@ final class ShapeSnapTests: XCTestCase {
         XCTAssertNil(ShapeRecognizer.recognize([]))
     }
 
+    func testALineWithAHookAtItsEndBecomesAnArrow() throws {
+        let hook = along([CGPoint(x: 100, y: 304), CGPoint(x: 420, y: 300), CGPoint(x: 420 - 40 * cos(0.6), y: 300 - 40 * sin(0.6))])
+        guard case .arrow(let tail, let tip, let head)? = ShapeRecognizer.recognize(hook) else { return XCTFail("a hook wasn't read as an arrow") }
+        XCTAssertEqual(tail.x, 100, accuracy: 3)
+        XCTAssertEqual(tip.x, 420, accuracy: 3, "it points where the line ended")
+        XCTAssertEqual(tail.y, tip.y, "and is made level as a line is")
+        XCTAssertEqual(head, 40, accuracy: 4, "with a head as long as the hook")
+
+        let barbs = along([CGPoint(x: 120, y: 420), CGPoint(x: 360, y: 180), CGPoint(x: 351, y: 213), CGPoint(x: 361, y: 182), CGPoint(x: 327, y: 189)])
+        guard case .arrow(_, let point, let size)? = ShapeRecognizer.recognize(barbs) else { return XCTFail("a barb either side wasn't read as an arrow") }
+        XCTAssertEqual(point.x, 360, accuracy: 4)
+        XCTAssertEqual(point.y, 180, accuracy: 4)
+        XCTAssertEqual(size, 34, accuracy: 4)
+
+        guard case .polyline? = ShapeRecognizer.recognize(along([CGPoint(x: 100, y: 300), CGPoint(x: 400, y: 300), CGPoint(x: 400, y: 260)])) else {
+            return XCTFail("a hook turned square is a corner")
+        }
+        guard case .polyline? = ShapeRecognizer.recognize(along([CGPoint(x: 100, y: 100), CGPoint(x: 200, y: 300), CGPoint(x: 300, y: 110)])) else {
+            return XCTFail("and so is a V, its arms too long for a head")
+        }
+
+        let drawn = try XCTUnwrap(ShapeSnap.snapped(pencilStroke(hook)))
+        guard case .arrow(let a, let b, let h) = drawn.shape else { return XCTFail() }
+        let (left, right) = SnappedShape.barbs(tail: a, tip: b, head: h)
+        let outline = drawn.stroke.path.interpolatedPoints(by: .distance(2)).map(\.location)
+        for corner in [a, b, left, right] {
+            XCTAssertLessThan(outline.map { ShapeRecognizer.distance($0, corner) }.min() ?? 99, 1.5, "the hook is redrawn as a barb either side")
+        }
+        XCTAssertEqual(drawn.shape.displayName, "arrow")
+    }
+
     private func pencilStroke(_ points: [CGPoint], width: CGFloat = 5) -> PKStroke {
         let date = Date(timeIntervalSinceReferenceDate: 1000)
         let path = PKStrokePath(controlPoints: points.enumerated().map { index, point in
