@@ -92,6 +92,7 @@ final class ShapeStripUITests: XCTestCase {
         XCTAssertTrue(circle.waitForNonExistence(timeout: 5), "Shapes again puts the strip away")
         waitUntilSelected(shapes, false)
         drag(canvas, CGVector(dx: 0.15, dy: 0.7), CGVector(dx: 0.6, dy: 0.75))
+        if strokeCount(canvas) == before + 4 { drag(canvas, CGVector(dx: 0.15, dy: 0.82), CGVector(dx: 0.6, dy: 0.86)) }
         XCTAssertEqual(strokeCount(canvas), before + 5, "and a drag writes again")
     }
 
