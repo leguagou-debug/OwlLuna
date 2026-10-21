@@ -297,12 +297,11 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         outline.lineCap = .round
         handle.frame = CGRect(x: 0, y: 0, width: Self.handleSize, height: Self.handleSize)
         knob.frame = handle.bounds.insetBy(dx: 8, dy: 8)
-        knob.backgroundColor = .surface
+        knob.backgroundColor = Grip.fill
         knob.layer.cornerRadius = knob.bounds.width / 2
         knob.layer.borderWidth = 1
-        knob.layer.borderColor = UIColor.ink.withAlphaComponent(0.35).cgColor
         knob.image = UIImage(systemName: "arrow.up.left.and.arrow.down.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .bold))
-        knob.tintColor = .ink
+        knob.tintColor = Grip.ink
         knob.contentMode = .center
         handle.addSubview(knob)
         addSubview(handle)
@@ -323,6 +322,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
             grip.onStep = { [weak self, side = grip.side] direction in self?.step(side, by: direction) }
         }
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (view: ItemSelectionView, _) in view.colour() }
     }
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
@@ -346,9 +346,8 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         CATransaction.setDisableActions(true)
         outline.path = path
         underline.path = path
-        outline.strokeColor = UIColor.mustard.resolvedColor(with: traitCollection).cgColor
-        underline.strokeColor = UIColor.ink.resolvedColor(with: traitCollection).withAlphaComponent(0.55).cgColor
         CATransaction.commit()
+        colour()
         // A text box or a strip of tape keeps its right edge for the width grip, so its corner handle moves to the left.
         let hasGrip = item.text != nil || item.tape != nil, squeezes = item.assetFile != nil
         handle.center = CGPoint(x: hasGrip ? bounds.minX + outset / 2 : bounds.maxX - outset / 2, y: bounds.maxY - outset / 2)
@@ -364,8 +363,18 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
             case .bottom: CGPoint(x: bounds.midX, y: bounds.maxY - outset / 2)
             case .right: CGPoint(x: bounds.maxX - outset / 2, y: bounds.midY)
             }
-            grip.show(item, traits: traitCollection)
+            grip.show(item)
         }
+    }
+
+    private func colour() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        outline.strokeColor = UIColor.mustard.resolvedColor(with: traitCollection).cgColor
+        underline.strokeColor = UIColor.ink.resolvedColor(with: traitCollection).withAlphaComponent(0.55).cgColor
+        CATransaction.commit()
+        knob.layer.borderColor = Grip.edge(traitCollection)
+        for grip in grips { grip.colour(traitCollection) }
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
@@ -527,7 +536,7 @@ private final class SideGrip: UIView {
         super.init(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
         let across = side == .top || side == .bottom
         bar.frame = across ? CGRect(x: 8, y: 17, width: 28, height: 10) : CGRect(x: 17, y: 8, width: 10, height: 28)
-        bar.backgroundColor = .surface
+        bar.backgroundColor = Grip.fill
         bar.layer.cornerRadius = 2
         bar.layer.borderWidth = 1
         bar.isUserInteractionEnabled = false
@@ -543,14 +552,28 @@ private final class SideGrip: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(_ item: PageItem, traits: UITraitCollection) {
-        bar.layer.borderColor = UIColor.ink.resolvedColor(with: traits).withAlphaComponent(0.35).cgColor
+    func colour(_ traits: UITraitCollection) {
+        bar.layer.borderColor = Grip.edge(traits)
+    }
+
+    func show(_ item: PageItem) {
         let length = side == .top || side == .bottom ? item.size.height : item.size.width
         accessibilityValue = String(localized: "\(Int(length.rounded())) pt")
     }
 
     override func accessibilityIncrement() { onStep?(1) }
     override func accessibilityDecrement() { onStep?(-1) }
+}
+
+/// The knobs on a selection or a crop. In Dark Mode they turn to cream card stock so they show on a dark page and a
+/// dimmed picture; Increase Contrast darkens their edge.
+private enum Grip {
+    static let fill = UIColor { ($0.userInterfaceStyle == .dark ? UIColor.labelCream : .surface).resolvedColor(with: $0) }
+    static let ink = UIColor { ($0.userInterfaceStyle == .dark ? UIColor.labelInk : .ink).resolvedColor(with: $0) }
+
+    static func edge(_ traits: UITraitCollection) -> CGColor {
+        ink.resolvedColor(with: traits).withAlphaComponent(traits.accessibilityContrast == .high ? 0.75 : 0.35).cgColor
+    }
 }
 
 /// Crop mode for a selected picture: all of it, what is cut off dimmed, and edges and corners to drag.
@@ -596,7 +619,7 @@ final class ItemCropView: UIView, UIGestureRecognizerDelegate {
         }
         for sublayer in [picture, shade, underline, outline] { layer.addSublayer(sublayer) }
         for knob in knobs {
-            knob.backgroundColor = .surface
+            knob.backgroundColor = Grip.fill
             knob.layer.cornerRadius = 2
             knob.layer.borderWidth = 1
             knob.isUserInteractionEnabled = false
@@ -607,7 +630,7 @@ final class ItemCropView: UIView, UIGestureRecognizerDelegate {
         addGestureRecognizer(pan)
         isAccessibilityElement = false
         accessibilityElements = edges
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ItemCropView, _) in view.showCrop() }
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (view: ItemCropView, _) in view.showCrop() }
         if contents == nil, case .image(let file) = item.content {
             Task { [weak self] in
                 let image = await Task.detached(priority: .userInitiated) { PageItemRenderer.image(file, assets: assets).map(SharedImage.init) }.value
@@ -702,7 +725,7 @@ final class ItemCropView: UIView, UIGestureRecognizerDelegate {
         CATransaction.commit()
         let corners = [CGPoint(x: kept.minX, y: kept.minY), CGPoint(x: kept.maxX, y: kept.minY), CGPoint(x: kept.minX, y: kept.maxY), CGPoint(x: kept.maxX, y: kept.maxY)]
         let sides = [CGPoint(x: kept.midX, y: kept.minY), CGPoint(x: kept.minX, y: kept.midY), CGPoint(x: kept.midX, y: kept.maxY), CGPoint(x: kept.maxX, y: kept.midY)]
-        let border = UIColor.ink.resolvedColor(with: traitCollection).withAlphaComponent(0.35).cgColor
+        let border = Grip.edge(traitCollection)
         for (index, knob) in knobs.enumerated() {
             let corner = index < 4, across = index % 2 == 0
             knob.bounds.size = corner ? CGSize(width: 14, height: 14) : across ? CGSize(width: 28, height: 10) : CGSize(width: 10, height: 28)

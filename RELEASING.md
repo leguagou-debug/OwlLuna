@@ -1,16 +1,16 @@
 # Releasing OwlLuna
 
-A checklist for each new build. Run the commands from the repository's root. The examples cut 1.0.1 (build 3); put in your own numbers.
+A checklist for each new build. Run the commands from the repository's root. The examples cut build 3 of version 1.0, which isn't on the App Store yet; put in your own numbers.
 
 ## Version numbers
 
-- `MARKETING_VERSION` is the version testers see, such as 1.0.1.
+- `MARKETING_VERSION` is the version people see, such as 1.0. It stays the same for every TestFlight build until that version is approved for the App Store: App Store Connect takes any number of builds of a version until then. Once a version is on the App Store, the next build needs a higher one, such as 1.0.1.
 - `CURRENT_PROJECT_VERSION` is the build. It goes up by one for every upload and is never used twice.
-- The tag is `v` and the version in three numbers, so version 1.0 is tagged `v1.0.0`.
+- Each TestFlight build is tagged `v`, the version in three numbers, `-build.` and the build, so build 3 of 1.0 is `v1.0.0-build.3`. The build that goes to the App Store is tagged with the version alone as well, `v1.0.0`.
 
-## 1. Bump the version
+## 1. Bump the build
 
-In Xcode, open the project's settings. In General › Identity, set Version and Build on the **OwlLuna** target and on the **OwlLunaWidgets** target. Both targets must have the same numbers, or the upload is turned away.
+In Xcode, open the project's settings. In General › Identity, raise Build on the **OwlLuna** target and on the **OwlLunaWidgets** target. Change Version too only when the last version is already on the App Store. Both targets must have the same numbers, or the upload is turned away.
 
 Check them:
 
@@ -20,12 +20,14 @@ for t in OwlLuna OwlLunaWidgets; do xcodebuild -project OwlLuna.xcodeproj -targe
 
 ## 2. Update the changelog
 
-In [CHANGELOG.md](CHANGELOG.md), move what is under Unreleased into a new section, `## [1.0.1] (build 3) - YYYY-MM-DD`, and leave Unreleased empty. Add its link at the bottom and point Unreleased at the new tag:
+In [CHANGELOG.md](CHANGELOG.md), move what is under Unreleased into a new section, `## [1.0.0-build.3] - YYYY-MM-DD`, and leave Unreleased empty. Add its link at the bottom and point Unreleased at the new tag:
 
 ```
-[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0...v1.0.1
+[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.3...HEAD
+[1.0.0-build.3]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.2...v1.0.0-build.3
 ```
+
+When a build goes to the App Store, add a short `## [1.0.0] - YYYY-MM-DD` section above it that says which build it is, linked to the `v1.0.0` tag.
 
 Commit the bump and the changelog. Archive from that commit with nothing else changed, so the tag matches the build exactly.
 
@@ -48,17 +50,27 @@ xcodebuild archive -project OwlLuna.xcodeproj -scheme OwlLuna -configuration Rel
 
 The app says it uses no non-exempt encryption (`ITSAppUsesNonExemptEncryption` is NO), so there is no export question to answer.
 
-## 5. Tag the release
+## 5. Tag the build
 
 ```bash
-git tag -a v1.0.1 -m "OwlLuna 1.0.1 (build 3)"
+git tag -a v1.0.0-build.3 -m "OwlLuna 1.0 (build 3)"
 ```
 
 ```bash
-git push origin v1.0.1
+git push origin v1.0.0-build.3
 ```
 
-Pushing the tag runs the Release workflow on that commit. It fails if the tag doesn't match the app's version, or if the widgets' numbers differ from the app's.
+Pushing the tag runs the Release workflow on that commit. It fails if the tag doesn't match the app's version and build, or if the widgets' numbers differ from the app's.
+
+When that build is approved for the App Store, tag the same commit with the version alone:
+
+```bash
+git tag -a v1.0.0 'v1.0.0-build.3^{}' -m "OwlLuna 1.0"
+```
+
+```bash
+git push origin v1.0.0
+```
 
 ## 6. Publish the GitHub Release
 
@@ -72,17 +84,17 @@ brew install gh
 gh auth login
 ```
 
-Take the version's section of the changelog as the notes:
+Take the build's section of the changelog as the notes:
 
 ```bash
-awk '/^## \[1\.0\.1\]/{on=1; next} on && /^(## )?\[/{exit} on' CHANGELOG.md > "$TMPDIR/notes.md"
+awk '/^## \[1\.0\.0-build\.3\]/{on=1; next} on && /^(## )?\[/{exit} on' CHANGELOG.md > "$TMPDIR/notes.md"
 ```
 
 ```bash
-gh release create v1.0.1 --verify-tag --title "OwlLuna 1.0.1 (build 3)" --notes-file "$TMPDIR/notes.md"
+gh release create v1.0.0-build.3 --verify-tag --prerelease --title "OwlLuna 1.0 (build 3)" --notes-file "$TMPDIR/notes.md"
 ```
 
-Add `--prerelease` while a version is only on TestFlight.
+A TestFlight build is a prerelease. The `v1.0.0` release for the App Store is not, so leave out `--prerelease` for it.
 
 ## Later: upload from CI
 

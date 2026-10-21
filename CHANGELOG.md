@@ -2,7 +2,7 @@
 
 All notable changes to OwlLuna are listed here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each version also names the build that went to TestFlight.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each TestFlight build has its own section, such as 1.0.0-build.3 for build 3 of 1.0; the build that goes to the App Store also gets a section with the version alone.
 
 ## [Unreleased]
 
@@ -53,8 +53,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - With two notebooks side by side, touching either one makes it the one you're working in, and a Pencil double-tap or squeeze reaches only that one.
 - With Settings › Appearance set to always Light or always Dark, a notebook opens at the right page and a whiteboard opens ready to write on.
 - At the largest text sizes, the library's title is no longer cut off.
+- In Dark Mode, the grips and corner handle on a selected picture or text box, and the knobs of a crop, are easy to see. Increase Contrast gives them a darker edge.
 
-## [1.0.0] (build 2) - 2026-10-15
+## [1.0.0-build.2] - 2026-10-15
 
 The first build for TestFlight testers. No accounts, no ads and no tracking.
 
@@ -131,5 +132,5 @@ The first build for TestFlight testers. No accounts, no ads and no tracking.
 
 - The app is now called OwlLuna. Notebooks and backups from before the rename still open.
 
-[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/owaisazmal/OwlLuna/releases/tag/v1.0.0
+[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.2...HEAD
+[1.0.0-build.2]: https://github.com/owaisazmal/OwlLuna/releases/tag/v1.0.0-build.2

@@ -46,8 +46,9 @@ jobs:
           build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")
           IFS=. read -r major minor patch <<< "$version"
           tag="v$major.${minor:-0}.${patch:-0}"
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
-            echo "::error::The app's version is $version, so its tag is $tag, not $GITHUB_REF_NAME."
+          # A TestFlight build is tagged with its build number; the build that goes to the App Store also gets the plain version.
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag-build.$build" ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::The app is $version (build $build), so its tag is $tag-build.$build, or $tag for the App Store, not $GITHUB_REF_NAME."
             exit 1
           fi
           echo "OwlLuna $version (build $build) archived from ${GITHUB_SHA:0:7}." >> "$GITHUB_STEP_SUMMARY"
