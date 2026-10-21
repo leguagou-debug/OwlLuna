@@ -40,6 +40,8 @@ final class ToolTrayUITests: XCTestCase {
                 + (mode.size.map { ["-UIPreferredContentSizeCategoryName", $0] } ?? [])
             app.launch()
             let notebook = app.buttons["notebook.Studio Notes 2"]
+            // At the largest size the notebooks start below the fold, where XCUITest doesn't see them.
+            for _ in 0..<5 where !notebook.waitForExistence(timeout: 8) { app.swipeUp() }
             XCTAssertTrue(notebook.waitForExistence(timeout: 30))
             notebook.tap()
             let black = app.buttons["editor.tools.1"], eraser = app.buttons["editor.tools.eraser"]

@@ -183,7 +183,10 @@ final class SliceUITests: XCTestCase {
 
         XCUIDevice.shared.appearance = .light
         app = launch(reset: false, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-        XCTAssertTrue(app.buttons["notebook.Cell Biology 1"].waitForExistence(timeout: 30), "the list layout shows the seeded notebooks")
+        let notebook = app.buttons["notebook.Cell Biology 1"]
+        // The notebooks start below the fold, where XCUITest doesn't see them.
+        for _ in 0..<5 where !notebook.waitForExistence(timeout: 8) { app.swipeUp() }
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30), "the list layout shows the seeded notebooks")
         attach(app, "library-largest-text")
         try audit(app, [.dynamicType, .textClipped], screen: "largest text")
     }
