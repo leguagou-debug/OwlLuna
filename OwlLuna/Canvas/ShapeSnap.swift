@@ -96,7 +96,7 @@ enum ShapeRecognizer {
     }
 
     /// Within three degrees of level or upright, a line is made exactly so.
-    private static func squared(_ a: CGPoint, _ b: CGPoint) -> (CGPoint, CGPoint) {
+    static func squared(_ a: CGPoint, _ b: CGPoint) -> (CGPoint, CGPoint) {
         let angle = abs(atan2(b.y - a.y, b.x - a.x)), limit = 3 * CGFloat.pi / 180
         if angle < limit || angle > .pi - limit {
             let y = (a.y + b.y) / 2
@@ -443,4 +443,62 @@ final class StrokeHoldRecognizer: UIGestureRecognizer {
 
     override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+}
+
+extension ShapeSnap {
+    /// A shape drawn with `tool`, as wide as the tool is set, from the corner nearest `start`.
+    static func stroke(_ shape: SnappedShape, tool: PKInkingTool, startingNear start: CGPoint) -> PKStroke {
+        let locations = shape.controlPoints(startingNear: start)
+        let size = CGSize(width: tool.width, height: tool.width)
+        let points = locations.enumerated().map { index, location in
+            PKStrokePoint(location: location, timeOffset: 0.005 * Double(index), size: size, opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+        }
+        return PKStroke(ink: PKInk(tool.inkType, color: tool.color), path: PKStrokePath(controlPoints: points, creationDate: Date()))
+    }
+}
+
+/// A shape picked from the strip over the tray, drawn from where a drag starts to where it ends.
+enum ShapeKind: String, CaseIterable, Identifiable, Sendable {
+    case line, circle, rectangle, triangle
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .line: String(localized: "Line")
+        case .circle: String(localized: "Circle")
+        case .rectangle: String(localized: "Rectangle")
+        case .triangle: String(localized: "Triangle")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .line: "line.diagonal"
+        case .circle: "circle"
+        case .rectangle: "rectangle"
+        case .triangle: "triangle"
+        }
+    }
+
+    /// A circle is the ellipse in the drag's box, and a true circle when the box is nearly square. A triangle
+    /// stands on the box's foot.
+    func shape(from a: CGPoint, to b: CGPoint) -> SnappedShape {
+        let box = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        switch self {
+        case .line:
+            let (start, end) = ShapeRecognizer.squared(a, b)
+            return .line(start, end)
+        case .circle:
+            var radii = CGSize(width: box.width / 2, height: box.height / 2)
+            if abs(radii.width - radii.height) < 0.14 * max(radii.width, radii.height) {
+                radii = CGSize(width: (radii.width + radii.height) / 2, height: (radii.width + radii.height) / 2)
+            }
+            return .ellipse(center: CGPoint(x: box.midX, y: box.midY), radii: radii, rotation: 0)
+        case .rectangle:
+            return .polygon([CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
+                             CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)])
+        case .triangle:
+            return .polygon([CGPoint(x: box.midX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)])
+        }
+    }
 }

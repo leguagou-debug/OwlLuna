@@ -829,6 +829,11 @@ fileprivate struct EditorContent: View {
                 ? String(localized: "Handwriting to Text on. What you write with a pen is set as text when you pause.")
                 : String(localized: "Handwriting to Text off")).post()
         case .zoomWindow: session.setZoomWindow(!session.isZoomWindowOpen)
+        case .shapes:
+            let toolbox = Toolbox.shared
+            toolbox.setShapesOut(toolbox.shape == nil)
+            AccessibilityNotification.Announcement(toolbox.shape.map { String(localized: "Shapes: \($0.title). Drag on the page to draw it.") }
+                ?? String(localized: "Shapes put away")).post()
         }
     }
 

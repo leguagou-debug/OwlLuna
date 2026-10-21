@@ -26,6 +26,28 @@
         }
       }
     },
+    "%@ drawn" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ gezeichnet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dibujado: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dessiné : %@"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "de" : {
@@ -1288,6 +1310,28 @@
         }
       }
     },
+    "Circle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kreis"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Círculo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cercle"
+          }
+        }
+      }
+    },
     "Created" : {
       "localizations" : {
         "de" : {
@@ -1328,6 +1372,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout désélectionner"
+          }
+        }
+      }
+    },
+    "Draw Shape" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Form zeichnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dibujar figura"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dessiner une forme"
           }
         }
       }
@@ -1602,6 +1668,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laissez vide pour le nommer d’après le moment où il a été enregistré."
+          }
+        }
+      }
+    },
+    "Line" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linie"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Línea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligne"
           }
         }
       }
@@ -2034,6 +2122,28 @@
         }
       }
     },
+    "Rectangle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechteck"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rectángulo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rectangle"
+          }
+        }
+      }
+    },
     "Remove from All" : {
       "localizations" : {
         "de" : {
@@ -2118,6 +2228,94 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serif"
+          }
+        }
+      }
+    },
+    "Shapes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figuras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formes"
+          }
+        }
+      }
+    },
+    "Shapes draws a line, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formen zeichnet eine Linie, einen Kreis, ein Rechteck oder ein Dreieck, wo du ziehst. Oder zeichne eine Form von Hand und halte den Stift vor dem Abheben kurz still, um sie zu begradigen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figuras dibuja una línea, un círculo, un rectángulo o un triángulo donde arrastres. O dibuja una a mano y mantén el lápiz quieto un momento antes de levantarlo para enderezarla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formes trace une ligne, un cercle, un rectangle ou un triangle là où vous faites glisser. Ou tracez-en une à la main et restez immobile un instant avant de lever le crayon pour la redresser."
+          }
+        }
+      }
+    },
+    "Shapes put away" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formen ausgeblendet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figuras ocultas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formes masquées"
+          }
+        }
+      }
+    },
+    "Shapes: %@. Drag on the page to draw it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formen: %@. Zum Zeichnen auf der Seite ziehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figuras: %@. Arrastra en la página para dibujar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formes : %@. Faites glisser sur la page pour dessiner."
           }
         }
       }
@@ -2294,6 +2492,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cocher %@"
+          }
+        }
+      }
+    },
+    "Tie it on from Customise Tools, then pick a line, circle, rectangle or triangle and drag it out on the page." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Über „Werkzeuge anpassen“ hinzufügen, dann eine Linie, einen Kreis, ein Rechteck oder ein Dreieck wählen und auf der Seite aufziehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añádelo desde Personalizar herramientas; luego elige una línea, un círculo, un rectángulo o un triángulo y arrástralo en la página."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez-le depuis Personnaliser les outils, puis choisissez une ligne, un cercle, un rectangle ou un triangle et faites-le glisser sur la page."
+          }
+        }
+      }
+    },
+    "Triangle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dreieck"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Triángulo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Triangle"
           }
         }
       }

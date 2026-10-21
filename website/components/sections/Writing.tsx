@@ -51,6 +51,10 @@ export function Writing() {
               <p className={styles.text}>
                 Undo gives your own stroke back, and Settings&nbsp;&rsaquo;&nbsp;Apple Pencil turns it off.
               </p>
+              <p className={styles.text}>
+                Or keep Shapes in the tray: tie it on from Customise&nbsp;Tools, then pick a line, a circle, a rectangle
+                or a triangle on the strip over the tray and drag it out on the page.
+              </p>
               <p className={styles.hint}>
                 <span className={styles.pointer} aria-hidden="true" />
                 Pick a shape, then Undo.

@@ -372,6 +372,10 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private let pdfText = PDFTextReader()
     private lazy var textPan = UIPanGestureRecognizer(target: self, action: #selector(textPanned))
     private lazy var textTap = UITapGestureRecognizer(target: self, action: #selector(textTapped))
+    /// While a shape is picked from the strip over the tray: the overlay that takes the drags, and where on which page one began.
+    private var shapeOverlay: ShapeOverlay?
+    private var shapeDrag: (pageID: UUID, start: CGPoint)?
+    private lazy var shapePan = UIPanGestureRecognizer(target: self, action: #selector(shapePanned))
     /// Nothing on the page can be changed by hand while it is presented or replayed, while ink or text is being
     /// selected, or while it is being searched.
     private var isLocked: Bool { isPresenting || replay != nil || inkLasso != nil || isFinding || textOverlay != nil }
@@ -494,6 +498,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             pan.maximumNumberOfTouches = 1
             pan.allowedTouchTypes = Self.scrollTouchTypes + [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
         }
+        shapePan.maximumNumberOfTouches = 1
+        shapePan.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(toolChanged), name: Toolbox.didChange, object: toolbox)
         applyDrawingPolicy(session.drawingInput.policy)
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (self: Self, _) in
@@ -922,6 +928,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         contentView.addSubview(slot)
         if let inkLasso { contentView.bringSubviewToFront(inkLasso) }
         if let textOverlay { contentView.bringSubviewToFront(textOverlay) }
+        if let shapeOverlay { contentView.bringSubviewToFront(shapeOverlay) }
         if let zoomTarget { contentView.bringSubviewToFront(zoomTarget) }
         slots[page.id] = slot
         if page.isBoard, !isSolo {
@@ -1513,6 +1520,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === shapePan { return !isLocked && !document.isReadOnly && toolbox.pen != nil }
         guard gestureRecognizer === tapeTap else { return true }
         return replay == nil && inkLasso == nil && textOverlay == nil && !isOnSelection(gestureRecognizer)
             && item(at: gestureRecognizer.location(in: scrollView), tapeOnly: true) != nil
@@ -2001,6 +2009,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// The tool tray came or went: the pages make room for it, and "System Setting" is read again.
     func toolTrayDidChange() {
         applyDrawingPolicy(drawingPolicy)
+        updateShapeOverlay()
         layoutZoomPanel()
         updateInsets()
         if !isModalShowing, textView == nil { anchor.becomeFirstResponder() }
@@ -2046,6 +2055,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         }
         self.fingersDraw = fingersDraw
         scrollView.panGestureRecognizer.minimumNumberOfTouches = fingersDraw ? 2 : 1
+        // A shape is drawn by whatever draws.
+        shapePan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)] + (effectivePolicy == .anyInput ? Self.scrollTouchTypes : [])
         let pencil = NSNumber(value: UITouch.TouchType.pencil.rawValue)
         laserGesture.allowedTouchTypes = fingersPoint ? Self.scrollTouchTypes + [pencil] : [pencil]
     }
@@ -2061,6 +2072,80 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// This editor's pane was touched while another had the keyboard: key commands and undo come here now.
     func paneBecameActive() {
         if textView == nil, !isModalShowing { anchor.becomeFirstResponder() }
+    }
+
+    // MARK: Drawing shapes
+
+    /// The overlay lies over the pages while a shape is picked and the tray is out; the canvases under it see no drags.
+    private func updateShapeOverlay() {
+        let wanted = toolbox.shape != nil && session.showsToolTray && !document.isReadOnly
+        guard isViewLoaded, wanted != (shapeOverlay != nil) else { return }
+        shapeDrag = nil
+        guard wanted else {
+            shapeOverlay?.removeFromSuperview()
+            shapeOverlay = nil
+            return
+        }
+        select(nil)
+        let overlay = ShapeOverlay(frame: contentView.bounds)
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.passesThrough = { [weak self, weak overlay] point in
+            guard let self, let overlay else { return false }
+            return ([selectionView, cropView] as [UIView?]).contains { view in view.map { $0.point(inside: overlay.convert(point, to: $0), with: nil) } ?? false }
+        }
+        overlay.addGestureRecognizer(shapePan)
+        contentView.addSubview(overlay)
+        for above in [inkLasso, textOverlay, zoomTarget] as [UIView?] { if let above { contentView.bringSubviewToFront(above) } }
+        shapeOverlay = overlay
+    }
+
+    /// A drag on a page draws the picked shape there in the pen's ink, from where it began to where it is, kept to
+    /// the page. Letting go puts it on the page as one undo step.
+    @objc private func shapePanned(_ gesture: UIPanGestureRecognizer) {
+        guard let overlay = shapeOverlay, let kind = toolbox.shape, let tool = toolbox.pen?.tool, bakedScale > 0 else { return }
+        let point = stackPoint(gesture), moved = gesture.translation(in: contentView)
+        switch gesture.state {
+        case .began:
+            let start = CGPoint(x: point.x - moved.x / bakedScale, y: point.y - moved.y / bakedScale)
+            guard let (id, frame) = stackFrames.first(where: { $0.value.contains(start) }), document.loadedInk(id) != nil else {
+                shapeDrag = nil
+                return
+            }
+            shapeDrag = (id, CGPoint(x: start.x - frame.minX, y: start.y - frame.minY))
+            // As writing does, drawing puts a selected picture down.
+            if session.selection != nil { select(nil) }
+            fallthrough
+        case .changed:
+            guard let (shape, frame, _) = draggedShape(kind, to: point) else { return }
+            let points = shape.controlPoints(startingNear: .zero).map { CGPoint(x: ($0.x + frame.minX) * bakedScale, y: ($0.y + frame.minY) * bakedScale) }
+            overlay.show(points, color: shapeColor(tool), width: max(tool.width, 1) * bakedScale)
+        case .ended:
+            overlay.clear()
+            defer { shapeDrag = nil }
+            guard let (shape, _, id) = draggedShape(kind, to: point), let start = shapeDrag?.start, let ink = document.loadedInk(id) else { return }
+            let stroke = ShapeSnap.stroke(shape, tool: tool, startingNear: start)
+            guard document.updateInk([id: PKDrawing(strokes: ink.strokes + [stroke])], actionName: String(localized: "Draw Shape")) else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            AccessibilityNotification.Announcement(String(localized: "\(kind.title) drawn")).post()
+        default:
+            overlay.clear()
+            shapeDrag = nil
+        }
+    }
+
+    /// The shape from where the drag began to `point`, in its page's points, with the page's frame in the stack.
+    /// Nothing smaller than a tap.
+    private func draggedShape(_ kind: ShapeKind, to point: CGPoint) -> (SnappedShape, CGRect, UUID)? {
+        guard let drag = shapeDrag, let frame = stackFrames[drag.pageID] else { return nil }
+        let end = CGPoint(x: min(max(point.x - frame.minX, 0), frame.width), y: min(max(point.y - frame.minY, 0), frame.height))
+        guard hypot(end.x - drag.start.x, end.y - drag.start.y) >= 4 else { return nil }
+        return (kind.shape(from: drag.start, to: end), frame, drag.pageID)
+    }
+
+    /// The pen's ink as the page shows it: lighter where the page is dark.
+    private func shapeColor(_ tool: PKInkingTool) -> UIColor {
+        guard let id = shapeDrag?.pageID, let page = pages.first(where: { $0.id == id }), page.inkAppearance(night: night) == .dark else { return tool.color }
+        return PKInkingTool.convertColor(tool.color, from: .light, to: .dark)
     }
 
     // MARK: Selecting ink across pages
@@ -2891,6 +2976,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     /// Every canvas takes the tool in hand, the ones waiting to be reused as well.
     @objc private func toolChanged() {
         for canvas in allCanvases + pool { syncTool(canvas) }
+        updateShapeOverlay()
         if toolbox.typesHandwriting { InkText.warmUp() }
         // Handwriting still waiting when the pen is put down, or the helper turned off, is read there and then.
         if !unreadWriting.isEmpty, !(toolbox.typesHandwriting && PencilGestures.writes(toolbox.tool)) { typeUnreadWriting() }

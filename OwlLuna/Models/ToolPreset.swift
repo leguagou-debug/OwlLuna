@@ -297,7 +297,7 @@ struct Eraser: Codable, Hashable, Sendable {
 
 /// Something from the Add menu or the page's helpers that can be kept in the tray, beside the tools.
 enum ToolExtra: String, Codable, CaseIterable, Identifiable, Sendable {
-    case picture, text, sticker, link, tape, ruler, zoomWindow, typing
+    case picture, text, sticker, link, tape, ruler, zoomWindow, typing, shapes
     var id: String { rawValue }
 
     static let starters: [ToolExtra] = [.picture, .text]
@@ -312,6 +312,7 @@ enum ToolExtra: String, Codable, CaseIterable, Identifiable, Sendable {
         case .ruler: String(localized: "Ruler")
         case .zoomWindow: String(localized: "Zoom Window")
         case .typing: String(localized: "Handwriting to Text")
+        case .shapes: String(localized: "Shapes")
         }
     }
 
@@ -325,6 +326,7 @@ enum ToolExtra: String, Codable, CaseIterable, Identifiable, Sendable {
         case .ruler: "ruler"
         case .zoomWindow: "plus.magnifyingglass"
         case .typing: "character.cursor.ibeam"
+        case .shapes: "square.on.circle"
         }
     }
 }
@@ -350,13 +352,27 @@ final class Toolbox {
     /// The shortcuts in the tray. They stand in the order `ToolExtra` lists them.
     private(set) var extras: Set<ToolExtra>
     var isRulerActive = false {
-        didSet { if isRulerActive != oldValue { post() } }
+        didSet {
+            guard isRulerActive != oldValue else { return }
+            // The ruler and the shapes both take the drags on the page.
+            if isRulerActive { shape = nil }
+            post()
+        }
     }
     /// While this is on, what a pen writes is read after a pause and set as typed text in its place. Like the ruler,
     /// it lasts as long as the app does.
     var typesHandwriting = false {
         didSet { if typesHandwriting != oldValue { post() } }
     }
+    /// What a drag on the page draws while the strip of shapes is out over the tray; nil while it is put away. Like
+    /// the ruler, it lasts as long as the app does.
+    private(set) var shape: ShapeKind? {
+        didSet { if shape != oldValue { post() } }
+    }
+    /// The shape the strip comes out with: the one last picked.
+    @ObservationIgnored private var lastShape = ShapeKind.circle
+    /// Saved shortcuts a later build added, kept so that saving here doesn't lose them.
+    @ObservationIgnored private var unknownExtras: [String] = []
     @ObservationIgnored private var memory = PencilToolMemory<ToolChoice>()
     /// The pen that was last in hand, for a new pen to be like while the eraser or the lasso is.
     @ObservationIgnored private var lastPen: UUID?
@@ -374,6 +390,7 @@ final class Toolbox {
         let saved = store?.data(forKey: SettingsKey.toolbox).flatMap { try? JSONDecoder().decode(Saved.self, from: $0) }
         eraser = saved?.eraser ?? Eraser()
         extras = saved?.extras.map { Set($0.compactMap(ToolExtra.init(rawValue:))) } ?? Set(ToolExtra.starters)
+        unknownExtras = saved?.extras?.filter { ToolExtra(rawValue: $0) == nil } ?? []
         let pens = shelf.usable
         switch saved?.choice {
         case .pen(let id)? where pens.contains { $0.id == id }: choice = .pen(id)
@@ -404,6 +421,8 @@ final class Toolbox {
         guard new != choice else { return }
         if case .pen(let id) = choice { lastPen = id }
         memory.select(new, isEraser: new == .eraser)
+        // A shape is drawn in a pen's ink.
+        if new == .eraser || new == .lasso { shape = nil }
         choice = new
         save()
         post()
@@ -467,7 +486,25 @@ final class Toolbox {
         // A helper taken off the tray is put away, or it would stay on with nothing to turn it off.
         if !shown, extra == .ruler { isRulerActive = false }
         if !shown, extra == .typing { typesHandwriting = false }
+        if !shown, extra == .shapes { shape = nil }
         save()
+    }
+
+    /// Brings the strip of shapes out with the shape last picked, taking up a pen if the eraser or the lasso was in
+    /// hand, or puts it away.
+    func setShapesOut(_ out: Bool) {
+        guard out != (shape != nil) else { return }
+        guard out else { return shape = nil }
+        let pens = shelf.usable
+        if pen == nil, let id = (pens.first { $0.id == lastPen } ?? pens.first)?.id { take(.pen(id)) }
+        isRulerActive = false
+        shape = lastShape
+    }
+
+    func pick(_ kind: ShapeKind) {
+        lastShape = kind
+        if shape == nil { setShapesOut(true) }
+        shape = kind
     }
 
     /// The Pencil's eraser switch: to the eraser, or from it back to what was in hand before.
@@ -485,7 +522,7 @@ final class Toolbox {
     }
 
     private func save() {
-        let saved = Saved(choice: choice, eraser: eraser, extras: ToolExtra.allCases.filter(extras.contains).map(\.rawValue))
+        let saved = Saved(choice: choice, eraser: eraser, extras: ToolExtra.allCases.filter(extras.contains).map(\.rawValue) + unknownExtras)
         guard let defaults, let data = try? JSONEncoder().encode(saved) else { return }
         defaults.set(data, forKey: SettingsKey.toolbox)
     }

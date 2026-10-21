@@ -74,6 +74,13 @@ struct ToolTray: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Tools"))
         .accessibilityIdentifier("editor.tools.tray")
+        .overlay(alignment: .top) {
+            Group {
+                if toolbox.shape != nil { ShapeStrip(session: session, toolbox: toolbox).transition(.opacity) }
+            }
+            .alignmentGuide(.top) { $0[.bottom] + Space.x2 }
+        }
+        .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: toolbox.shape == nil)
     }
 
     private var rule: some View {
@@ -202,6 +209,7 @@ struct ToolTray: View {
         case .ruler: toolbox.isRulerActive
         case .zoomWindow: session.isZoomWindowOpen
         case .typing: toolbox.typesHandwriting
+        case .shapes: toolbox.shape != nil
         default: false
         }
         return Button { use(extra) } label: { Label(extra.title, systemImage: extra.symbol) }
@@ -246,6 +254,16 @@ private struct ShortcutOptions: View {
                         .accessibilityIdentifier("editor.tools.shortcut.\(extra.rawValue)")
                 }
             }
+            HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
+                Image(systemName: ToolExtra.shapes.symbol).font(.footnote.weight(.semibold)).foregroundStyle(Color.accentColor)
+                Text("Shapes draws a line, circle, rectangle or triangle where you drag. Or draw one by hand and rest the pen a moment before lifting to straighten it.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, Space.x3)
+            .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
+            .accessibilityElement(children: .combine)
         }
         .padding(Space.x4)
         .frame(minWidth: 328, idealWidth: width, maxWidth: width, alignment: .leading)
@@ -289,6 +307,43 @@ private struct ShortcutTag: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(extra.title)
         .accessibilityAddTraits(isShown ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// The shapes a drag on the page draws, on a strip over the tray, with Undo at its end. The shape picked wears the
+/// frame the tool in hand does.
+private struct ShapeStrip: View {
+    let session: EditorSession
+    let toolbox: Toolbox
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(ShapeKind.allCases) { kind in
+                let chosen = toolbox.shape == kind
+                Button { pick(kind) } label: { Label(kind.title, systemImage: kind.symbol) }
+                    .buttonStyle(TrayIconStyle(isOn: chosen))
+                    .accessibilityAddTraits(chosen ? .isSelected : [])
+                    .accessibilityIdentifier("editor.tools.shape.\(kind.rawValue)")
+            }
+            Rectangle().fill(Color.hairline).frame(width: 1, height: 24).padding(.horizontal, Space.x2)
+            Button { session.document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                .buttonStyle(TrayIconStyle())
+                .disabled(!session.canUndo)
+                .accessibilityIdentifier("editor.tools.shapes.undo")
+        }
+        .padding(.horizontal, Space.x2)
+        .frame(height: ToolTray.height)
+        .board(in: RoundedRectangle.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Shapes"))
+        .accessibilityIdentifier("editor.tools.shapes")
+    }
+
+    private func pick(_ kind: ShapeKind) {
+        guard toolbox.shape != kind else { return }
+        toolbox.pick(kind)
+        UISelectionFeedbackGenerator().selectionChanged()
+        AccessibilityNotification.Announcement(kind.title).post()
     }
 }
 

@@ -106,10 +106,10 @@ These values were chosen in the simulator and need judging with a real hand. The
 
 | Tunable | Value | Where | Judged in |
 |---|---|---|---|
-| Zoom window: rest before it moves on | 0.8 s | `ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`; used at `OwlLuna/Canvas/PageStack.swift:2686` | [Pencil 8](#pencil-8) |
+| Zoom window: rest before it moves on | 0.8 s | `ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`; used at `OwlLuna/Canvas/PageStack.swift:2771` | [Pencil 8](#pencil-8) |
 | Zoom window: the band | the last 30% of the window (`advanceZone` 0.7); moves 55% of its width (`stride`); windows of 30, 42 or 60% of the page (`widths`) | `OwlLuna/Canvas/ZoomWindow.swift:9`, `:11`, `:7` | [Pencil 8](#pencil-8) |
-| Handwriting to Text: rest before it is set as type | 1.0 s (`InkTyping.pause`), with the reading begun 0.4 s into it (`InkTyping.lookAhead`). It was 1.2 s before | `OwlLuna/Canvas/InkTyping.swift:13`, `:17`; the timer at `OwlLuna/Canvas/PageStack.swift:1135`. A Debug build takes `-inkTypingPause <seconds>` (`InkTyping.swift:11`) | [Pencil 9](#pencil-9) |
-| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:278`; used at `OwlLuna/Canvas/PageStack.swift:1202` (loop) and `:1234` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
+| Handwriting to Text: rest before it is set as type | 1.0 s (`InkTyping.pause`), with the reading begun 0.4 s into it (`InkTyping.lookAhead`). It was 1.2 s before | `OwlLuna/Canvas/InkTyping.swift:13`, `:17`; the timer at `OwlLuna/Canvas/PageStack.swift:1142`. A Debug build takes `-inkTypingPause <seconds>` (`InkTyping.swift:11`) | [Pencil 9](#pencil-9) |
+| Draw and hold, and loop to select: rest | 0.45 s (`ShapeSnap.holdDuration`) | `OwlLuna/Canvas/ShapeSnap.swift:278`; used at `OwlLuna/Canvas/PageStack.swift:1209` (loop) and `:1241` (shapes) | [Pencil 6](#pencil-6), [Pencil 7](#pencil-7) |
 | Draw and hold: how still a rest is | 6 pt (`TouchRests.slop`) | `OwlLuna/Canvas/ShapeSnap.swift:304` | [Pencil 7](#pencil-7) |
 | Draw and hold: which touch's rest counts | the Pencil's; a finger's only when fingers draw and it was alone on the pages; only for a stroke begun while that touch was down | `TouchRests.began`, `OwlLuna/Canvas/ShapeSnap.swift:322`; `TouchRests.take`, `:353` | [Pencil 3](#pencil-3) |
 | Draw and hold: smallest shape | 24 pt across | `OwlLuna/Canvas/ShapeSnap.swift:32` | [Pencil 7](#pencil-7) |
@@ -495,7 +495,7 @@ A resting palm or thumb must never draw, scroll, or count as the Pencil resting 
 <a id="pencil-5"></a>
 ### Pencil 5. Double-tap and squeeze switch tools, and the ink dish opens under the tip
 
-The app has no system tool picker, so it carries out the system's setting itself (`OwlLuna/Canvas/PageStack.swift:2914`). Where the system asks for a palette, the ink dish comes to the tip (`toggleDish`, `:2947`).
+The app has no system tool picker, so it carries out the system's setting itself (`OwlLuna/Canvas/PageStack.swift:3000`). Where the system asks for a palette, the ink dish comes to the tip (`toggleDish`, `:3033`).
 
 **Setup:** an Apple Pencil Pro (double-tap and squeeze) or an Apple Pencil (2nd generation) (double-tap only), on an iPad with hover if you can. Note what iPadOS's Settings › Apple Pencil has for double-tap and squeeze.
 
@@ -548,10 +548,12 @@ These have only been recognised from strokes drawn by tests.
 4. Draw a shape smaller than a fingertip (under 24 pt) and rest.
 5. Write a page of handwriting with your usual pauses at the ends of words.
 6. In the zoom window's strip, draw a shape and rest.
+7. Tie Shapes on from the tray's Customise Tools and tap it. Pick each shape on the strip over the tray and drag one out with the Pencil, quickly and slowly. Then do the same with a finger, with Draw With set to Pencil Only and then to Any Input.
+8. Tap Undo on the strip, then tap Shapes and write a word.
 
-**Pass:** shapes straighten only after a rest, into the kind drawn. The first Undo gives your own stroke back and the second removes it. Step 4 and step 6 are left as drawn. Nothing in step 5 straightens.
+**Pass:** shapes straighten only after a rest, into the kind drawn. The first Undo gives your own stroke back and the second removes it. Step 4 and step 6 are left as drawn. Nothing in step 5 straightens. In step 7 the outline keeps up with the tip and lands as the shape picked, in the pen's ink and about as wide as a stroke of the same pen; a finger scrolls with Pencil Only and draws a shape with Any Input. In step 8 one Undo takes the last shape away whole, and the word is ink as written.
 
-**Common failures:** a pause at the end of a word turning a letter into a line; a held shape not straightening; Undo removing the stroke at once.
+**Common failures:** a pause at the end of a word turning a letter into a line; a held shape not straightening; Undo removing the stroke at once; a dragged-out shape much thinner or bolder than the pen writes, or its outline trailing the tip.
 
 **Tunable:** the rest is 0.45 s (`ShapeSnap.holdDuration`, `OwlLuna/Canvas/ShapeSnap.swift:278`). Too short: letters and ticks you pause on become lines. Too long: you hold and wait and are unsure it took. A rest only counts while the tip stays within 6 pt (`TouchRests.slop`, `:304`); if a steady hold still fails, the tip is drifting further than that. It must be taken within 2 s of lifting (`takeHold(for:within:)`, `:403`). Count, of 20 deliberate holds, how many straightened, and on the handwriting page how many straightened by mistake.
 
@@ -574,7 +576,7 @@ These have only been recognised from strokes drawn by tests.
 
 **Common failures:** the window moving under the Pencil; writing that runs off the strip before it moves; a move lost at the end of a page.
 
-**Tunable:** the rest is 0.8 s (`ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`, used at `OwlLuna/Canvas/PageStack.swift:2686`). Late: you sit with the Pencil up, waiting for it. Jumpy: it moves while you lift between letters or go back to dot an "i". The band is the last 30% of the window (`advanceZone`, `OwlLuna/Canvas/ZoomWindow.swift:9`) and a move is 55% of its width (`stride`, `OwlLuna/Canvas/ZoomWindow.swift:11`). Too narrow a band: you reach the end of the strip first. Too wide: it moves on with room left. For each size, note how many of the ten moves felt late, early or right, your writing hand, and your speed.
+**Tunable:** the rest is 0.8 s (`ZoomWindow.rest`, `OwlLuna/Canvas/ZoomWindow.swift:13`, used at `OwlLuna/Canvas/PageStack.swift:2771`). Late: you sit with the Pencil up, waiting for it. Jumpy: it moves while you lift between letters or go back to dot an "i". The band is the last 30% of the window (`advanceZone`, `OwlLuna/Canvas/ZoomWindow.swift:9`) and a move is 55% of its width (`stride`, `OwlLuna/Canvas/ZoomWindow.swift:11`). Too narrow a band: you reach the end of the strip first. Too wide: it moves on with room left. For each size, note how many of the ten moves felt late, early or right, your writing hand, and your speed.
 
 **Evidence:** a screen recording of each size, with a phone video of the hand.
 
@@ -597,7 +599,7 @@ This has only read block letters drawn by a test.
 
 **Pass:** a sentence becomes one text box that carries on along the line and onto the next, in the pen's colour. One Undo gives the handwriting back and it stays ink. Turning the shortcut off reads what was waiting at once. Count wrong words in every 20, for print, joined-up and small.
 
-**Common failures:** a word set in two pieces; i-dots and t-crosses left as ink beside the text; the first word after turning it on much slower than the rest (Vision warming up; `InkText.warmUp`, `OwlLuna/Canvas/PageStack.swift:2892`).
+**Common failures:** a word set in two pieces; i-dots and t-crosses left as ink beside the text; the first word after turning it on much slower than the rest (Vision warming up; `InkText.warmUp`, `OwlLuna/Canvas/PageStack.swift:2977`).
 
 **Tunable:** the rest is 1.0 s (`InkTyping.pause`, `OwlLuna/Canvas/InkTyping.swift:13`), and reading starts 0.4 s into it (`InkTyping.lookAhead`, `:17`). Too short: a word is set while you pause to think, or its dots arrive after it is set. Too long: you've started the next line before the last is set and it feels late. On a Debug build, compare `-inkTypingPause 0.8` and `-inkTypingPause 1.4` with the default. A phone video shows the time from lift to text; aim for about one second.
 

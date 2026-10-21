@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A text box can be highlighted in any of the highlighter's four colours.
 - Crop a picture on the page: choose Crop, then drag an edge or a corner. Reset Crop brings the whole picture back, and exports keep only the part you kept.
 - Squeeze or stretch a picture on the page from the grip on any of its sides. The corner handle and a pinch still keep its proportions, and a picture settles back on its own shape as you near it.
+- Shapes in the tool tray: tie it on from Customise Tools, then pick a line, circle, rectangle or triangle on the strip over the tray and drag it out on the page in the pen's ink. The strip has Undo too, and Customise Tools says how draw and hold straightens a shape you draw by hand.
 - Settings › Appearance: follow the iPad's Light or Dark, or always use one of them, in every window.
 - Settings › Input › Left-Handed moves the page ribbon, the zoom window's buttons and the panels beside the page to the left.
 - Settings › Recently Deleted: empty it after 7, 30 or 90 days. Each iPad keeps to its own length, and sync leaves a notebook on an iPad that keeps it longer.
