@@ -200,7 +200,7 @@ final class IndexRefreshTests: XCTestCase {
         XCTAssertEqual([record.title, record.tagsRaw], ["Biology", "exam"], "what the record knew comes across")
         XCTAssertNil(record.manifestDate)
         XCTAssertEqual(LibraryIndex.notebookIDs(matching: "prophase", in: ModelContext(store.context.container)), [manifest.id])
-        XCTAssertEqual(LibraryIndex.schemaNumber, 6, "so the launch after the update reads every manifest once")
+        XCTAssertEqual(LibraryIndex.schemaNumber, 7, "so the launch after the update reads every manifest once")
 
         let first = await LibraryIndex.refresh(root: root, context: store.context)
         XCTAssertEqual(first, [manifest.id], "a record without the date is read, whatever it was stamped with")

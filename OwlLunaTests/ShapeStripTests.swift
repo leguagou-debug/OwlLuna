@@ -30,14 +30,14 @@ final class ShapeStripTests: XCTestCase {
     }
 
     func testAShapeIsDrawnInThePensInkAndReadsAsItself() throws {
-        let tool = PKInkingTool(.monoline, color: ToolPreset.uiColor(0x2747_B8FF), width: 4)
+        let tool = PKInkingTool(.monoline, color: ToolPreset.uiColor(0x2747_B8FF), width: 2)
         let drawn: [(ShapeKind, String)] = [(.line, "line"), (.arrow, "arrow"), (.circle, "circle"), (.rectangle, "rectangle"), (.triangle, "triangle")]
         for (kind, name) in drawn {
             let start = CGPoint(x: 100, y: 80), end = CGPoint(x: 260, y: 200)
             let stroke = ShapeSnap.stroke(kind.shape(from: start, to: end, width: tool.width), tool: tool, startingNear: start)
             XCTAssertEqual(stroke.ink.inkType, .monoline)
             XCTAssertEqual(ToolPreset.bytes(of: stroke.ink.color), 0x2747_B8FF, "in the pen's colour")
-            XCTAssertEqual(try XCTUnwrap(stroke.path.first).size.width, 4, accuracy: 0.01, "as wide as the pen")
+            XCTAssertEqual(try XCTUnwrap(stroke.path.first).size.width, 4, accuracy: 0.01, "2 pt more than the fineliner's width, as its strokes by hand are")
             let bounds = PKDrawing(strokes: [stroke]).bounds
             XCTAssertEqual(bounds.minX, 100, accuracy: 4, name)
             XCTAssertEqual(bounds.maxX, 260, accuracy: 4, name)
@@ -71,6 +71,46 @@ final class ShapeStripTests: XCTestCase {
         for corner in [tail, tip, left, right] {
             XCTAssertLessThan(outline.map { ShapeRecognizer.distance($0, corner) }.min() ?? 99, 1.5, "one stroke, sharp at the tip and the barbs")
         }
+    }
+
+    func testAShapeLeavesAMarkAtThePensThinnestWidth() {
+        for ink in [PKInkingTool.InkType.pen, .monoline, .fountainPen] {
+            let tool = PKInkingTool(ink, color: .black, width: ink.validWidthRange.lowerBound)
+            let stroke = ShapeSnap.stroke(ShapeKind.line.shape(from: CGPoint(x: 60, y: 10), to: CGPoint(x: 60, y: 110), width: tool.width), tool: tool, startingNear: .zero)
+            let image = PKDrawing(strokes: [stroke]).image(from: CGRect(x: 0, y: 0, width: 120, height: 120), scale: 2)
+            XCTAssertGreaterThan(inkedPixels(image), 200, "\(ink.rawValue) at \(tool.width)")
+        }
+    }
+
+    private func inkedPixels(_ image: UIImage) -> Int {
+        guard let cg = image.cgImage else { return 0 }
+        let width = cg.width, height = cg.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let context = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        context?.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return stride(from: 3, to: bytes.count, by: 4).filter { bytes[$0] > 64 }.count
+    }
+
+    func testEveryArrowFromTheStripReadsBackAsAnArrow() {
+        for (ink, width) in [(.pen, 1), (.pen, 2.7), (.pen, 6), (.pen, 20), (.monoline, 0.5)] as [(PKInkingTool.InkType, CGFloat)] {
+            let tool = PKInkingTool(ink, color: .black, width: width)
+            for length in [40, 120, 320, 640, 960] as [CGFloat] {
+                for step in 0..<8 {
+                    let angle = CGFloat(step) * .pi / 4 + 0.2
+                    let tail = CGPoint(x: 1000, y: 1000), tip = CGPoint(x: 1000 + length * cos(angle), y: 1000 + length * sin(angle))
+                    let stroke = ShapeSnap.stroke(ShapeKind.arrow.shape(from: tail, to: tip, width: width), tool: tool, startingNear: tail)
+                    let read = ShapeRecognizer.recognize(stroke.path.interpolatedPoints(by: .distance(3)).map(\.location))
+                    XCTAssertEqual(read?.displayName, "arrow", "\(length) pt at width \(width), turned \(step)")
+                }
+            }
+        }
+    }
+
+    func testTheStripKeepsWithinANarrowPane() {
+        XCTAssertEqual(ToolTray.shapeButton(room: 1024), ToolTray.button)
+        XCTAssertEqual(ToolTray.shapeButton(room: 320), 42.5, accuracy: 0.01, "six buttons, a rule and the padding fill the pane's width within its margins")
+        XCTAssertEqual(ToolTray.shapeButton(room: 200), ToolSwatch.side, "never narrower than a button's well")
     }
 
     func testTheStripComesOutWithTheLastShapeAndAPen() throws {

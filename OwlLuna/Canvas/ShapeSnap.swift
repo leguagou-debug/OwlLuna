@@ -44,14 +44,20 @@ enum ShapeRecognizer {
         if gap > max(0.2 * diagonal, 16) {
             let wander = points.map { distance($0, toSegment: first, last) }.max() ?? 0
             if gap / max(length, 1) >= 0.93, wander <= max(0.07 * gap, 4) {
+                // A head too small to be a corner of so long a line still makes it an arrow: a barb either side, or a lone hook of 16 pt.
+                let fine = simplified(points, tolerance: max(0.4 * wander, 4))
+                if wander >= 8, let hooked = arrow(fine, turnedAtLeast: 15 * .pi / 180), case .arrow(_, _, let head) = hooked,
+                   fine.count == 5 || head >= 16 { return hooked }
                 let (a, b) = squared(first, last)
                 return .line(a, b)
             }
             // Straight pieces keep the same corners when looked at more closely; a curve keeps gaining them.
             let tolerance = max(0.045 * diagonal, 6)
-            let corners = simplified(points, tolerance: tolerance)
-            guard (3...8).contains(corners.count), simplified(points, tolerance: tolerance / 3).count <= corners.count + 1,
-                  fit(points, to: corners, closed: false) <= 0.022 * diagonal + 1.5 else { return nil }
+            let corners = simplified(points, tolerance: tolerance), closer = simplified(points, tolerance: tolerance / 3)
+            let fits = fit(points, to: corners, closed: false) <= 0.022 * diagonal + 1.5
+            // A small head shows both its barbs only when looked at more closely.
+            if fits, (3...4).contains(corners.count), closer.count == 5, let small = arrow(closer) { return small }
+            guard (3...8).contains(corners.count), closer.count <= corners.count + 1, fits else { return nil }
             return arrow(corners) ?? .polyline(corners)
         }
 
@@ -135,19 +141,30 @@ enum ShapeRecognizer {
         return zip(points, keep).filter(\.1).map(\.0)
     }
 
-    /// A line with a short hook turned back at its end, or a barb either side of its tip, is an arrow.
-    private static func arrow(_ corners: [CGPoint]) -> SnappedShape? {
+    /// A line with a short hook turned back at its end, or a barb either side of its tip, is an arrow; a bow in the line is let go.
+    private static func arrow(_ corners: [CGPoint], turnedAtLeast least: CGFloat = 10 * .pi / 180) -> SnappedShape? {
+        var corners = corners
+        let bend = corners.count == 4 ? (direction(corners[1], corners[2]) - direction(corners[0], corners[1])).remainder(dividingBy: 2 * .pi) : .pi
+        if abs(bend) < 20 * .pi / 180 { corners.remove(at: 1) }
+        return pointed(corners, least) ?? (corners.count == 5 ? pointed(corners.reversed(), least) : nil)
+    }
+
+    /// The arrow these corners make tail first: a lone hook no longer than a third of the line, as a longer one is more likely
+    /// an angle's second side, or a barb either side no longer than half of it.
+    private static func pointed(_ corners: [CGPoint], _ least: CGFloat) -> SnappedShape? {
         guard corners.count == 3 || corners.count == 5 else { return nil }
         let tail = corners[0], tip = corners[1], barbs = corners.count == 3 ? [corners[2]] : [corners[2], corners[4]]
         if corners.count == 5, distance(corners[3], tip) > 0.4 * distance(corners[2], tip) { return nil }
-        let back = atan2(tail.y - tip.y, tail.x - tip.x), shaft = distance(tail, tip)
-        let turns = barbs.map { (atan2($0.y - tip.y, $0.x - tip.x) - back).remainder(dividingBy: 2 * .pi) }
+        let back = direction(tip, tail), shaft = distance(tail, tip)
+        let turns = barbs.map { (direction(tip, $0) - back).remainder(dividingBy: 2 * .pi) }
         let heads = barbs.map { distance(tip, $0) }
-        guard turns.allSatisfy({ (10 * .pi / 180...65 * .pi / 180).contains(abs($0)) }), heads.allSatisfy({ $0 <= 0.5 * shaft }),
+        guard turns.allSatisfy({ (least...65 * .pi / 180).contains(abs($0)) }), heads.allSatisfy({ $0 <= (barbs.count == 1 ? 1 / 3 : 0.5) * shaft }),
               turns.count == 1 || turns[0] * turns[1] < 0 else { return nil }
         let (a, b) = squared(tail, tip)
         return .arrow(a, b, head: heads.reduce(0, +) / CGFloat(heads.count))
     }
+
+    private static func direction(_ a: CGPoint, _ b: CGPoint) -> CGFloat { atan2(b.y - a.y, b.x - a.x) }
 
     /// A stroke that starts in the middle of a side leaves a corner there that isn't one.
     private static func withoutStraightCorners(_ corners: [CGPoint]) -> [CGPoint] {
@@ -473,14 +490,33 @@ final class StrokeHoldRecognizer: UIGestureRecognizer {
 }
 
 extension ShapeSnap {
-    /// A shape drawn with `tool`, as wide as the tool is set, from the corner nearest `start`.
+    /// A shape drawn with `tool`, in its ink and about as broad as its strokes by hand, from the corner nearest `start`.
     static func stroke(_ shape: SnappedShape, tool: PKInkingTool, startingNear start: CGPoint) -> PKStroke {
         let locations = shape.controlPoints(startingNear: start)
-        let size = CGSize(width: tool.width, height: tool.width)
+        let size = CGSize(width: pointSize(for: tool), height: pointSize(for: tool))
         let points = locations.enumerated().map { index, location in
             PKStrokePoint(location: location, timeOffset: 0.005 * Double(index), size: size, opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
         }
         return PKStroke(ink: PKInk(tool.inkType, color: tool.color), path: PKStrokePath(controlPoints: points, creationDate: Date()))
+    }
+
+    /// PencilKit draws a pen's, fineliner's or fountain pen's nib 2 pt narrower all round than its points: a pen's shape is
+    /// drawn as wide as it is set, and never finer than a stroke by hand, and the others at the size a stroke by hand records.
+    static func pointSize(for tool: PKInkingTool) -> CGFloat {
+        switch tool.inkType {
+        case .pen: max(tool.width / 2 + 2, 3)
+        case .monoline: tool.width + 2
+        case .fountainPen: 2.2 + 0.57 * tool.width
+        default: tool.width
+        }
+    }
+
+    /// How broad a shape drawn with `tool` comes out, for the outline shown while it is dragged.
+    static func drawnWidth(for tool: PKInkingTool) -> CGFloat {
+        switch tool.inkType {
+        case .pen, .monoline, .fountainPen: max(2 * (pointSize(for: tool) - 2), 1)
+        default: max(tool.width, 1)
+        }
     }
 }
 

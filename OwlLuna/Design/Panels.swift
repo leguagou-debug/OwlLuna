@@ -353,6 +353,7 @@ private struct HoldProbe: UIViewRepresentable {
     final class HoldView: UIView, UIGestureRecognizerDelegate {
         var draggable = false { didSet { press.cancelsTouchesInView = !draggable } }
         var held: (() -> Void)?
+        private weak var touch: UITouch?
         private lazy var press: UILongPressGestureRecognizer = {
             let press = UILongPressGestureRecognizer(target: self, action: #selector(pressed))
             press.minimumPressDuration = 0.45
@@ -368,16 +369,32 @@ private struct HoldProbe: UIViewRepresentable {
         }
 
         @objc private func pressed() {
-            if press.state == (draggable ? .ended : .began) { held?() }
+            guard press.state == (draggable ? .ended : .began) else { return }
+            if !draggable { takeTouch() }
+            held?()
+        }
+
+        /// The screen's own gestures let go of a held touch, so a button under it doesn't take its lifting for a tap.
+        private func takeTouch() {
+            guard let screen else { return }
+            for other in touch?.gestureRecognizers ?? [] where other !== press && other.view?.isDescendant(of: screen) == true {
+                other.isEnabled = false
+                other.isEnabled = true
+            }
+        }
+
+        private var screen: UIView? {
+            var responder = next
+            while let current = responder, !(current is UIViewController) { responder = current.next }
+            return (responder as? UIViewController)?.viewIfLoaded
         }
 
         /// A touch over this view counts only if it lands in the screen this view is on, not in one that covers it.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard bounds.contains(touch.location(in: self)) else { return false }
-            var responder = next
-            while let current = responder, !(current is UIViewController) { responder = current.next }
-            guard let screen = (responder as? UIViewController)?.viewIfLoaded else { return true }
-            return touch.view?.isDescendant(of: screen) ?? false
+            if let screen, touch.view?.isDescendant(of: screen) != true { return false }
+            self.touch = touch
+            return true
         }
 
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }

@@ -192,10 +192,12 @@ enum InkTimelapse {
                 } else if frame == total {
                     // The finished page is drawn from the whole drawing, the way every other export draws it.
                     if let image = paper.cgImage { base.draw(image, in: whole) }
-                    autoreleasepool {
-                        var page: UIImage?
-                        appearance.performAsCurrent { page = ink.image(from: pageRect, scale: scale) }
-                        if let image = page?.cgImage { base.draw(image, in: whole) }
+                    for run in PageRenderer.inkRuns(ink, within: pageRect, multiplying: !onDark) {
+                        autoreleasepool {
+                            var page: UIImage?
+                            appearance.performAsCurrent { page = run.ink.image(from: pageRect, scale: scale) }
+                            if let image = page?.cgImage { paint((image, whole, run.multiplies), on: base) }
+                        }
                     }
                     baseImage = base.makeImage()
                 }

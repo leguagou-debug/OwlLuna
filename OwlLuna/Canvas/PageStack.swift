@@ -87,8 +87,33 @@ final class PageCanvasView: PKCanvasView {
     weak var undoProxy: UndoManager?
     /// Counted lazily, only when an assistive technology asks, and reset whenever the drawing changes.
     var strokeCount: Int?
+    /// Renders still to be looked over for a lost tile after ink was put on from the page's side.
+    var tileChecks = 0
 
     override var undoManager: UndoManager? { undoProxy ?? super.undoManager }
+
+    /// Whether a tile PencilKit has drawn is empty where a stroke runs through it. When memory runs short PencilKit
+    /// can lose a tile's render and leave it blank until the strokes change.
+    var hasBlankInkTile: Bool {
+        let blank = tileLayers(in: self).filter { $0.contents == nil && !$0.isHidden }.map { $0.convert($0.bounds, to: layer) }
+        let scale = zoomScale, ink = drawing
+        func shown(_ rect: CGRect) -> CGRect { CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale) }
+        guard !blank.isEmpty, blank.contains(where: { $0.intersects(shown(ink.bounds)) }) else { return false }
+        for stroke in ink.strokes {
+            let near = blank.filter { $0.intersects(shown(stroke.renderBounds)) }
+            guard !near.isEmpty else { continue }
+            for point in stroke.path.interpolatedPoints(by: .distance(4)) {
+                let location = point.location.applying(stroke.transform)
+                if near.contains(where: { $0.contains(CGPoint(x: location.x * scale, y: location.y * scale)) }) { return true }
+            }
+        }
+        return false
+    }
+
+    private func tileLayers(in view: UIView) -> [CALayer] {
+        guard NSStringFromClass(type(of: view)) == "PKCanvasAttachmentView" else { return view.subviews.flatMap { tileLayers(in: $0) } }
+        return view.subviews.flatMap { holder in (holder.layer.sublayers ?? []).filter { $0.delegate == nil } }
+    }
 
     override var accessibilityValue: String? {
         get {
@@ -398,8 +423,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var typed: TextBox?
     /// The edit the text view asked to make: where, what goes in, and the text it should leave.
     private var pendingEdit: (range: NSRange, text: String, result: String)?
-    /// The ticks each text has had while it is typed, for when the text view's own undo brings one back.
-    private var typedTicks: [String: Set<Int>] = [:]
+    /// The ticks of the last 200 texts typed, newest last, for when the text view's own undo brings one back.
+    private var typedTicks: [(text: String, ticks: Set<Int>)] = []
     private lazy var checkTap = UITapGestureRecognizer(target: self, action: #selector(tappedTypedCheckbox))
     private var typingMarkers: TextMarkersView?
     private var keyboardOverlap: CGFloat = 0
@@ -1041,7 +1066,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             Task { [weak self] in
                 guard let self else { return }
                 let ink = await document.ink(id)
-                if canvas.pageID == id { show(ink, in: canvas) }
+                // Ink put on the page since it loaded is on the canvas already.
+                if canvas.pageID == id, !canvas.isLoaded { show(document.loadedInk(id) ?? ink, in: canvas) }
             }
         }
     }
@@ -1052,6 +1078,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         canvas.strokeCount = nil
         isApplyingDrawing = false
         canvas.isLoaded = true
+        canvas.tileChecks = 2
         setDrawingEnabled(!document.isReadOnly && !isLocked, canvas)
         if !firstInkReported, canvas.pageID == firstInkPage, ink.strokes.isEmpty {
             DispatchQueue.main.async { [weak self] in self?.reportFirstInk() }
@@ -1298,6 +1325,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     /// Writing anywhere puts a selected picture down.
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        (canvasView as? PageCanvasView)?.tileChecks = 0
         if session.selection != nil { select(nil) }
         if !unreadWriting.isEmpty { typingTimer?.cancel() }
         guard canvasView === zoomCanvas else { return }
@@ -1306,9 +1334,23 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     func canvasViewDidFinishRendering(_ canvasView: PKCanvasView) {
-        guard !firstInkReported, (canvasView as? PageCanvasView)?.pageID == firstInkPage,
-              (canvasView as? PageCanvasView)?.isLoaded == true else { return }
+        guard let canvas = canvasView as? PageCanvasView else { return }
+        if canvas.tileChecks > 0 {
+            canvas.tileChecks -= 1
+            if canvas.hasBlankInkTile { redrawTiles(of: canvas) } else { canvas.tileChecks = 0 }
+        }
+        guard !firstInkReported, canvas.pageID == firstInkPage, canvas.isLoaded else { return }
         reportFirstInk()
+    }
+
+    /// PencilKit draws its tiles again only when the strokes change, so the canvas is emptied and given them back.
+    private func redrawTiles(of canvas: PageCanvasView) {
+        guard ![.began, .changed].contains(canvas.drawingGestureRecognizer.state) else { return }
+        let ink = canvas.drawing
+        isApplyingDrawing = true
+        canvas.drawing = PKDrawing()
+        canvas.drawing = PKDrawing(strokes: ink.strokes)
+        isApplyingDrawing = false
     }
 
     private func reportFirstInk() {
@@ -1628,7 +1670,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         textView = view
         typing = selection
         typed = box
-        typedTicks = [box.string: box.checked]
+        typedTicks = [(box.string, box.checked)]
         let markers = TextMarkersView()
         slot.insertSubview(markers, belowSubview: view)
         typingMarkers = markers
@@ -1715,7 +1757,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     func textViewDidChange(_ textView: UITextView) {
         let text = textView.text ?? ""
         let undoing = textView.undoManager?.isUndoing == true || textView.undoManager?.isRedoing == true
-        if undoing, let ticks = typedTicks[text] {
+        if undoing, let ticks = typedTicks.last(where: { $0.text == text })?.ticks {
             typed?.string = text
             typed?.checked = ticks
         } else if let edit = pendingEdit, (text as NSString).isEqual(to: edit.result) {
@@ -1725,17 +1767,18 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         }
         pendingEdit = nil
         if let typed {
-            if typedTicks.count >= 200 { typedTicks.removeAll() }
-            typedTicks[typed.string] = typed.checked
+            typedTicks.append((typed.string, typed.checked))
+            if typedTicks.count > 200 { typedTicks.removeFirst() }
         }
         layoutTextEditor()
         revealTextEditor()
     }
 
-    /// The line of the checklist being typed in whose box is at a point in its text view.
+    /// The line of the checklist being typed in whose box is at a point in its text view. Its words start where the box's
+    /// room ends, so a tap on them only places the caret.
     private func typedCheckbox(at point: CGPoint) -> Int? {
         guard bakedScale > 0, let (_, item) = liveTextItem(), let box = item.text, box.list == .check else { return nil }
-        return box.checkbox(at: CGPoint(x: point.x / bakedScale, y: point.y / bakedScale), width: item.size.width)
+        return box.checkbox(at: CGPoint(x: point.x / bakedScale, y: point.y / bakedScale), width: item.size.width, reach: 0)
     }
 
     /// Only a touch on a box of the checklist being typed in is a tick; every other touch is the text view's.
@@ -1754,7 +1797,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         guard textView != nil, !isLocked, !document.isReadOnly, liveTextItem()?.item.text?.list == .check, var box = typed else { return false }
         box.toggleCheck(line: line)
         typed = box
-        typedTicks = [box.string: box.checked]
+        typedTicks = [(box.string, box.checked)]
         layoutTextEditor()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         return true
@@ -1811,7 +1854,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         typing = nil
         typed = nil
         pendingEdit = nil
-        typedTicks = [:]
+        typedTicks = []
         selectionView?.isEditing = false
         if session.isEditingText { session.isEditingText = false }
         updateInsets()
@@ -2214,7 +2257,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         case .changed:
             guard let (shape, frame, _) = draggedShape(kind, to: point, width: tool.width) else { return }
             let points = shape.controlPoints(startingNear: .zero).map { CGPoint(x: ($0.x + frame.minX) * bakedScale, y: ($0.y + frame.minY) * bakedScale) }
-            overlay.show(points, color: shapeColor(tool), width: max(tool.width, 1) * bakedScale)
+            overlay.show(points, color: shapeColor(tool), width: ShapeSnap.drawnWidth(for: tool) * bakedScale)
         case .ended:
             overlay.clear()
             defer { shapeDrag = nil }
@@ -2792,7 +2835,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         Task { [weak self] in
             guard let self else { return }
             let ink = await document.ink(pageID)
-            if zoomCanvas === canvas, canvas.pageID == pageID { showZoomInk(ink, in: canvas) }
+            if zoomCanvas === canvas, canvas.pageID == pageID, !canvas.isLoaded { showZoomInk(document.loadedInk(pageID) ?? ink, in: canvas) }
         }
     }
 
@@ -2802,6 +2845,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         canvas.strokeCount = nil
         isApplyingDrawing = false
         canvas.isLoaded = true
+        canvas.tileChecks = 2
         setDrawingEnabled(!document.isReadOnly && !isLocked, canvas)
     }
 

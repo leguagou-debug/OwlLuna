@@ -302,10 +302,11 @@ extension TextBox {
             .text.attributes(at: 0, effectiveRange: nil)
     }
 
-    /// The line of a checklist whose box is at a point, in page points from the box's top left.
-    func checkbox(at point: CGPoint, width: CGFloat) -> Int? {
+    /// The line of a checklist whose box is at a point, in page points from the box's top left; `reach` is how far past
+    /// the box's room a tap still counts.
+    func checkbox(at point: CGPoint, width: CGFloat, reach: CGFloat = 6) -> Int? {
         checkboxes(typeset(string, color: .black), width: width)
-            .filter { $0.room.insetBy(dx: -6, dy: -2).contains(point) }
+            .filter { $0.room.insetBy(dx: -reach, dy: -2).contains(point) }
             .min { hypot($0.box.midX - point.x, $0.box.midY - point.y) < hypot($1.box.midX - point.x, $1.box.midY - point.y) }?.line
     }
 

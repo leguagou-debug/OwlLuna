@@ -194,12 +194,9 @@ enum PageRenderer {
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         format.opaque = paper || !includeBackground
-        var inkImage: UIImage?
-        if !ink.strokes.isEmpty {
-            UITraitCollection(userInterfaceStyle: includeBackground && paper ? page.inkAppearance(night: night) : .light).performAsCurrent {
-                inkImage = ink.image(from: page.inkRect, scale: factor * scale)
-            }
-        }
+        let onPaper = includeBackground && paper
+        let appearance = UITraitCollection(userInterfaceStyle: onPaper ? page.inkAppearance(night: night) : .light)
+        let runs = inkRuns(ink, within: page.inkRect, multiplying: !(onPaper && page.isDark(night: night)))
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             if includeBackground {
                 drawBackground(page, assets: assets, in: context.cgContext, size: size, links: links, night: night, paper: paper)
@@ -207,8 +204,27 @@ enum PageRenderer {
                 UIColor.white.setFill()
                 context.fill(CGRect(origin: .zero, size: size))
             }
-            inkImage?.draw(in: CGRect(origin: .zero, size: size))
+            for run in runs {
+                autoreleasepool {
+                    var picture: UIImage?
+                    appearance.performAsCurrent { picture = run.ink.image(from: page.inkRect, scale: factor * scale) }
+                    picture?.draw(in: CGRect(origin: .zero, size: size), blendMode: run.multiplies ? .multiply : .normal, alpha: 1)
+                }
+            }
             if includeBackground { drawOverInk(page, assets: assets, in: context.cgContext, size: size, lifted: lifted) }
         }
+    }
+
+    /// The ink as one picture, or cut where the highlighter starts and stops so it can be multiplied over what is under it.
+    static func inkRuns(_ ink: PKDrawing, within rect: CGRect, multiplying: Bool) -> [(ink: PKDrawing, multiplies: Bool)] {
+        let strokes = ink.strokes
+        guard !strokes.isEmpty else { return [] }
+        guard multiplying, strokes.contains(where: { $0.ink.inkType == .marker }) else { return [(ink, false)] }
+        var runs: [(strokes: [PKStroke], multiplies: Bool)] = []
+        for stroke in strokes where stroke.renderBounds.intersects(rect) {
+            let marker = stroke.ink.inkType == .marker
+            if runs.last?.multiplies == marker { runs[runs.count - 1].strokes.append(stroke) } else { runs.append(([stroke], marker)) }
+        }
+        return runs.map { (PKDrawing(strokes: $0.strokes), $0.multiplies) }
     }
 }

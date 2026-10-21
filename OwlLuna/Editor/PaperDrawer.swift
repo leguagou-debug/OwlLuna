@@ -388,8 +388,6 @@ private struct OwnPaperSection: View {
     @State private var renaming: CustomPaper?
     @State private var newName = ""
     @State private var failure: String?
-    /// A hold opens the paper's menu, and the button still sees the touch end: that one isn't a pick.
-    @State private var held: (id: String, at: Date)?
 
     var body: some View {
         content
@@ -511,13 +509,7 @@ private struct OwnPaperSection: View {
 
     private func button(_ paper: CustomPaper) -> some View {
         let chosen = paper.id == own.chosen
-        return Button {
-            if let held, held.id == paper.id, Date.now.timeIntervalSince(held.at) < 5 {
-                self.held = nil
-            } else {
-                pick(paper)
-            }
-        } label: {
+        return Button { pick(paper) } label: {
             PaperPreview(paper: paper)
                 .overlay {
                     if chosen { StitchedSelection().transition(reduceMotion ? .opacity : .scale(scale: 1.06).combined(with: .opacity)) }
@@ -527,7 +519,6 @@ private struct OwnPaperSection: View {
         .buttonStyle(.plain)
         .hoverEffect(.lift)
         .disabled(isAdding)
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in held = (paper.id, .now) })
         .heldMenu(Text(paper.name)) {
             Button { startRenaming(paper) } label: { Label("Rename…", systemImage: "pencil") }
             Button(role: .destructive) { remove(paper) } label: { Label("Delete Paper", systemImage: "trash") }

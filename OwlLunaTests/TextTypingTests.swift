@@ -223,6 +223,49 @@ final class TextTypingTests: XCTestCase {
         XCTAssertFalse(printed(retyped.id), "words changed by hand make it the user's own too")
     }
 
+    func testAPrintedAgendaTypedOverByABuildThatKeepsItsMarkIsTheUsersOwn() throws {
+        let events = [AgendaEvent(title: "Lab group", start: Date(timeIntervalSinceReferenceDate: 0))]
+        var printed = try XCTUnwrap(Agenda.item(for: events, on: paper.newPage()))
+        XCTAssertTrue(printed.isPrintedAgenda)
+        var box = try XCTUnwrap(printed.text)
+        box.string += "\nBring lab coat"
+        printed.content = .text(box)
+        XCTAssertFalse(printed.isPrintedAgenda, "the mark holds the printed words, so words typed over them count as the user's")
+        printed.raw["agenda"] = .bool(true)
+        XCTAssertTrue(printed.isPrintedAgenda, "a mark from before still counts")
+    }
+
+    func testAStyleThatChangesNothingKeepsTheAgendaAndADuplicateKeepsWhatANewerBuildStored() async throws {
+        var placed = item(checklist("9:00  Standup"))
+        placed.raw["agenda"] = .bool(true)
+        placed.raw["face"] = .string("calligraphy")
+        let document = try await makeDocument(items: [placed])
+        let session = EditorSession(document: document)
+        session.selection = ItemSelection(pageID: document.pages[0].id, itemID: placed.id)
+        let before = document.pages[0].items
+        session.updateText { $0.tint = .ink }
+        XCTAssertEqual(document.pages[0].items, before, "tapping the colour already chosen changes nothing, the agenda mark included")
+
+        session.duplicateSelection()
+        let copy = try XCTUnwrap(document.pages[0].items.last)
+        XCTAssertNotEqual(copy.id, placed.id)
+        XCTAssertEqual(copy.json.objectValue?["face"], .string("calligraphy"), "a copy keeps the face a newer build chose")
+        XCTAssertFalse(copy.isPrintedAgenda, "a copy is placed by hand")
+        session.selection = ItemSelection(pageID: document.pages[0].id, itemID: placed.id)
+        session.updateText { $0.tint = .cobalt }
+        XCTAssertFalse(document.pages[0].items[0].isPrintedAgenda, "a real change makes the box the user's own")
+    }
+
+    func testWhileABoxIsTypedInOnlyItsMarkerColumnTicks() throws {
+        let box = checklist("Oats\nFlour")
+        let style = try XCTUnwrap(box.editingText(scale: 1, onDark: false).attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        let flour = try XCTUnwrap(box.checkboxes(width: 260).first { $0.line == 1 }?.rect)
+        let words = CGPoint(x: style.firstLineHeadIndent + 3, y: flour.midY)
+        XCTAssertEqual(box.checkbox(at: words, width: 260), 1, "on the page a tap just into the words still ticks")
+        XCTAssertNil(box.checkbox(at: words, width: 260, reach: 0), "while typing it only places the caret")
+        XCTAssertEqual(box.checkbox(at: CGPoint(x: flour.midX, y: flour.midY), width: 260, reach: 0), 1)
+    }
+
     // MARK: Drawing
 
     func testTheMarkersOfABoxTypedInFarZoomedInHaveNoMorePixelsThanAScreenful() throws {

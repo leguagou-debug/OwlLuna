@@ -458,7 +458,7 @@ extension FolderTree {
 @MainActor
 enum LibraryIndex {
     private static let log = Logger(subsystem: "com.owais.OwlLuna", category: "index")
-    static let schemaNumber = 6
+    static let schemaNumber = 7
 
     /// Opens the index. A store that can't be opened is set aside (never deleted) and a fresh one is rebuilt
     /// from the manifests; if even that fails, the app runs on an in-memory index for this launch.

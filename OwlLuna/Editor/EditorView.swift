@@ -63,6 +63,9 @@ final class EditorSession {
     var showsTools = true
     var canUndo = false
     var canRedo = false
+    /// While a box is typed in, only a change of its style can be undone or redone from the bar.
+    var undoesStyle = false
+    var redoesStyle = false
     /// The picture, sticker, text box or link being arranged. The canvas owns it; it's mirrored here for the chrome.
     var selection: ItemSelection?
     var isEditingText = false
@@ -389,7 +392,9 @@ final class EditorSession {
         guard let selection else { return }
         document.updateItems(onPage: selection.pageID, actionName: String(localized: "Text Style")) { items in
             guard let index = items.firstIndex(where: { $0.id == selection.itemID }), var box = items[index].text else { return }
+            let before = box
             change(&box)
+            guard box != before else { return }
             items[index].content = .text(box)
             items[index] = items[index].fittedToText()
             items[index].raw["agenda"] = nil
@@ -470,10 +475,8 @@ final class EditorSession {
     func duplicateSelection() {
         guard let selection, let page = document.pages.first(where: { $0.id == selection.pageID }),
               var copy = page.items.first(where: { $0.id == selection.itemID }) else { return }
-        let crop = copy.crop
         copy.id = UUID()
-        copy.raw = [:]
-        copy.crop = crop
+        copy.raw["agenda"] = nil
         copy.center = CGPoint(x: min(copy.center.x + 24, page.size.width), y: min(copy.center.y + 24, page.size.height))
         document.updateItems(onPage: selection.pageID, actionName: String(localized: "Duplicate")) { $0.append(copy) }
         canvas?.select(ItemSelection(pageID: selection.pageID, itemID: copy.id))
@@ -502,6 +505,8 @@ final class EditorSession {
     func refreshUndoState() {
         canUndo = document.undoManager.canUndo
         canRedo = document.undoManager.canRedo
+        undoesStyle = canUndo && document.undoManager.undoActionName == String(localized: "Text Style")
+        redoesStyle = canRedo && document.undoManager.redoActionName == String(localized: "Text Style")
     }
 
     /// Inserts after `index` (or at the end) and makes the new page current.
@@ -675,6 +680,10 @@ fileprivate struct EditorContent: View {
 
     /// A pane beside another notebook has about half a window: its bar keeps the essentials and the rest move into More.
     private var isNarrow: Bool { paneWidth < EditorPanes.narrowWidth }
+    /// Bold, Italic and Underline stand in a text box's bar only where the bar still clears the page ribbons.
+    private var textBarIsRoomy: Bool {
+        !(isCompact || dynamicTypeSize.isAccessibilitySize) && paneWidth >= (dynamicTypeSize > .large ? 820 : 760)
+    }
     private var isCompact: Bool { sizeClass == .compact || isNarrow }
 
     /// An open whiteboard has its own button in the bar, where there is room for one.
@@ -1126,11 +1135,11 @@ fileprivate struct EditorContent: View {
     private var undoButtons: some View {
         Button { document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z"))
-            .disabled(!session.canUndo || session.isEditingText)
+            .disabled(!session.canUndo || session.isEditingText && !session.undoesStyle)
             .accessibilityIdentifier("editor.undo")
         Button { document.undoManager.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z", [.command, .shift]))
-            .disabled(!session.canRedo || session.isEditingText)
+            .disabled(!session.canRedo || session.isEditingText && !session.redoesStyle)
             .accessibilityIdentifier("editor.redo")
     }
 
@@ -1328,7 +1337,7 @@ fileprivate struct EditorContent: View {
                 arrangeButton("Edit Text", "keyboard") { session.canvas?.editText() }
                     .disabled(session.isEditingText)
                     .accessibilityIdentifier("editor.arrange.edit")
-                AnyView(TextStyleControls(session: session, box: box, roomy: !(isCompact || dynamicTypeSize.isAccessibilitySize),
+                AnyView(TextStyleControls(session: session, box: box, roomy: textBarIsRoomy,
                                           shortcuts: isActivePane && !isPresentingModal))
             }
             if let link = item?.link {

@@ -30,6 +30,7 @@ const glyphs = {
   plus: 'M10 4.5 V15.5 M4.5 10 H15.5',
   type: 'M4.5 7 V5 H15.5 V7 M10 5 V15.5 M7.6 15.5 H12.4',
   line: 'M4 16 L16 4',
+  arrow: 'M4 16 L15.5 4.5 M8 4.5 H15.5 V12',
   circle: 'M10 3.5 A6.5 6.5 0 1 0 10 16.5 A6.5 6.5 0 0 0 10 3.5 Z',
   rectangle: 'M3.5 5 H16.5 V15 H3.5 Z',
   triangle: 'M10 3.8 L16.8 15.5 H3.2 Z',

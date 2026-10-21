@@ -84,7 +84,7 @@ enum Agenda {
         let head = page.template.flatMap { PageMasthead.baselines(for: $0, size: page.size) }.map { ($0.date + 26) * unit } ?? 48 * unit
         let right = page.size.width - 96 * unit
         var item = PageItem(content: .text(box), center: CGPoint(x: (right - width / 2).rounded(), y: (head + size.height / 2).rounded()), size: size)
-        item.raw["agenda"] = .bool(true)
+        item.raw["agenda"] = .string(box.string)
         return item
     }
 
@@ -96,6 +96,7 @@ enum Agenda {
 }
 
 extension PageItem {
-    /// The events a journal page was printed with, as opposed to anything placed on it by hand.
-    var isPrintedAgenda: Bool { raw["agenda"] != nil }
+    /// The events a journal page was printed with, as opposed to anything placed on it by hand. A mark that holds the
+    /// printed words stops counting once they are typed over, even by a build that doesn't know to take it off.
+    var isPrintedAgenda: Bool { raw["agenda"].map { $0.stringValue.map { $0 == text?.string } ?? true } ?? false }
 }

@@ -42,6 +42,11 @@ struct ToolTray: View {
         return Plan(pens: max(min(need, space - CGFloat(shown) * button), slot), extras: shown)
     }
 
+    /// The strip of shapes keeps within the pane while the tray does, its buttons narrowing as far as their wells when they must.
+    static func shapeButton(room: CGFloat) -> CGFloat {
+        min(button, max(ToolSwatch.side, (room - margin * 2 - rule - inset * 2) / CGFloat(ShapeKind.allCases.count + 1)))
+    }
+
     var body: some View {
         let pens = toolbox.shelf.usable
         let extras = ToolExtra.allCases.filter(toolbox.extras.contains)
@@ -76,7 +81,7 @@ struct ToolTray: View {
         .accessibilityIdentifier("editor.tools.tray")
         .overlay(alignment: .top) {
             Group {
-                if toolbox.shape != nil { ShapeStrip(session: session, toolbox: toolbox).transition(.opacity) }
+                if toolbox.shape != nil { ShapeStrip(session: session, toolbox: toolbox, button: Self.shapeButton(room: room)).transition(.opacity) }
             }
             .alignmentGuide(.top) { $0[.bottom] + Space.x2 }
         }
@@ -315,19 +320,20 @@ private struct ShortcutTag: View {
 private struct ShapeStrip: View {
     let session: EditorSession
     let toolbox: Toolbox
+    let button: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(ShapeKind.allCases) { kind in
                 let chosen = toolbox.shape == kind
                 Button { pick(kind) } label: { Label(kind.title, systemImage: kind.symbol) }
-                    .buttonStyle(TrayIconStyle(isOn: chosen))
+                    .buttonStyle(TrayIconStyle(isOn: chosen, width: button))
                     .accessibilityAddTraits(chosen ? .isSelected : [])
                     .accessibilityIdentifier("editor.tools.shape.\(kind.rawValue)")
             }
             Rectangle().fill(Color.hairline).frame(width: 1, height: 24).padding(.horizontal, Space.x2)
             Button { session.document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
-                .buttonStyle(TrayIconStyle())
+                .buttonStyle(TrayIconStyle(width: button))
                 .disabled(!session.canUndo)
                 .accessibilityIdentifier("editor.tools.shapes.undo")
         }
@@ -806,14 +812,16 @@ private struct ToolSwatchButtonStyle: ButtonStyle {
 /// An icon in the tray. The tool in hand, and a helper that is on, wears the frame the pen in hand does.
 struct TrayIconStyle: ButtonStyle {
     var isOn = false
+    var width = ToolTray.button
 
     func makeBody(configuration: Configuration) -> some View {
-        Icon(configuration: configuration, isOn: isOn)
+        Icon(configuration: configuration, isOn: isOn, width: width)
     }
 
     private struct Icon: View {
         let configuration: Configuration
         let isOn: Bool
+        let width: CGFloat
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.accessibilityShowBorders) private var showBorders
 
@@ -827,7 +835,7 @@ struct TrayIconStyle: ButtonStyle {
                 .frame(width: ToolSwatch.side, height: ToolSwatch.side)
                 .background { if isOn || (configuration.isPressed && isEnabled) || showBorders { ToolSwatch.shape.fill(Color.well) } }
                 .overlay { if isOn { ToolSwatch.shape.strokeBorder(Color.accentColor, lineWidth: 2) } }
-                .frame(width: ToolTray.button, height: ToolTray.button)
+                .frame(width: width, height: ToolTray.button)
                 .contentShape(Rectangle())
                 .contentShape(.hoverEffect, RoundedRectangle.plate.inset(by: 1))
                 .hoverEffect(.highlight)

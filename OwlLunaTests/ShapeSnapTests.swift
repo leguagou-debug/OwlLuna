@@ -121,6 +121,51 @@ final class ShapeSnapTests: XCTestCase {
         XCTAssertEqual(drawn.shape.displayName, "arrow")
     }
 
+    /// What draw and hold makes of a stroke through `corners`, read from PencilKit's path as the app reads it.
+    private func held(_ corners: [CGPoint]) -> SnappedShape? {
+        ShapeSnap.snapped(pencilStroke(along(corners)))?.shape
+    }
+
+    private func isArrow(_ corners: [CGPoint]) -> Bool {
+        if case .arrow? = held(corners) { true } else { false }
+    }
+
+    /// A line from (100, 300) with a hook `length` long turned back `degrees` from it at its end.
+    private func hooked(_ length: CGFloat, _ degrees: CGFloat, line: CGFloat = 300) -> [CGPoint] {
+        let angle = degrees * .pi / 180
+        return [CGPoint(x: 100, y: 300), CGPoint(x: 100 + line, y: 300), CGPoint(x: 100 + line - length * cos(angle), y: 300 - length * sin(angle))]
+    }
+
+    func testOnlyAShortHookOrABarbEitherSideMakesAnArrow() {
+        for (length, degrees) in [(60, 20), (60, 50), (40, 35), (90, 30)] as [(CGFloat, CGFloat)] {
+            XCTAssertTrue(isArrow(hooked(length, degrees)), "a \(length) pt hook turned back \(degrees)°")
+        }
+        XCTAssertTrue(isArrow(hooked(24, 30, line: 500)), "a hook too short to be a corner of a long line")
+        XCTAssertTrue(isArrow(hooked(36, 35, line: 900)))
+        XCTAssertFalse(isArrow(hooked(24, 8, line: 640)), "a short end folded back along a long line")
+        XCTAssertTrue(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 260, y: 284), CGPoint(x: 420, y: 300), CGPoint(x: 390, y: 275)]), "a line with a bow in it")
+        XCTAssertTrue(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 300, y: 300), CGPoint(x: 287.9, y: 307), CGPoint(x: 300, y: 300), CGPoint(x: 287.9, y: 293)]),
+                      "a small barb either side")
+        XCTAssertTrue(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 500, y: 300), CGPoint(x: 483.6, y: 311.5), CGPoint(x: 500, y: 300), CGPoint(x: 483.6, y: 288.5)]),
+                      "even on a long line")
+        XCTAssertTrue(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 400, y: 300), CGPoint(x: 287.4, y: 235), CGPoint(x: 401, y: 301), CGPoint(x: 287.4, y: 365)]),
+                      "a barb either side may be longer than a lone hook")
+        guard case .arrow(let tail, let tip, _)? = held([CGPoint(x: 360, y: 280), CGPoint(x: 400, y: 300), CGPoint(x: 360, y: 320), CGPoint(x: 399, y: 301),
+                                                          CGPoint(x: 100, y: 300)]) else { return XCTFail("a head drawn before its line") }
+        XCTAssertEqual(tail.x, 100, accuracy: 4)
+        XCTAssertEqual(tip.x, 400, accuracy: 4, "still points at its head")
+
+        for (length, degrees, why) in [(75, 5, "folded back along the line"), (60, 75, "turned nearly square"), (135, 30, "longer than a third of the line"),
+                                       (210, 30, "as long as the line")] as [(CGFloat, CGFloat, String)] {
+            XCTAssertFalse(isArrow(hooked(length, degrees)), why)
+        }
+        XCTAssertFalse(isArrow([CGPoint(x: 100, y: 400), CGPoint(x: 340, y: 100), CGPoint(x: 385, y: 250)]), "a graph's peak")
+        XCTAssertFalse(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 400, y: 300), CGPoint(x: 370, y: 280), CGPoint(x: 400, y: 301), CGPoint(x: 360, y: 285)]),
+                       "two barbs on one side")
+        XCTAssertFalse(isArrow([CGPoint(x: 100, y: 300), CGPoint(x: 400, y: 300), CGPoint(x: 370, y: 270), CGPoint(x: 380, y: 330), CGPoint(x: 350, y: 320)]),
+                       "a zigzag")
+    }
+
     private func pencilStroke(_ points: [CGPoint], width: CGFloat = 5) -> PKStroke {
         let date = Date(timeIntervalSinceReferenceDate: 1000)
         let path = PKStrokePath(controlPoints: points.enumerated().map { index, point in

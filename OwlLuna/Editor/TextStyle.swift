@@ -130,8 +130,8 @@ struct TextStylePanel: View {
             }
             OwlLunaSegmentedPicker("List", selection: Binding(get: { box.list }, set: { list in
                 session.updateText {
+                    if list != nil || $0.list != nil { $0.alignment = .leading }
                     $0.list = list
-                    if list != nil { $0.alignment = .leading }
                 }
             }), options: [nil] + TextBox.List.allCases.map(Optional.some)) { list in
                 Label(list?.displayName ?? String(localized: "No List"), systemImage: list?.symbol ?? "text.alignleft").labelStyle(.iconOnly)
@@ -158,7 +158,8 @@ struct TextStylePanel: View {
         return TextBox.Face.allCases.allSatisfy { ($0.displayName as NSString).size(withAttributes: [.font: font]).width.rounded(.up) <= room }
     }
 
-    /// The four sizes, and the box's own when it has been scaled to one of its own: named, or in points where a name won't fit.
+    /// The four sizes, and the box's own when it has been scaled to one of its own: named, or in points where a name won't
+    /// fit, with a tenth on the box's own where it would otherwise read as a preset.
     private func sizes(_ box: TextBox) -> some View {
         let presets = TextBox.sizes.map(\.points)
         let options = presets.contains(box.fontSize) ? presets : presets + [box.fontSize]
@@ -167,11 +168,13 @@ struct TextStylePanel: View {
         }
         let named = namesFit(options.map(name))
         return OwlLunaSegmentedPicker("Size", selection: Binding(get: { box.fontSize }, set: { size in session.updateText { $0.fontSize = size } }),
-                                      options: options) { points in
+                                      options: options, padding: Space.x2) { points in
             if named {
                 Text(name(points))
             } else {
-                Text(Int(points.rounded()), format: .number).accessibilityLabel(Text(name(points)))
+                let near = !presets.contains(points) && presets.contains(points.rounded())
+                let number = Text(Double(points), format: .number.precision(.fractionLength(near ? 1 : 0)))
+                number.accessibilityLabel(Text(name(points))).accessibilityInputLabels([number, Text(name(points))])
             }
         }
         .accessibilityIdentifier("editor.text.size")
@@ -182,7 +185,7 @@ struct TextStylePanel: View {
         guard !textSize.isAccessibilitySize else { return true }
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(textSize))
         let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traits).pointSize, weight: .semibold)
-        let room = (Self.width - 2 * Space.x4) / CGFloat(max(names.count, 1)) - 2 * Space.x4
+        let room = (Self.width - 2 * Space.x4) / CGFloat(max(names.count, 1)) - 2 * Space.x2
         return names.allSatisfy { name in
             let words = name.split(whereSeparator: \.isWhitespace).allSatisfy {
                 (String($0) as NSString).size(withAttributes: [.font: font]).width.rounded(.up) <= room

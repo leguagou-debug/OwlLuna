@@ -281,6 +281,12 @@
   display: flex;
 }
 
+@container (width < 440px) {
+  .shapes {
+    --slot: 32px;
+  }
+}
+
 .action {
   flex: none;
   display: grid;

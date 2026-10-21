@@ -68,6 +68,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - In Dark Mode, the grips and corner handle on a selected picture or text box, and the knobs of a crop, are easy to see. Increase Contrast gives them a darker edge.
 - Highlighter in an exported PDF no longer hides the writing and printed words under it.
 - A link to another page in an export of one page, or of some pages, shows that page's name rather than "Missing page", and bookmarks keep their page numbers.
+- Ink put on a page as it opens, such as a shape or an undo, no longer stays half drawn when the iPad is short of memory. A page that finishes loading at that moment no longer hides it, or drops it when you next write there.
 
 ## [1.0.0-build.2] - 2026-10-15
 

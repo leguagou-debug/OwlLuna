@@ -66,6 +66,11 @@ final class PDFExportTests: XCTestCase {
             CGFloat(values[Int(point.y * scale) * width + Int(point.x * scale)]) / 255
         }
 
+        func darkest(in rect: CGRect) -> CGFloat {
+            let rows = Int(rect.minY * scale)..<Int(rect.maxY * scale), columns = Int(rect.minX * scale)..<Int(rect.maxX * scale)
+            return CGFloat(rows.flatMap { y in columns.map { values[y * width + $0] } }.min() ?? 255) / 255
+        }
+
         /// The mean difference where either has ink, and the share of those pixels that differ by more than a quarter.
         func difference(to other: Gray) -> (mean: Double, bad: Double) {
             var inked = 0, sum = 0, bad = 0
@@ -141,6 +146,41 @@ final class PDFExportTests: XCTestCase {
         XCTAssertLessThan(exported.luminance(at: CGPoint(x: 250, y: 200)), 0.25, "the line still shows through the highlighter")
         XCTAssertGreaterThan(exported.luminance(at: CGPoint(x: 250, y: 195)), 0.5, "beside it the highlighter is yellow, not dark")
         XCTAssertLessThan(exported.luminance(at: CGPoint(x: 250, y: 195)), 0.9)
+    }
+
+    func testHighlighterIsMultipliedOverInkAndPDFTextInThumbnailsAndImages() async throws {
+        let root = temporaryRoot(self), id = UUID()
+        let package = NotebookPackage(root: root, id: id)
+        try await package.create(NotebookManifest(id: id, title: "Highlight", defaults: paper, pages: []))
+        let size = PageSize.letter.points
+        let printed = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: size)).pdfData { context in
+            context.beginPage()
+            ("Osmosis" as NSString).draw(at: CGPoint(x: 100, y: 280), withAttributes: [.font: UIFont.systemFont(ofSize: 48, weight: .black)])
+        }
+        let page = NotebookPage(background: .pdf(file: try await package.writeAsset(printed, ext: "pdf"), index: 0), paperColor: .white, size: size)
+        let yellow = PKInk(.marker, color: UIColor(red: 0.91, green: 0.69, blue: 0.14, alpha: 1))
+        let drawing = PKDrawing(strokes: [stroke(from: CGPoint(x: 100, y: 200), to: CGPoint(x: 400, y: 200), width: 5),
+                                          PKStroke(ink: yellow, path: stroke(from: CGPoint(x: 120, y: 200), to: CGPoint(x: 380, y: 200), width: 30).path),
+                                          PKStroke(ink: yellow, path: stroke(from: CGPoint(x: 90, y: 312), to: CGPoint(x: 330, y: 312), width: 30).path)])
+        let input = NotebookExporter.Input(title: "Highlight", pages: [page], inMemoryInk: [page.id: drawing], package: package)
+        let urls = try await NotebookExporter.exportImages(input) { _ in }
+        let exported = try XCTUnwrap(urls.first)
+        let pictures = [("thumbnail", PageThumbnailer.render(page: page, ink: drawing, assets: package.assetsDirectory)),
+                        ("image", try XCTUnwrap(UIImage(contentsOfFile: exported.path(percentEncoded: false)))),
+                        ("reader", PageRenderer.image(of: page, ink: drawing, assets: package.assetsDirectory, width: Whiteboard.readingWidth(for: page),
+                                                      includeBackground: false))]
+        for (name, picture) in pictures {
+            let gray = Gray(size, scale: 2) { _ in picture.draw(in: CGRect(origin: .zero, size: size)) }
+            XCTAssertLessThan(gray.darkest(in: CGRect(x: 240, y: 196, width: 20, height: 8)), 0.35, "\(name): the pen line shows through the highlighter")
+            XCTAssertGreaterThan(gray.luminance(at: CGPoint(x: 320, y: 312)), 0.5, "\(name): over bare paper the highlighter is yellow, not dark")
+            XCTAssertLessThan(gray.luminance(at: CGPoint(x: 320, y: 312)), 0.9, name)
+            guard name != "reader" else { continue }
+            XCTAssertLessThan(gray.darkest(in: CGRect(x: 110, y: 308, width: 190, height: 8)), 0.35, "\(name): so does the PDF's text")
+        }
+
+        let charcoal = NotebookPage.template(.blank, color: .charcoal, size: .letter)
+        let dark = Gray(size, scale: 1) { _ in PageRenderer.image(of: charcoal, ink: drawing, assets: package.assetsDirectory, width: size.width).draw(at: .zero) }
+        XCTAssertGreaterThan(dark.luminance(at: CGPoint(x: 320, y: 312)), 0.5, "on dark paper the highlighter isn't multiplied into it")
     }
 
     func testSomePagesGoOutWithTheNumbersTheyHaveInTheNotebook() async throws {

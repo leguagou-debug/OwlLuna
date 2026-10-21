@@ -7,7 +7,7 @@ import { Glyph } from './marks'
 import { useStill } from '@/components/ui/useStill'
 import styles from './Stage.module.css'
 
-type Shape = 'line' | 'circle' | 'rectangle' | 'triangle'
+type Shape = 'line' | 'arrow' | 'circle' | 'rectangle' | 'triangle'
 type Phase = 'waiting' | 'drawing' | 'resting' | 'held' | 'undone'
 
 const board = { width: 480, height: 270 } as const
@@ -32,6 +32,11 @@ const figures: Record<Shape, ReturnType<typeof paired>> = {
     'M 94,212 C 148,172 196,170 242,138 C 284,108 338,106 388,58',
     'M 96,208 C 144,183.7 192,159.3 240,135 C 288,110.7 336,86.3 384,62',
   ),
+  arrow: paired(
+    'Arrow',
+    'M 104,217 C 152,186 198,178 240,146 C 286,112 330,96 372,63 C 372,63 372,63 372,63 C 372,63 372,63 372,63 C 367,73 358,92 349,108',
+    'M 106,212 C 150,187.7 194,163.3 238,139 C 282,114.7 326,90.3 370,66 C 353.3,65.7 336.7,65.4 320,65.1 C 336.7,65.4 353.3,65.7 370,66 C 361.4,80.3 352.8,94.6 344.2,108.8',
+  ),
   circle: paired(
     'Circle',
     'M 252,47 C 304,52 340,92 330,142 C 322,192 282,234 232,226 C 180,219 141,182 153,128 C 163,84 200,44 247,58',
@@ -49,7 +54,7 @@ const figures: Record<Shape, ReturnType<typeof paired>> = {
   ),
 }
 
-const order: Shape[] = ['line', 'circle', 'rectangle', 'triangle']
+const order: Shape[] = ['line', 'arrow', 'circle', 'rectangle', 'triangle']
 
 const says: Record<Phase, string> = {
   waiting: 'As drawn',
@@ -146,7 +151,7 @@ export function HoldDemo() {
             className={styles.page}
             viewBox={`0 0 ${board.width} ${board.height}`}
             role="img"
-            aria-label={`A dotted page with a ${chosen.name.toLowerCase()} drawn by hand${held ? ' and straightened' : ''}`}
+            aria-label={`A dotted page with ${shape === 'arrow' ? 'an' : 'a'} ${chosen.name.toLowerCase()} drawn by hand${held ? ' and straightened' : ''}`}
           >
             <defs>
               <pattern id="writing-dots" width="20" height="20" y="5" patternUnits="userSpaceOnUse">

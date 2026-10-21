@@ -180,7 +180,7 @@ struct OwlLunaSettingsView: View {
     }
 
     private var pencilSection: some View {
-        SettingsSection("Apple Pencil", note: "Draw a line, circle, rectangle or triangle and hold still before lifting to straighten it, or draw a loop round ink and hold still to select it. Scribble back and forth over ink with a pen to erase it; Undo brings it back. A highlighter drawn along a line of a PDF's text is laid straight over that line. For Double-Tap and Squeeze, “System Setting” follows Settings › Apple Pencil.") {
+        SettingsSection("Apple Pencil", note: "Draw a line, arrow, circle, rectangle or triangle and hold still before lifting to straighten it, or draw a loop round ink and hold still to select it. Scribble back and forth over ink with a pen to erase it; Undo brings it back. A highlighter drawn along a line of a PDF's text is laid straight over that line. For Double-Tap and Squeeze, “System Setting” follows Settings › Apple Pencil.") {
             Toggle("Straighten Shapes", isOn: $snapsShapes).settingsRow()
             Toggle("Snap Highlighter to PDF Text", isOn: $snapsHighlighter).settingsRow()
             Toggle("Circle and Hold to Select", isOn: $circleSelects)
