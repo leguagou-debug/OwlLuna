@@ -274,6 +274,41 @@ final class PDFExportTests: XCTestCase {
         XCTAssertLessThan(Double(smallSize), Double(sharpSize) * 0.6, "\(smallSize) against \(sharpSize)")
     }
 
+    func testWordsInATurnedCroppedPictureCanBeFoundWhereTheyLie() async throws {
+        let root = temporaryRoot(self), id = UUID()
+        let package = NotebookPackage(root: root, id: id)
+        try await package.create(NotebookManifest(id: id, title: "Pictures", defaults: paper, pages: []))
+        let file = try await package.writeAsset(XCTUnwrap(DocumentScan.samples()[0].pngData()), ext: "png")
+        // The sample sheet without its title, a quarter of a point to each pixel, turned a quarter and centred at (300, 400).
+        var item = PageItem(content: .image(file: file), center: CGPoint(x: 155, y: 219.25), size: CGSize(width: 310, height: 438.5))
+            .cropped(to: CGRect(x: 0.05, y: 0.16, width: 0.9, height: 0.3))
+        item.center = CGPoint(x: 300, y: 400)
+        item.rotation = .pi / 2
+        var page = paper.newPage()
+        page.items = [item]
+        let input = NotebookExporter.Input(title: "Pictures", pages: [page], inMemoryInk: [:], package: package)
+        let url = try await NotebookExporter.export(input) { _ in }
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        let pdfPage = try XCTUnwrap(document.page(at: 0))
+        try XCTSkipIf((pdfPage.string ?? "").isEmpty, "text recognition isn't available on this simulator")
+        let found = document.findString("revenue", withOptions: .caseInsensitive)
+        XCTAssertEqual(found.count, 1)
+        let box = try XCTUnwrap(found.first?.bounds(for: pdfPage))
+        let onPage = CGRect(x: box.minX, y: page.size.height - box.maxY, width: box.width, height: box.height)
+        // Where Find in Notebook marks it: running down the page from y 275, 42.4 pt right of the picture's centre.
+        XCTAssertEqual(onPage.minY, 275, accuracy: 8)
+        XCTAssertEqual(onPage.midX, 342.4, accuracy: 10)
+        XCTAssertGreaterThan(onPage.height, onPage.width * 2, "set along the picture's turn")
+        XCTAssertFalse(document.findString("costs", withOptions: .caseInsensitive).isEmpty)
+        XCTAssertTrue(document.findString("quarterly", withOptions: .caseInsensitive).isEmpty, "the title is cropped away")
+
+        // A picture kept as having no words isn't read again.
+        try await package.writePictureText([try XCTUnwrap(item.readingKey): []], pageID: page.id)
+        let againURL = try await NotebookExporter.export(input) { _ in }
+        let again = try XCTUnwrap(PDFDocument(url: againURL))
+        XCTAssertTrue(again.findString("revenue", withOptions: .caseInsensitive).isEmpty)
+    }
+
     func testNotebookAsTextHasEachPagesWords() async throws {
         var pages = (0..<3).map { _ in paper.newPage() }
         pages[0].items = [PageItem(content: .text(TextBox(string: "Cell walls")), center: CGPoint(x: 200, y: 200), size: CGSize(width: 200, height: 40))]

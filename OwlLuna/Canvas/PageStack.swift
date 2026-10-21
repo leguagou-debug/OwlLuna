@@ -2492,6 +2492,11 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
             contentView.addSubview(overlay)
             if let zoomTarget { contentView.bringSubviewToFront(zoomTarget) }
             textOverlay = overlay
+            let index = pendingPage ?? currentPage
+            if pages.indices.contains(index), case .pdf(let file, let pdfIndex) = pages[index].background {
+                let url = document.package.assetURL(file)
+                Task { [pdfText] in await pdfText.prepare(file: url, index: pdfIndex) }
+            }
         } else {
             textOverlay?.removeFromSuperview()
             textOverlay = nil

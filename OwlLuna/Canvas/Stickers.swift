@@ -739,11 +739,11 @@ enum PageItemRenderer {
     }
 
     /// The picture, or just its `crop` at the file's own pixels, so an export carries nothing that was cropped away.
-    static func image(_ file: String, assets: URL, crop: CGRect? = nil) -> CGImage? {
-        let url = assets.appending(path: file)
-        let whole = PageRenderer.images.value(url.path(percentEncoded: false)) {
-            UIImage(contentsOfFile: url.path(percentEncoded: false))?.cgImage.map(SharedImage.init)
-        }?.image
+    /// Reading its words passes `cached: false`, so it doesn't push what the editor shows out of the cache.
+    static func image(_ file: String, assets: URL, crop: CGRect? = nil, cached: Bool = true) -> CGImage? {
+        let path = assets.appending(path: file).path(percentEncoded: false)
+        let whole = cached ? PageRenderer.images.value(path) { UIImage(contentsOfFile: path)?.cgImage.map(SharedImage.init) }?.image
+            : UIImage(contentsOfFile: path)?.cgImage
         guard let whole, let crop else { return whole }
         return whole.cropping(to: pixels(of: crop, width: whole.width, height: whole.height))
     }

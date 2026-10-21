@@ -28,6 +28,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Sync progress. A thread runs along the library's bar while notebooks are syncing, a notebook says "Not uploaded yet" under its cover until iCloud has it, and Settings counts the notebooks being synced and uploaded, "Uploading 3 of 12", over a row of ticks.
 - Smart shelves and the pens in the tray sync with iCloud. A smart shelf changed on two iPads keeps the later change, and the tray's pens go as one set, the last changed winning.
 - Scanned PDFs, and slides saved as pictures, are read for search too: their words turn up in the library's search, Find in Notebook, Spotlight and the study guide.
+- Words in pictures placed on a page are read for search as well, just the part that shows when a picture is cropped. Find in Notebook marks them where they lie, even on a turned picture.
+- An exported PDF carries the words in placed pictures too, as invisible text over each word, turned with its picture, that any PDF reader can find and select.
+- Select PDF Text and the snapping highlighter work on scanned PDFs and slides saved as pictures too, on the words read off the page.
 - Paper of your own. In the paper drawer or New Notebook, Add Paper… takes the first page of a PDF, or a picture, from Files or Photos: a planner, a lab sheet, score paper, a letterhead. It waits under My Paper with a miniature for every notebook; touch and hold it to rename or delete it. A page on it keeps its own copy in the notebook, a new page after it carries on with it, and your paper syncs and is backed up along with your stickers.
 - Choose what a PDF export takes: drag the mustard ends along a strip of the pages, or tap a page, This Page or All Pages; keep the paper or leave out its colour and ruling; and pick Smaller File or Sharper Ink. Exporting images asks which pages and about the paper too.
 - This Page as a PDF, in the editor's Export menu.

@@ -2,8 +2,8 @@ import UIKit
 import PencilKit
 import CoreText
 
-/// The words read from a page's handwriting, and from the photo or scan it is, where they lie on it: a PDF carries them
-/// as text no one sees, which a reader can still find and select.
+/// The words read from a page's handwriting, from the photo or scan it is, and from pictures placed on it, where they lie
+/// on it: a PDF carries them as text no one sees, which a reader can still find and select.
 enum PageWords {
     struct Word: Sendable, Equatable {
         var text: String
@@ -13,17 +13,20 @@ enum PageWords {
         var height: CGFloat
     }
 
-    /// Read as find reads them, the whole page at once. A page whose saved words are still its own and say it has none isn't read.
+    /// Read as find reads them, the whole page at once and each placed picture on its own. A page whose saved words are still
+    /// its own and say it has none isn't read.
     static func read(_ page: NotebookPage, ink: PKDrawing, package: NotebookPackage, unsaved: Bool) -> [Word] {
         var picture: URL?
         if case .image(let file) = page.background { picture = package.assetURL(file) }
-        guard !ink.strokes.isEmpty || picture != nil else { return [] }
+        let placed = page.placedPictures
+        guard !ink.strokes.isEmpty || picture != nil || !placed.isEmpty else { return [] }
         if !unsaved, let saved = try? String(contentsOf: package.textURL(page.id), encoding: .utf8), saved.hasPrefix(HandwritingIndexer.header(for: page)),
            StudyGuide.body(ofPageText: saved).allSatisfy(\.isWhitespace) { return [] }
         var words: [Word] = []
         if let picture, let image = UIImage(contentsOfFile: picture.path(percentEncoded: false)), let lines = NotebookFind.read(image) {
             words += self.words(in: lines, size: page.size)
         }
+        words += self.words(onPictures: placed, of: page, package: package)
         if !ink.strokes.isEmpty {
             let image = PageRenderer.image(of: page, ink: ink, assets: package.assetsDirectory, width: Whiteboard.readingWidth(for: page), includeBackground: false)
             words += self.words(in: NotebookFind.read(image) ?? [], size: page.size)
@@ -31,7 +34,27 @@ enum PageWords {
         return words
     }
 
-    /// The image read filled the page, so each box is a fraction of it, measured from the bottom.
+    /// Each placed picture is read as it shows, cropped, once for each file and crop, and its words are taken through its
+    /// size, turn and centre to where they lie. One whose kept reading found nothing isn't read again.
+    private static func words(onPictures items: [PageItem], of page: NotebookPage, package: NotebookPackage) -> [Word] {
+        guard !items.isEmpty else { return [] }
+        let kept = (try? Data(contentsOf: package.pictureTextURL(page.id))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        var read: [String: [RecognizedLine]] = [:], words: [Word] = []
+        for item in items {
+            guard let file = item.assetFile, let key = item.readingKey, kept[key] != [] else { continue }
+            if read[key] == nil {
+                read[key] = PageItemRenderer.image(file, assets: package.assetsDirectory, crop: item.crop, cached: false)
+                    .flatMap { NotebookFind.read(UIImage(cgImage: $0)) } ?? []
+            }
+            let place = item.placement
+            words += self.words(in: read[key] ?? [], size: item.size).map {
+                Word(text: $0.text, start: $0.start.applying(place), end: $0.end.applying(place), height: $0.height)
+            }
+        }
+        return words
+    }
+
+    /// The image read filled `size`, the page's or a placed picture's, so each box is a fraction of it, measured from the bottom.
     static func words(in lines: [RecognizedLine], size: CGSize) -> [Word] {
         var words: [Word] = []
         for line in lines {

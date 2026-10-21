@@ -468,4 +468,9 @@ extension PageItem {
         let h = abs(size.width * sin(rotation)) + abs(size.height * cos(rotation))
         return CGRect(x: center.x - w / 2, y: center.y - h / 2, width: w, height: h)
     }
+
+    /// From the item's own points, top left at the origin, to the page's, turned about its centre.
+    var placement: CGAffineTransform {
+        CGAffineTransform(translationX: center.x, y: center.y).rotated(by: rotation).translatedBy(x: -size.width / 2, y: -size.height / 2)
+    }
 }

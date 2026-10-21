@@ -46,23 +46,30 @@ actor HandwritingIndexer {
     }
 
     private func isCurrent(_ page: NotebookPage, in package: NotebookPackage) async -> Bool {
-        guard let text = await package.readText(page.id) else { return page.inkHash == nil && !page.hasPDFText && !page.hasPicture && page.typedText.isEmpty }
+        guard let text = await package.readText(page.id) else {
+            return page.inkHash == nil && !page.hasPDFText && !page.hasPicture && page.typedText.isEmpty && page.placedPictures.isEmpty
+        }
         return text.hasPrefix(Self.header(for: page))
     }
 
     /// Typed text joins the stamp only on pages that have some, so pages read before text boxes existed stay current.
     /// A scan or photo page is marked too, so one stamped before its picture was read is read again. So is a PDF page, for
-    /// those that are pictures of pages.
+    /// those that are pictures of pages. Pictures placed on a page join it by their files and crops, only on pages that have some.
     nonisolated static func header(for page: NotebookPage) -> String {
         stamp(for: page, mark: page.hasPicture ? "+img" : page.hasPDFText ? "+pdf" : "")
     }
 
     private nonisolated static func stamp(for page: NotebookPage, mark: String) -> String {
-        let typed = page.typedText
+        let typed = page.typedText, pictures = Set(page.placedPictures.compactMap(\.readingKey)).sorted()
+        let mark = pictures.isEmpty ? mark : mark + "+pic" + hash(pictures.joined(separator: "\n"))
         guard !typed.isEmpty else { return "#ink:\(page.inkHash ?? "none")\(mark)\n" }
+        return "#ink:\(page.inkHash ?? "none")+\(hash(typed))\(mark)\n"
+    }
+
+    private nonisolated static func hash(_ text: String) -> String {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in typed.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3 }
-        return "#ink:\(page.inkHash ?? "none")+\(String(hash, radix: 16))\(mark)\n"
+        for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3 }
+        return String(hash, radix: 16)
     }
 
     /// Rendering and Vision run off the actor, so an edit's `cancel(page:)` gets through while they work.
@@ -91,6 +98,8 @@ actor HandwritingIndexer {
             guard !Task.isCancelled, let lines = Self.recognizeText(in: picture) else { return }
             chunks += lines
         }
+        guard let placed = await readPlacedPictures(of: page, in: package) else { return }
+        chunks += placed
         let typed = page.typedText
         if !typed.isEmpty { chunks.append(typed) }
         if page.inkHash != nil, case .ink(let drawing, _) = await package.readInk(page.id), !drawing.strokes.isEmpty {
@@ -102,6 +111,29 @@ actor HandwritingIndexer {
         }
         guard !Task.isCancelled else { return }
         try? await package.writeText(Self.header(for: page) + chunks.joined(separator: "\n"), pageID: page.id)
+    }
+
+    /// Each picture placed on the page as it shows, crop and all. Its files never change, so what each showed is kept
+    /// beside the page's text and only a picture or crop new to the page is read.
+    private nonisolated func readPlacedPictures(of page: NotebookPage, in package: NotebookPackage) async -> [String]? {
+        let pictures = page.placedPictures
+        guard !pictures.isEmpty else { return [] }
+        let saved = await package.readPictureText(page.id)
+        var read: [String: [String]] = [:], lines: [String] = []
+        for item in pictures {
+            guard let key = item.readingKey, read[key] == nil, let file = item.assetFile else { continue }
+            if let known = saved[key] {
+                read[key] = known
+            } else {
+                guard !Task.isCancelled else { return nil }
+                guard let picture = PageItemRenderer.image(file, assets: package.assetsDirectory, crop: item.crop, cached: false) else { continue }
+                guard let recognized = Self.recognizeText(in: UIImage(cgImage: picture)) else { return nil }
+                read[key] = recognized
+            }
+            lines += read[key] ?? []
+        }
+        if read != saved { try? await package.writePictureText(read, pageID: page.id) }
+        return lines
     }
 
     /// Nil when Vision fails, so the page isn't stamped as read and is tried again next time.
@@ -138,5 +170,19 @@ extension NotebookPage {
     var hasPicture: Bool {
         if case .image = background, paperID == nil { return true }
         return false
+    }
+
+    /// Pictures and stickers of your own placed on the page, back to front. Their printed words are read for search too.
+    var placedPictures: [PageItem] {
+        hasItems ? items.filter { $0.assetFile != nil } : []
+    }
+}
+
+extension PageItem {
+    /// What a placed picture's words are read from: its file, which never changes, and the part of it that shows.
+    var readingKey: String? {
+        guard let file = assetFile else { return nil }
+        guard let crop else { return file }
+        return "\(file)@\([crop.minX, crop.minY, crop.width, crop.height].map { "\(Double($0))" }.joined(separator: ","))"
     }
 }

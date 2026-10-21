@@ -15,7 +15,7 @@ struct RecognizedLine: @unchecked Sendable {
     let text: VNRecognizedText
 }
 
-/// Where words are on a page: in what was typed, in a PDF's own text, and in what the recogniser reads of ink and scans.
+/// Where words are on a page: in what was typed, in a PDF's own text, and in what the recogniser reads of ink, scans and pictures.
 enum NotebookFind {
     private static let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
 
@@ -100,7 +100,14 @@ enum NotebookFind {
 
     /// Top to bottom, then left to right, the way the page is read.
     static func inReadingOrder(_ rects: [CGRect]) -> [CGRect] {
-        rects.sorted { abs($0.midY - $1.midY) > min($0.height, $1.height) / 2 ? $0.midY < $1.midY : $0.minX < $1.minX }
+        inReadingOrder(rects) { $0 }
+    }
+
+    static func inReadingOrder<Item>(_ items: [Item], by rect: (Item) -> CGRect) -> [Item] {
+        items.sorted {
+            let one = rect($0), other = rect($1)
+            return abs(one.midY - other.midY) > min(one.height, other.height) / 2 ? one.midY < other.midY : one.minX < other.minX
+        }
     }
 }
 
@@ -123,6 +130,15 @@ actor FindReader {
 
     func pictureRects(for query: String, file: URL, pageSize: CGSize) -> [CGRect] {
         rects(for: query, key: "picture-\(file.lastPathComponent)", pageSize: pageSize) { UIImage(contentsOfFile: file.path(percentEncoded: false)) }
+    }
+
+    /// A placed picture is read as it shows, cropped, and what is found is taken through its turn to where it lies.
+    func placedPictureRects(for query: String, item: PageItem, assets: URL) -> [CGRect] {
+        guard let file = item.assetFile, let key = item.readingKey else { return [] }
+        let found = rects(for: query, key: "item-\(key)", pageSize: item.size) {
+            PageItemRenderer.image(file, assets: assets, crop: item.crop, cached: false).map(UIImage.init(cgImage:))
+        }
+        return found.map { $0.applying(item.placement) }
     }
 
     private func rects(for query: String, key: String, pageSize: CGSize, image: () -> UIImage?) -> [CGRect] {
@@ -228,6 +244,12 @@ final class NotebookFinder {
             rects += await reader.pictureRects(for: needle, file: package.assetURL(file), pageSize: page.size)
         default:
             break
+        }
+        let pictures = page.placedPictures
+        // What a picture showed was kept when it was read, and it can't change, so one without the words is passed over.
+        let read = pictures.isEmpty ? [:] : await package.readPictureText(page.id)
+        for item in pictures where read[item.readingKey ?? ""].map({ NotebookFind.contains($0.joined(separator: "\n"), needle) }) ?? true {
+            rects += await reader.placedPictureRects(for: needle, item: item, assets: package.assetsDirectory)
         }
         if page.inkHash != nil || unsaved {
             let ink = await document.ink(page.id)

@@ -69,6 +69,7 @@ actor NotebookPackage {
     nonisolated func inkURL(_ pageID: UUID) -> URL { inkDirectory.appending(path: "\(pageID.uuidString).pkdrawing") }
     nonisolated func assetURL(_ file: String) -> URL { assetsDirectory.appending(path: file) }
     nonisolated func textURL(_ pageID: UUID) -> URL { textDirectory.appending(path: "\(pageID.uuidString).txt") }
+    nonisolated func pictureTextURL(_ pageID: UUID) -> URL { textDirectory.appending(path: "\(pageID.uuidString).pictures.json") }
     nonisolated func thumbURL(_ pageID: UUID, key: String) -> URL {
         thumbsDirectory.appending(path: "\(pageID.uuidString)-\(key).png")
     }
@@ -200,6 +201,11 @@ actor NotebookPackage {
         try? String(contentsOf: textURL(pageID), encoding: .utf8)
     }
 
+    /// What each picture placed on a page showed when it was read, by `PageItem.readingKey`.
+    func readPictureText(_ pageID: UUID) -> [String: [String]] {
+        (try? Data(contentsOf: pictureTextURL(pageID))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+    }
+
     // MARK: Write
 
     /// Writes the given pages' ink, each atomically, then the manifest last. Throws on the first failure;
@@ -272,6 +278,13 @@ actor NotebookPackage {
     func writeText(_ text: String, pageID: UUID) throws {
         try makeDirectoryInExistingPackage(textDirectory)
         try Data(text.utf8).write(to: textURL(pageID), options: .atomic)
+    }
+
+    func writePictureText(_ lines: [String: [String]], pageID: UUID) throws {
+        try makeDirectoryInExistingPackage(textDirectory)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        try encoder.encode(lines).write(to: pictureTextURL(pageID), options: .atomic)
     }
 
     func writeThumbnail(_ png: Data, pageID: UUID, key: String) throws {

@@ -655,18 +655,18 @@ This has only read block letters drawn by a test.
 <a id="pencil-10"></a>
 ### Pencil 10. Selecting PDF text, and the snapping highlighter
 
-**Setup:** notebooks made with **Import PDF…** from three PDFs: plain text in one column, a paper in two columns, and a scanned PDF with no text. Settings › Apple Pencil › **Snap Highlighter to PDF Text** on.
+**Setup:** notebooks made with **Import PDF…** from three PDFs: plain text in one column, a paper in two columns, and a scanned PDF with no text of its own. Settings › Apple Pencil › **Snap Highlighter to PDF Text** on.
 
 **Steps:**
-1. **⋯** › **Select PDF Text**. With the Pencil, drag across words, tap a word, and tap **Select All on This Page**. **Copy**, and paste into Notes. **Highlight** in each **Highlight Colour**.
+1. **⋯** › **Select PDF Text**. With the Pencil, drag across words, tap a word, and tap **Select All on This Page**. **Copy**, and paste into Notes. **Highlight** in each **Highlight Colour**. Do the same on the scanned PDF.
 2. In the two-column PDF, drag along a line in the left column and into the margin.
 3. Tap **Done**. Take the Highlighter and draw roughly along a line of text: a little wavy, a little off the line, across two lines. Do it on the scanned PDF too.
 4. Undo after a highlighter snaps.
 5. Erase a highlight with the eraser.
 
-**Pass:** the selection follows the Pencil letter by letter and doesn't jump lines when it reaches the margin. The copied words are in reading order. A highlight lies over each line. A snapped highlighter stroke is straight, as tall as the line and no wider than the letters it passed over. The first Undo gives your own stroke back. On the scanned PDF the highlighter stays as drawn. The eraser takes a highlight off.
+**Pass:** the selection follows the Pencil letter by letter and doesn't jump lines when it reaches the margin. The copied words are in reading order. A highlight lies over each line. A snapped highlighter stroke is straight, as tall as the line and no wider than the letters it passed over. The first Undo gives your own stroke back. On the scanned PDF the printed words are selected, copied and highlighted the same way, within a second of the page first showing, though inside a word the selection may stop a letter off; the copied words match the print apart from letters misread, and the highlighter snaps to a printed line. The eraser takes a highlight off.
 
-**Common failures:** a selection crossing into the other column; a crash on tapping a word; a snap onto the wrong line; a snap with the setting off.
+**Common failures:** a selection crossing into the other column; a crash on tapping a word; a snap onto the wrong line; a snap with the setting off; nothing selectable on the scanned PDF, or a long wait before its first selection.
 
 **Evidence:** a screen recording and the pasted text.
 
