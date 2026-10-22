@@ -47,9 +47,11 @@ final class PresentingTests: XCTestCase {
             XCTAssertEqual(manager?.canUndo, false, "⌘Z, the Edit menu and the three-finger swipe find nothing to undo")
             XCTAssertEqual(manager?.canRedo, false)
             manager?.undo()
-            manager?.redo()
         }
         XCTAssertEqual(strokes(), 1, "the page stays as it was")
+        anchor.undoManager?.redo()
+        canvas.undoManager?.redo()
+        XCTAssertEqual(strokes(), 1, "redo changes nothing either")
         XCTAssertTrue(document.undoManager.canUndo && document.undoManager.canRedo, "the steps wait for afterwards")
 
         session.enter(.writing)
