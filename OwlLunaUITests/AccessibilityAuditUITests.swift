@@ -119,6 +119,9 @@ final class AccessibilityAuditUITests: XCTestCase {
         if !app.buttons["Delete"].firstMatch.waitForExistence(timeout: 5) { biology.press(forDuration: 1.5) }
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 5))
+        // Pressing the notebook scrolled the library to it, and scrolled, the audit places the header where it stood at the top.
+        app.swipeDown(velocity: .fast)
+        app.swipeDown(velocity: .fast)
         sleep(1)
         try check("library undo slip", overlay: app.buttons["Undo"])
         if app.buttons["Undo"].exists {

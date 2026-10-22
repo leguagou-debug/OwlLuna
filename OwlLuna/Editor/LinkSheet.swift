@@ -82,8 +82,8 @@ private struct LinkPagePicker: View {
             Button { choose(PageLink(target: page.id)) } label: {
                 PageThumbnailCell(document: document, page: page, index: index, isCurrent: isCurrent)
             }
-            .buttonStyle(.plain)
-            .hoverEffect(.lift)
+            .buttonStyle(PageCellButtonStyle())
+            .hoverEffect(.lift, isEnabled: !isCurrent)
             .disabled(isCurrent)
             .accessibilityLabel(Text(isCurrent ? "Page \(index + 1), this page" : "Page \(index + 1)"))
             .accessibilityValue(Text(page.bookmark.flatMap { $0.isEmpty ? nil : $0 } ?? ""))
@@ -91,6 +91,13 @@ private struct LinkPagePicker: View {
             .accessibilityIdentifier("link.page.\(index + 1)")
             .id(page.id)
         }
+    }
+}
+
+/// Pressed like a plain button, but the page the link sits on isn't dimmed while it can't be chosen, so its number stays readable.
+private struct PageCellButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 

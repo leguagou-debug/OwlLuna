@@ -50,12 +50,12 @@ extension XCTestCase {
                 print("AUDIT [\(screen)] ignored, scrolled out of its list: \(element.label)")
                 return true
             }
-            // A notebook's line of small print is part of its button, so the audit measures it over the whole card and
-            // reads the cover's colours. Its own pair, secondary text on the desk, is checked by DesignTests.
+            // A notebook's line of small print and a page's number are part of their buttons, so the audit measures them over the
+            // whole card or thumbnail and reads the cover's or the page's colours. Their pair, secondary text on the desk, is checked by DesignTests.
             if issue.auditType == .contrast, let element, element.elementType == .staticText, case let frame = element.frame, frame.height > 100,
-               app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'notebook.'")).allElementsBoundByIndex
+               app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'notebook.' OR label BEGINSWITH 'Page '")).allElementsBoundByIndex
                    .contains(where: { $0.frame.insetBy(dx: -1, dy: -1).contains(frame) }) {
-                print("AUDIT [\(screen)] ignored, a card's small print measured with its cover: \(element.label)")
+                print("AUDIT [\(screen)] ignored, small print measured with its cover or page: \(element.label)")
                 return true
             }
             // iPadOS 27 reports popover content about 49 pt below where it's drawn, so contrast samples the wrong pixels.
