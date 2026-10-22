@@ -57,6 +57,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A change made after syncing with an iPad whose clock runs fast now wins, as it should.
 - A notebook reopened at launch, or when you return to the app, takes in writing from another iPad first. If that isn't ready yet, the editor says so and closing keeps both.
 - Typing in a text box while zoomed in now wraps the lines where the page does.
+- In the zoom window, Next Line on Cornell and Checklist paper now moves down by one rule, so writing stays on the lines.
 - Today's events on a journal page are no longer replaced on a new day once you have edited them.
 - A notebook you close no longer stays in memory until the app quits.
 - A recording is kept if OwlLuna quits, crashes or runs out of battery before Stop. It appears the next time the notebook opens.

@@ -38,13 +38,24 @@ private extension UIColor {
     func faded(_ factor: CGFloat) -> UIColor { withAlphaComponent(min(1, cgColor.alpha * factor)) }
 }
 
-private extension PaperTemplate {
-    /// The gap between rules or dots, in units of an 800-wide page; 0 for paper without an even ruling.
-    var ruleGap: CGFloat {
+extension PaperTemplate {
+    /// The gap between the lines written on, in units of an 800-wide page; 0 for paper without an even ruling.
+    var lineGap: CGFloat {
         switch self {
         case .grid, .dotted: 26
         case .narrowRuled: 28
-        case .wideRuled: 38
+        case .cornell: 30
+        case .wideRuled, .checklist: 38
+        default: 0
+        }
+    }
+}
+
+private extension PaperTemplate {
+    /// The gap a whiteboard rules this paper at; 0 for the papers a board doesn't rule.
+    var boardGap: CGFloat {
+        switch self {
+        case .grid, .dotted, .narrowRuled, .wideRuled: lineGap
         default: 0
         }
     }
@@ -55,7 +66,7 @@ extension PageRenderer {
     /// `origin` is where the piece being drawn sits on its board, so the rules stay under the ink they were under.
     /// Zoomed far out, every second or fourth rule is left out rather than run together.
     static func drawBoardPaper(_ template: PaperTemplate, color: PaperColor, origin: CGPoint, scale: CGFloat, in ctx: CGContext, night: Bool = false) {
-        let gap = template.ruleGap
+        let gap = template.boardGap
         let unit = Whiteboard.unit * scale, clip = ctx.boundingBoxOfClipPath
         guard gap > 0, unit > 0, !clip.isNull, !clip.isInfinite else { return }
         let pixels = abs(ctx.ctm.a) + abs(ctx.ctm.b)
@@ -106,7 +117,7 @@ extension PageRenderer {
         case .blank:
             break
         case .narrowRuled, .wideRuled:
-            rules.hLines(rules.steps(from: 120 * unit, by: template.ruleGap * unit) { $0 < height - 20 * unit }, from: 0, to: width)
+            rules.hLines(rules.steps(from: 120 * unit, by: template.lineGap * unit) { $0 < height - 20 * unit }, from: 0, to: width)
             rules.stroke(ink.line)
             rules.vLines([104 * unit], from: 0, to: height)
             rules.stroke(ink.accent)
@@ -123,7 +134,7 @@ extension PageRenderer {
         case .cornell:
             let summaryTop = height * 0.8
             let cueRight = 240 * unit
-            rules.hLines(rules.steps(from: 120 * unit, by: 30 * unit) { $0 < summaryTop }, from: cueRight, to: width)
+            rules.hLines(rules.steps(from: 120 * unit, by: template.lineGap * unit) { $0 < summaryTop }, from: cueRight, to: width)
             rules.stroke(ink.line)
             ctx.setLineWidth(max(1, 2 * unit))
             rules.hLines([90 * unit], from: 0, to: width)
@@ -145,7 +156,7 @@ extension PageRenderer {
             rules.diagonalFamily(angle: -.pi / 6, spacing: spacing)
             rules.stroke(ink.line.withAlphaComponent(ink.grid))
         case .checklist:
-            let ys = rules.steps(from: 120 * unit, by: 38 * unit) { $0 < height - 20 * unit }
+            let ys = rules.steps(from: 120 * unit, by: template.lineGap * unit) { $0 < height - 20 * unit }
             rules.hLines(ys, from: 0, to: width)
             rules.stroke(ink.line)
             rules.boxes(ys.map { CGRect(x: 36 * unit, y: $0 - 20 * unit, width: 14 * unit, height: 14 * unit) }, corner: 2.5 * unit)

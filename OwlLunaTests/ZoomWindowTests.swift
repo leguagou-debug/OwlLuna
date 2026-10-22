@@ -72,6 +72,42 @@ final class ZoomWindowTests: XCTestCase {
         XCTAssertEqual(ZoomWindow.lineHeight(for: narrow, windowHeight: 60), 28 * 612 / 800, accuracy: 0.01)
         XCTAssertEqual(ZoomWindow.lineHeight(for: blank, windowHeight: 60), 30)
     }
+
+    func testNextLineMovesByTheGapThePaperIsRuledAt() {
+        for template in [PaperTemplate.narrowRuled, .wideRuled, .cornell, .checklist] {
+            let page = NotebookPage.template(template, color: .white, size: .letter)
+            let rules = drawnRules(template, size: page.sheetSize, at: page.sheetSize.width - 30)
+            let gaps = zip(rules.dropFirst(), rules).map { $0 - $1 }.sorted()
+            XCTAssertGreaterThan(gaps.count, 10, "\(template)")
+            XCTAssertEqual(ZoomWindow.lineHeight(for: page, windowHeight: 60), gaps[gaps.count / 2], accuracy: 0.25, "\(template)")
+        }
+    }
+
+    /// Where the paper's horizontal rules cross the column at `x`, in page points, from the paper as it is drawn.
+    private func drawnRules(_ template: PaperTemplate, size: CGSize, at x: CGFloat, scale: CGFloat = 4) -> [CGFloat] {
+        let width = Int(size.width * scale), height = Int(size.height * scale)
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.translateBy(x: 0, y: CGFloat(height))
+            ctx.scaleBy(x: scale, y: -scale)
+            ctx.setFillColor(UIColor.white.cgColor)
+            ctx.fill(CGRect(origin: .zero, size: size))
+            PageRenderer.drawTemplate(template, color: .white, in: ctx, size: size)
+        }
+        let column = Int(x * scale)
+        let ink = (0..<height).map { y in 255 - CGFloat(pixels[((y * width + column) * 4)..<((y * width + column) * 4 + 3)].min()!) }
+        var rules: [CGFloat] = [], run: [(y: Int, ink: CGFloat)] = []
+        for y in 0...height {
+            if y < height, ink[y] > 8 { run.append((y, ink[y])); continue }
+            guard !run.isEmpty else { continue }
+            let weight = run.reduce(0) { $0 + $1.ink }
+            rules.append(run.reduce(0) { $0 + (CGFloat($1.y) + 0.5) * $1.ink } / weight / scale)
+            run = []
+        }
+        return rules
+    }
 }
 
 /// The strip's paper is drawn in pieces off the main thread: wherever the window goes, it must match the page drawn whole.
