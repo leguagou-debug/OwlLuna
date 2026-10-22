@@ -165,6 +165,50 @@ final class DocumentSafetyTests: XCTestCase {
         XCTAssertEqual(document.pages.first?.template, .dotted)
     }
 
+    func testUndoingAPageChangeKeepsTheInkHashTheLastSaveGaveIt() async throws {
+        let (document, root) = try await makeDocument()
+        document.saveDelay = .seconds(60)
+        document.undoManager.groupsByEvent = false
+        func step(_ action: () -> Void) {
+            document.undoManager.beginUndoGrouping()
+            action()
+            document.undoManager.endUndoGrouping()
+        }
+        func addBox(_ page: UUID) {
+            document.updateItems(onPage: page, actionName: "Add Text Box") {
+                $0.append(PageItem(content: .text(TextBox(string: "Lab")), center: CGPoint(x: 200, y: 200), size: CGSize(width: 200, height: 40)))
+            }
+        }
+        func fileHash(_ page: UUID) -> String? { (try? Data(contentsOf: document.package.inkURL(page))).map(NotebookPackage.hash) }
+        let early = document.pages[0].id, late = document.pages[1].id
+        _ = await document.ink(early)
+        _ = await document.ink(late)
+
+        step { document.canvasDidChangeInk(early, to: ink(2)) }
+        step { addBox(early) }
+        document.undoManager.undo()
+        let first = await document.flush()
+        XCTAssertTrue(first)
+        XCTAssertNotNil(fileHash(early))
+        XCTAssertEqual(document.pages[0].inkHash, fileHash(early), "an undo between a stroke and its save leaves the save to hash the ink")
+
+        step { document.canvasDidChangeInk(late, to: ink(3)) }
+        step { addBox(late) }
+        let second = await document.flush()
+        XCTAssertTrue(second)
+        document.undoManager.undo()
+        XCTAssertEqual(document.pages[1].items, [])
+        XCTAssertEqual(document.pages[1].inkHash, fileHash(late), "the box goes, the saved stroke stays hashed as saved")
+        let third = await document.flush()
+        XCTAssertTrue(third)
+        let onDisk = try await savedManifest(root, document.id)
+        XCTAssertNotNil(onDisk.pages[1].inkHash, "the manifest still names the page's ink")
+        XCTAssertEqual(onDisk.pages[1].inkHash, fileHash(late), "and hashes it as written: sync and search trust that hash")
+        document.undoManager.redo()
+        XCTAssertEqual(document.pages[1].inkHash, fileHash(late), "nor does redo bring an old hash back")
+        XCTAssertEqual(document.loadedInk(late)?.strokes.count, 3)
+    }
+
     func testInkEditsDateTheNotebook() async throws {
         let (document, root) = try await makeDocument()
         let before = document.manifest.modifiedAt

@@ -74,6 +74,7 @@ final class EditorSession {
     var currentPage: Int
     /// Whether the tools are out. The tray itself also waits on the mode, see `showsToolTray`.
     var showsTools = true
+    /// Whether anything can be undone or redone now. Nothing is while presenting or replaying.
     var canUndo = false
     var canRedo = false
     /// While a box is typed in, only a change of its style can be undone or redone from the bar.
@@ -205,6 +206,7 @@ final class EditorSession {
         if newMode == .selecting { canvas?.setSelectingInk(true) }
         if newMode == .finding { canvas?.setFinding(true) }
         if newMode == .selectingText { canvas?.setSelectingText(true) }
+        refreshUndoState()
     }
 
     /// Circle and hold: starts selecting with the ink inside `outline`, given in the page stack's points, already caught.
@@ -515,14 +517,19 @@ final class EditorSession {
         showsTools && (mode == .writing || mode == .focus) && !document.isReadOnly && !isEditingText
     }
 
+    /// The bar's Undo and Redo. While a box is typed in, its words are the text view's to undo.
+    var canUndoFromBar: Bool { canUndo && (!isEditingText || undoesStyle) }
+    var canRedoFromBar: Bool { canRedo && (!isEditingText || redoesStyle) }
+
     func toggleTools() {
         showsTools.toggle()
         canvas?.toolTrayDidChange()
     }
 
     func refreshUndoState() {
-        canUndo = document.undoManager.canUndo
-        canRedo = document.undoManager.canRedo
+        let held = mode == .presenting || mode == .replaying
+        canUndo = !held && document.undoManager.canUndo
+        canRedo = !held && document.undoManager.canRedo
         undoesStyle = canUndo && document.undoManager.undoActionName == String(localized: "Text Style")
         redoesStyle = canRedo && document.undoManager.redoActionName == String(localized: "Text Style")
     }

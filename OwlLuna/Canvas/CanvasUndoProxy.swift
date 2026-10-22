@@ -6,7 +6,7 @@ import UIKit
 final class CanvasUndoProxy: UndoManager {
     private weak var document: UndoManager?
     private var purgeScheduled = false
-    /// While a recording is replayed the page shows ink as it was, so nothing is undone under it.
+    /// Nothing is undone while presenting, or while a recording is replayed and the page shows ink as it was.
     var isSuspended = false
     /// Only read again in deinit, when nothing else can reach it.
     nonisolated(unsafe) private var relays: [NSObjectProtocol] = []

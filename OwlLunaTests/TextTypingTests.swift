@@ -266,6 +266,67 @@ final class TextTypingTests: XCTestCase {
         XCTAssertEqual(box.checkbox(at: CGPoint(x: flour.midX, y: flour.midY), width: 260, reach: 0), 1)
     }
 
+    // MARK: Undo
+
+    func testWhatIsTypedInANewBoxIsNeverUndoneFromTheBarAndAfterwardsComesAndGoesWithTheBox() async throws {
+        let document = try await makeDocument(items: [])
+        let session = EditorSession(document: document)
+        let controller = PageStackController(session: session)
+        session.canvas = controller
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        addTeardownBlock { @MainActor in window.isHidden = true }
+        controller.view.layoutIfNeeded()
+        for _ in 0..<100 where controller.canvas(forPage: 0)?.isLoaded != true { await pause(0.05) }
+        func words() -> [String] { document.pages[0].items.compactMap { $0.text?.string } }
+
+        session.addText()
+        let textView = try XCTUnwrap(window.descendants(UITextView.self).first { $0.accessibilityIdentifier == "page.text.editor" })
+        let box = try XCTUnwrap(session.selection)
+        edit(textView, NSRange(location: 0, length: 0), "Molar mass")
+        session.refreshUndoState()
+        XCTAssertEqual(document.undoManager.undoActionName, "Add Text Box")
+        XCTAssertTrue(session.canUndo)
+        XCTAssertFalse(session.canUndoFromBar, "the bar's Undo would take the box away with its words, so it stands aside")
+        XCTAssertNotNil(textView.undoManager)
+        XCTAssertFalse(textView.undoManager === document.undoManager || textView.undoManager === controller.canvas(forPage: 0)?.undoManager,
+                       "⌘Z and the three-finger swipe undo the typing, never the page")
+        await pause(0.1)
+
+        session.updateText { $0.isBold = true }
+        session.refreshUndoState()
+        XCTAssertTrue(session.canUndoFromBar, "a change of style while typing is the bar's to undo")
+        document.undoManager.undo()
+        session.refreshUndoState()
+        XCTAssertTrue(session.isEditingText)
+        XCTAssertEqual(textView.text, "Molar mass", "undoing the style leaves the words")
+        XCTAssertFalse(session.canUndoFromBar)
+        XCTAssertTrue(session.canRedoFromBar, "and putting it back is too")
+
+        textView.delegate?.textViewDidEndEditing?(textView)
+        XCTAssertEqual(words(), ["Molar mass"])
+        XCTAssertEqual(session.selection, box, "the box stays picked up")
+        XCTAssertEqual(document.undoManager.undoActionName, "Add Text Box", "a new box and what was first typed in it are one step")
+        session.refreshUndoState()
+        XCTAssertTrue(session.canUndoFromBar)
+        await pause(0.1)
+        document.undoManager.undo()
+        XCTAssertEqual(words(), [], "one undo takes the box away")
+        document.undoManager.redo()
+        XCTAssertEqual(words(), ["Molar mass"], "redo brings it back with its words")
+
+        session.addText()
+        let empty = try XCTUnwrap(window.descendants(UITextView.self).first { $0.accessibilityIdentifier == "page.text.editor" })
+        empty.delegate?.textViewDidEndEditing?(empty)
+        XCTAssertEqual(words(), ["Molar mass"], "a box left empty isn't kept")
+        await pause(0.1)
+        document.undoManager.undo()
+        XCTAssertEqual(words(), [], "nor is its step: the next undo takes the first box away")
+    }
+
     // MARK: Drawing
 
     func testTheMarkersOfABoxTypedInFarZoomedInHaveNoMorePixelsThanAScreenful() throws {

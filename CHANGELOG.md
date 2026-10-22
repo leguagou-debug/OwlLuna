@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Undo and Redo do nothing while presenting. After typing in a new text box, one Undo takes the box away and Redo brings it back with its words.
+
 ## [1.0.0-build.3] - 2026-10-21
 
 ### Added

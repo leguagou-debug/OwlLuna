@@ -599,11 +599,11 @@ fileprivate struct EditorContent: View {
     private var undoButtons: some View {
         Button { document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z"))
-            .disabled(!session.canUndo || session.isEditingText && !session.undoesStyle)
+            .disabled(!session.canUndoFromBar)
             .accessibilityIdentifier("editor.undo")
         Button { document.undoManager.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
             .keyboardShortcut(session.isEditingText ? nil : shortcut("z", [.command, .shift]))
-            .disabled(!session.canRedo || session.isEditingText && !session.redoesStyle)
+            .disabled(!session.canRedoFromBar)
             .accessibilityIdentifier("editor.redo")
     }
 

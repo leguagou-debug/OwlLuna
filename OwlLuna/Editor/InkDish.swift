@@ -81,11 +81,11 @@ struct InkDish: View {
                 GridRow {
                     Button { session.document.undoManager.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
                         .buttonStyle(TrayIconStyle())
-                        .disabled(!session.canUndo || session.isEditingText && !session.undoesStyle)
+                        .disabled(!session.canUndoFromBar)
                         .accessibilityIdentifier("editor.dish.undo")
                     Button { session.document.undoManager.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
                         .buttonStyle(TrayIconStyle())
-                        .disabled(!session.canRedo || session.isEditingText && !session.redoesStyle)
+                        .disabled(!session.canRedoFromBar)
                         .accessibilityIdentifier("editor.dish.redo")
                 }
             }

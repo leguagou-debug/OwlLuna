@@ -473,6 +473,7 @@ final class NotebookDocument {
         registerPageRestore(before, actionName: actionName)
     }
 
+    /// The ink's hash stays as the last save left it: the ink has undo steps of its own.
     private func registerPageRestore(_ page: NotebookPage, actionName: String) {
         undoManager.registerUndo(withTarget: self) { document in
             guard let index = document.index(of: page.id) else {
@@ -481,6 +482,7 @@ final class NotebookDocument {
             }
             let current = document.manifest.pages[index]
             document.manifest.pages[index] = page
+            document.manifest.pages[index].inkHash = current.inkHash
             document.structureChanged()
             document.registerPageRestore(current, actionName: actionName)
         }

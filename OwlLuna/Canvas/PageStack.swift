@@ -1507,20 +1507,22 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     @objc private func finishTyping() { endTextEditing() }
 
-    /// Saves what was typed as one undo step. A box left empty is taken off the page.
+    /// Saves what was typed as one undo step, a new box's Add included. A box left empty is taken off the page.
     private func endTextEditing() {
         guard let textView, let typing else { return }
-        let string = textView.text ?? "", checked = typed?.checked
+        let string = textView.text ?? "", checked = typed?.checked, kept = session.selection
         discardTextEditor()
         if !isModalShowing { anchor.becomeFirstResponder() }
+        let isNew = document.undoManager.canUndo && document.undoManager.undoActionName == EditorSession.addTextAction && item(typing)?.text?.string.isEmpty == true
+        let added = isNew ? document.pages.first(where: { $0.id == typing.pageID })?.items : nil
+        if isNew { document.undoManager.undo() }
         if string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if document.undoManager.canUndo, document.undoManager.undoActionName == EditorSession.addTextAction, item(typing)?.text?.string.isEmpty == true {
-                document.undoManager.undo()
-            } else {
+            if !isNew {
                 document.updateItems(onPage: typing.pageID, actionName: String(localized: "Delete")) { $0.removeAll { $0.id == typing.itemID } }
             }
         } else {
-            document.updateItems(onPage: typing.pageID, actionName: String(localized: "Edit Text")) { items in
+            document.updateItems(onPage: typing.pageID, actionName: isNew ? EditorSession.addTextAction : String(localized: "Edit Text")) { items in
+                if let added { items = added }
                 guard let index = items.firstIndex(where: { $0.id == typing.itemID }), var box = items[index].text else { return }
                 let before = box
                 box.string = string
@@ -1529,6 +1531,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
                 if box != before { items[index].raw["agenda"] = nil }
                 items[index] = items[index].fittedToText()
             }
+            if isNew, kept == typing, session.selection != kept { select(kept) }
         }
     }
 
@@ -2620,7 +2623,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         let changed = (replay == nil) != (timeline == nil)
         replay = timeline.map { ($0, time) }
         if changed {
-            undoProxy.isSuspended = replay != nil
+            undoProxy.isSuspended = replay != nil || isPresenting
             if replay != nil { select(nil) }
             lockDidChange()
         }
@@ -2674,6 +2677,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         mirrored = nil
         if presenting { ExternalDisplay.shared.begin(for: self) } else { ExternalDisplay.shared.end(for: self) }
         if presenting { select(nil) }
+        undoProxy.isSuspended = presenting || replay != nil
         lockDidChange()
         guard isViewLoaded, lastBounds != .zero else { return }
         if presenting {
