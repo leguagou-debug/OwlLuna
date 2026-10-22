@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.0-build.3] - 2026-10-21
+
 ### Added
 
 - Text boxes can use a serif, monospaced or Fraunces typeface, with italic and underline.
@@ -149,5 +151,6 @@ The first build for TestFlight testers. No accounts, no ads and no tracking.
 
 - The app is now called OwlLuna. Notebooks and backups from before the rename still open.
 
-[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.2...HEAD
+[Unreleased]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.3...HEAD
+[1.0.0-build.3]: https://github.com/owaisazmal/OwlLuna/compare/v1.0.0-build.2...v1.0.0-build.3
 [1.0.0-build.2]: https://github.com/owaisazmal/OwlLuna/releases/tag/v1.0.0-build.2
