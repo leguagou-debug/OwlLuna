@@ -589,8 +589,8 @@ final class NotebookDocument {
         if manifest.library.isLocked != before.isLocked { recorder?.noteLockChanged() }
     }
 
-    /// A library change written to the files while this document was being opened. Applying it again is
-    /// harmless if the document already read it, and keeps its first save from reverting it otherwise.
+    /// A change the library would write to a closed notebook's manifest, made here instead: a tag renamed everywhere,
+    /// or a change that found the notebook opening.
     func applyLibraryChange(_ change: (inout NotebookManifest) -> Void) {
         guard !isReadOnly else { return }
         var changed = manifest
@@ -743,6 +743,7 @@ final class NotebookDocument {
         signposter.emitEvent("Save snapshot taken")
         do {
             let receipt = try await package.write(pending.snapshot)
+            takeLaterFiling(receipt.manifest.library)
             for (pageID, version) in pending.versions {
                 inks[pageID]?.savedVersion = version
                 if inks[pageID]?.version == version, let hash = receipt.inkHashes[pageID], let index = index(of: pageID) {
@@ -786,6 +787,13 @@ final class NotebookDocument {
             }
             return false
         }
+    }
+
+    /// Filing the save kept from the file, changed there after this document read it, is the document's too.
+    private func takeLaterFiling(_ written: LibraryState) {
+        let wasLocked = manifest.library.isLocked
+        manifest.library.takeLaterChanges(from: written)
+        if manifest.library.isLocked != wasLocked { recorder?.noteLockChanged() }
     }
 
     /// Saves everything now, retrying a few times. Used when the app moves to the background and on close.

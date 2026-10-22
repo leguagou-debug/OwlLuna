@@ -418,6 +418,42 @@ final class StorageSafetyTests: XCTestCase {
 }
 
 final class ManifestSafetyTests: XCTestCase {
+    func testAManifestReadBeforeALibraryChangeNeverWritesItOver() async throws {
+        let manifest = NotebookManifest(title: "Physics", defaults: PageDefaults(template: .grid, paperColor: .white, pageSize: .letter),
+                                        pages: [.template(.grid, color: .white, size: .letter)])
+        let package = NotebookPackage(root: temporaryRoot(self), id: manifest.id)
+        try await package.create(manifest)
+        var stale = try await package.readManifest().manifest
+        let folder = UUID()
+        let filed = try await package.updateLibraryState { state in
+            let before = state
+            state.isFavorite = true
+            state.isLocked = true
+            state.tags = ["Exam"]
+            state.folderID = folder
+            state.deletedAt = .now
+            state.isJournal = true
+            state.stamp(changesSince: before, at: .now)
+        }
+        stale.title = "Physics II"
+        stale.library.currentPage = 1
+        let written = try await package.writeManifest(stale)
+        let onDisk = try await package.readManifest().manifest
+        XCTAssertEqual(onDisk.title, "Physics II")
+        XCTAssertEqual(onDisk.library.currentPage, 1, "where it was left off reading is the writer's")
+        XCTAssertTrue(onDisk.library.agrees(with: filed.library), "every library change it hadn't read is kept")
+        XCTAssertTrue(written.library.agrees(with: filed.library))
+
+        var later = onDisk
+        let before = later.library
+        later.library.isLocked = false
+        later.library.stamp(changesSince: before, at: .now)
+        try await package.writeManifest(later)
+        let unlocked = try await package.readManifest().manifest.library
+        XCTAssertFalse(unlocked.isLocked, "a change made after the file's still lands")
+        XCTAssertTrue(unlocked.isFavorite)
+    }
+
     func testNewerSchemaWithRestructuredPagesOpensReadOnly() throws {
         let raw = #"{"schemaVersion": 3, "title": "From the future", "pages": {"order": ["a", "b"]}}"#
         let (manifest, _) = try ManifestCodec.decode(Data(raw.utf8), fallbackID: UUID())
@@ -537,15 +573,56 @@ final class LibraryStoreSafetyTests: XCTestCase {
     func testALibraryChangeSurvivesADocumentOpeningAtTheSameTime() async throws {
         let (store, root, _) = try makeStore()
         let manifest = try await makeNotebook(store)
-        store.setFavorite(true, for: [try XCTUnwrap(store.record(manifest.id))])
-        let document = try await DocumentRegistry.shared.open(manifest.id, root: root, scene: nil) { store.reapplyChangesInFlight(to: $0) }
-        XCTAssertTrue(document.manifest.library.isFavorite)
+        let record = try XCTUnwrap(store.record(manifest.id))
+        let folder = try XCTUnwrap(store.createFolder(name: "Term 1", cloth: .jade))
+        // The race a step at a time: the open reads the manifest, the changes are written and done with, and only then
+        // is the document handed out.
+        let document = try await NotebookDocument.open(manifest.id, root: root)
+        store.setFavorite(true, for: [record])
+        store.setLocked(true, for: [record])
+        store.setTags(["Exam"], for: [record])
+        store.move([record], to: folder)
+        store.moveToTrash([record])
+        await store.finishWritingNotebooks()
+        document.onSaved = { store.index($0) }
+        DocumentRegistry.shared.register(document, scene: nil)
+        defer { DocumentRegistry.shared.unregister(manifest.id, document: document) }
         document.rename("Opened")
         let saved = await document.flush()
         XCTAssertTrue(saved)
         let onDisk = try await NotebookPackage(root: root, id: manifest.id).readManifest().manifest
+        XCTAssertEqual(onDisk.title, "Opened")
         XCTAssertTrue(onDisk.library.isFavorite, "the document's save must not revert the favourite")
-        DocumentRegistry.shared.unregister(manifest.id, document: document)
+        XCTAssertTrue(onDisk.library.isLocked, "or the lock")
+        XCTAssertEqual(onDisk.library.tags, ["Exam"])
+        XCTAssertEqual(onDisk.library.folderID, folder.id)
+        XCTAssertNotNil(onDisk.library.deletedAt)
+        XCTAssertTrue(document.manifest.library.agrees(with: onDisk.library), "the document takes them too")
+        XCTAssertTrue(record.isFavorite && record.isLocked && record.isTrashed, "and so does the library")
+    }
+
+    func testALibraryChangeMadeAsANotebookOpensReachesItsDocument() async throws {
+        let (store, root, _) = try makeStore()
+        let manifest = try await makeNotebook(store)
+        let record = try XCTUnwrap(store.record(manifest.id))
+        let registry = DocumentRegistry.shared
+        store.setFavorite(true, for: [record])
+        // Main-actor jobs run in turn, so by now the favourite is being written.
+        await Task.yield()
+        let opening = Task { try await registry.open(manifest.id, root: root, scene: nil) { _ in } }
+        while !registry.isOpening(manifest.id) { await Task.yield() }
+        store.setLocked(true, for: [record])
+        let document = try await opening.value
+        defer { registry.unregister(manifest.id, document: document) }
+        XCTAssertTrue(document.manifest.library.isFavorite, "the open waits for a write under way")
+        await store.finishWritingNotebooks()
+        XCTAssertTrue(document.manifest.library.isLocked, "and a change made while it opens goes to the document")
+        document.rename("Opened")
+        let saved = await document.flush()
+        XCTAssertTrue(saved)
+        let onDisk = try await NotebookPackage(root: root, id: manifest.id).readManifest().manifest
+        XCTAssertTrue(onDisk.library.isFavorite)
+        XCTAssertTrue(onDisk.library.isLocked)
     }
 
     func testDeletingPermanentlyMovesThePackageAsideAtOnce() async throws {

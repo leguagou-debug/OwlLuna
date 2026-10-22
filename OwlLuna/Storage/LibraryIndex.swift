@@ -332,8 +332,9 @@ enum LibraryIndex {
         for id in ids {
             let package = NotebookPackage(root: root, id: id)
             var date = manifestDate(ofPackage: package.url)
-            guard let load = try? await package.readManifest() else { continue }
-            if load.needsSave, !load.isReadOnly, (try? await package.writeManifest(load.manifest)) != nil {
+            guard var load = try? await package.readManifest() else { continue }
+            if load.needsSave, !load.isReadOnly, let written = try? await package.writeManifest(load.manifest) {
+                load.manifest = written
                 date = manifestDate(ofPackage: package.url)
             }
             let issues = await package.quarantinedFiles().count + load.manifest.opaquePages.count

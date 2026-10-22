@@ -18,6 +18,8 @@ final class DocumentRegistry {
     private var inHand: Set<UUID> = []
     /// How many changes the library has yet to write into each closed notebook's manifest.
     private var changing: [UUID: Int] = [:]
+    /// How many of those are being written right now. Opening the notebook waits for them.
+    private var writing: [UUID: Int] = [:]
     /// Why a recording stopped as its notebook was put away with nobody looking, told when the notebook next opens.
     private var recordingStops: [UUID: String] = [:]
     /// Where Keep Both put the other version, told to the editor that opens the newer one.
@@ -80,6 +82,25 @@ final class DocumentRegistry {
         while inHand.contains(id) { try? await Task.sleep(for: .milliseconds(20)) }
     }
 
+    /// The library is about to write a closed notebook's manifest. False while it is open or opening, when the change is
+    /// for its document instead; otherwise opening waits until `doneWriting`, so it never reads the file from before it.
+    func startWriting(_ id: UUID) -> Bool {
+        guard document(for: id) == nil, opening[id] == nil else { return false }
+        writing[id, default: 0] += 1
+        return true
+    }
+
+    func doneWriting(_ id: UUID) {
+        let left = (writing[id] ?? 1) - 1
+        writing[id] = left > 0 ? left : nil
+    }
+
+    /// The notebook's live document, once an open under way has finished.
+    func opened(_ id: UUID) async -> NotebookDocument? {
+        if let pending = opening[id] { _ = try? await pending.task.value }
+        return document(for: id)
+    }
+
     func sceneIdentifier(for id: UUID) -> String? {
         if entries[id]?.document != nil { return entries[id]?.sceneIdentifier }
         return opening[id]?.scene
@@ -97,8 +118,9 @@ final class DocumentRegistry {
         if let pending = opening[id] { return try await pending.task.value }
         let task = Task { () throws -> NotebookDocument in
             defer { self.opening[id] = nil }
-            // A sync that has the notebook in hand finishes first, so the editor never reads files being swapped.
-            while self.inHand.contains(id) { try await Task.sleep(for: .milliseconds(20)) }
+            // A sync that has the notebook in hand finishes first, so the editor never reads files being swapped, and so
+            // does a library change being written. One made from here on goes to the document.
+            while self.inHand.contains(id) || self.writing[id] != nil { try await Task.sleep(for: .milliseconds(20)) }
             let document = try await NotebookDocument.open(id, root: root)
             configure(document)
             self.entries[id] = Entry(document: document, sceneIdentifier: scene)

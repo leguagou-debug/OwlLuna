@@ -111,7 +111,6 @@ struct EditorScreen: View {
                 document.onSaved = { manifest in store?.index(manifest) }
                 document.onWritten = { sync?.sendSoon(id) }
                 document.onInkSaved = { pages, date in activity?.record(notebook: id, pages: pages, at: date) }
-                store?.reapplyChangesInFlight(to: document)
             }
             opened.noteOpened()
             document = opened

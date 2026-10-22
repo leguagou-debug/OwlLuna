@@ -238,11 +238,21 @@ actor NotebookPackage {
         for index in manifest.pages.indices {
             if let hash = hashes[manifest.pages[index].id] { manifest.pages[index].inkHash = hash }
         }
-        try writeManifest(manifest)
+        manifest = try writeManifest(manifest)
         return SaveReceipt(manifest: manifest, inkHashes: hashes, inkBytes: bytes)
     }
 
-    func writeManifest(_ manifest: NotebookManifest) throws {
+    /// Filing the file has stamped later than `manifest` is kept, so a manifest read before a library change was
+    /// written never undoes it. Returns what was written.
+    @discardableResult
+    func writeManifest(_ manifest: NotebookManifest) throws -> NotebookManifest {
+        var manifest = manifest
+        if let filed = LibrarySync.filing(ofPackage: url) { manifest.library.takeLaterChanges(from: filed) }
+        try replaceManifest(with: manifest)
+        return manifest
+    }
+
+    private func replaceManifest(with manifest: NotebookManifest) throws {
         guard !manifest.isNewerThanSupported else { throw PackageError.readOnly }
         try makeDirectories()
         let data = try ManifestCodec.encode(manifest)
@@ -260,7 +270,7 @@ actor NotebookPackage {
     func updateManifest(_ change: @Sendable (inout NotebookManifest) -> Void) throws -> NotebookManifest {
         var manifest = try readManifest().manifest
         change(&manifest)
-        try writeManifest(manifest)
+        try replaceManifest(with: manifest)
         return manifest
     }
 

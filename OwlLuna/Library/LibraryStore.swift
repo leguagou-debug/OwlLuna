@@ -31,8 +31,8 @@ final class LibraryStore {
     /// The saved filters in `smart-shelves.json`, in the order they were made.
     private(set) var smartShelves: [SmartShelf] = []
     @ObservationIgnored private let log = Logger(category: "library")
-    @ObservationIgnored private var changesInFlight: [UUID: [UUID: @Sendable (inout NotebookManifest) -> Void]] = [:]
     @ObservationIgnored private var manifestWrites: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lastUpdate: [UUID: UUID] = [:]
     @ObservationIgnored private var lastRefile: [UUID: UUID] = [:]
     @ObservationIgnored private var folderWrite: Task<Void, Never>?
     @ObservationIgnored private var smartShelfWrite: Task<Void, Never>?
@@ -405,34 +405,38 @@ final class LibraryStore {
         return write
     }
 
-    /// Read-modify-write of a closed notebook's manifest. A document that starts opening meanwhile gets the
-    /// change applied again (see `reapplyChangesInFlight`); if the write fails, the index is re-read from the file.
+    /// Read-modify-write of a closed notebook's manifest. One that starts opening first takes the change in its
+    /// document instead, and opening waits for a write under way. If the write fails, the index is re-read from the file.
     /// Writes to one notebook are chained, so two changes made back to back both land.
     @discardableResult
     func update(_ id: UUID, _ change: @escaping @Sendable (inout NotebookManifest) -> Void) -> Task<Void, Never> {
         let package = NotebookPackage(root: root, id: id), registry = DocumentRegistry.shared
-        let token = UUID()
-        changesInFlight[id, default: [:]][token] = change
-        let previous = manifestWrites[id]
+        let previous = manifestWrites[id], token = UUID()
+        lastUpdate[id] = token
         // From here until it is written a sync leaves the notebook alone, and one that has it in hand finishes first.
         registry.willChange(id)
         let write = Task {
             await previous?.value
             await registry.whenReleased(id)
+            var document: NotebookDocument?
+            while document == nil, !registry.startWriting(id) { document = await registry.opened(id) }
             var written: NotebookManifest?
-            do {
-                written = try await package.updateManifest(change)
-            } catch {
-                await writeFailed(error, "manifest", package: package)
+            if let document {
+                document.applyLibraryChange(change)
+            } else {
+                do {
+                    written = try await package.updateManifest(change)
+                } catch {
+                    await writeFailed(error, "manifest", package: package)
+                }
+                registry.doneWriting(id)
             }
             registry.didChange(id)
-            changesInFlight[id]?[token] = nil
-            if changesInFlight[id]?.isEmpty == true {
-                changesInFlight[id] = nil
-                manifestWrites[id] = nil
-                // The last write holds every change: the record takes it and its date, so the next launch doesn't read it again.
-                if let written, record(id) != nil, registry.document(for: id) == nil, !registry.isOpening(id) { index(written) }
-            }
+            guard lastUpdate[id] == token else { return }
+            lastUpdate[id] = nil
+            manifestWrites[id] = nil
+            // The last write holds every change: the record takes it and its date, so the next launch doesn't read it again.
+            if let written, record(id) != nil, registry.document(for: id) == nil, !registry.isOpening(id) { index(written) }
         }
         manifestWrites[id] = write
         return write
@@ -443,11 +447,6 @@ final class LibraryStore {
         lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
         log.error("\(what, privacy: .public) update failed for \(package.id): \(error.localizedDescription)")
         if let manifest = try? await package.readManifest().manifest { index(manifest) }
-    }
-
-    func reapplyChangesInFlight(to document: NotebookDocument) {
-        guard let changes = changesInFlight[document.id] else { return }
-        for change in changes.values { document.applyLibraryChange(change) }
     }
 
     // MARK: Folders
@@ -794,23 +793,17 @@ final class LibraryStore {
         guard !DocumentRegistry.shared.isOpening(id) else { return nil }
         let package = NotebookPackage(root: root, id: id), registry = DocumentRegistry.shared
         let pageID = UUID()
-        let token = UUID()
         registry.willChange(id)
-        defer {
-            registry.didChange(id)
-            changesInFlight[id]?[token] = nil
-            if changesInFlight[id]?.isEmpty == true { changesInFlight[id] = nil }
-        }
+        defer { registry.didChange(id) }
         // A sync that has the journal in hand finishes first, so the page is added to what it brought in.
         await registry.whenReleased(id)
         do {
             if let page = try await package.readManifest().manifest.pages.last(where: { $0.day == key }) { return page.id }
             // The calendar is only read on a day that has no page yet.
             let agenda = await Agenda.forJournal(now: now, calendar: calendar)
-            guard DocumentRegistry.shared.document(for: id) == nil, !DocumentRegistry.shared.isOpening(id) else { return nil }
-            let change: @Sendable (inout NotebookManifest) -> Void = { DailyJournal.dateToday(key, newPageID: pageID, agenda: agenda, in: &$0) }
-            changesInFlight[id, default: [:]][token] = change
-            let manifest = try await package.updateManifest(change)
+            guard registry.startWriting(id) else { return nil }
+            defer { registry.doneWriting(id) }
+            let manifest = try await package.updateManifest { DailyJournal.dateToday(key, newPageID: pageID, agenda: agenda, in: &$0) }
             index(manifest)
             return manifest.pages.last { $0.day == key }?.id
         } catch {

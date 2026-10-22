@@ -200,7 +200,7 @@ Only one window writes in a notebook. Anything that would show a notebook open i
 
 ## One document per notebook
 
-`DocumentRegistry` hands out one `NotebookDocument` per notebook across windows, and shares an open still in progress. Library changes (favourite, trash, folder, rename, cover) go through the open document. A change written to a closed notebook's files while a document is opening is applied to that document too, so its first save can't revert it.
+`DocumentRegistry` hands out one `NotebookDocument` per notebook across windows, and shares an open still in progress. Library changes (favourite, trash, folder, rename, cover) go through the open document. Opening waits for a change being written to a closed notebook's manifest, and one made while it opens goes to the document instead (`DocumentRegistry.startWriting`). A whole manifest written from an older read, a document's save included, keeps any library state the file has stamped later (`LibraryState.takeLaterChanges`), and the document takes it.
 
 ## Saving and closing
 

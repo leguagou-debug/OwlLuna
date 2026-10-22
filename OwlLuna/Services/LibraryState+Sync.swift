@@ -41,6 +41,15 @@ extension LibraryState {
         }
     }
 
+    /// Takes each item another copy changed after this one, so a copy that missed a change never writes it back.
+    mutating func takeLaterChanges(from other: LibraryState) {
+        for filing in Filing.allCases {
+            // Dates are kept to the millisecond.
+            guard let theirs = other.changedAt(filing), theirs.timeIntervalSince(changedAt(filing) ?? .distantPast) > 0.0005 else { continue }
+            take(filing, from: other)
+        }
+    }
+
     /// What both copies should hold, settled one item at a time: whichever was changed last, or this device's when
     /// neither says. A lock from before changes were stamped is kept whichever side has it, and pages `written` in
     /// unseen by whoever deleted a notebook take it back out of Recently Deleted. Nil when neither copy lacks anything.

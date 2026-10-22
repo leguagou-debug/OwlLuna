@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Undo and Redo do nothing while presenting. After typing in a new text box, one Undo takes the box away and Redo brings it back with its words.
+- A notebook you favourite, lock, tag, file or move to Recently Deleted just before opening it now keeps that change. Its first save could undo it.
 
 ## [1.0.0-build.3] - 2026-10-21
 
