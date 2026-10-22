@@ -12,7 +12,7 @@ struct TextSelection: Sendable, Equatable {
 /// A PDF page's own text: what lies between two points, the word at a point, and the stretch of a line that a
 /// highlighter was drawn along. Points and rectangles are in the page's points as it is shown.
 enum PDFText {
-    static var snapsHighlighter: Bool { UserDefaults.standard.object(forKey: SettingsKey.snapsHighlighter) as? Bool ?? true }
+    static var snapsHighlighter: Bool { UserDefaults.standard.bool(forKey: SettingsKey.snapsHighlighter, default: true) }
 
     /// The lines of text on a page, each as a rectangle.
     static func lines(on page: PDFPage, pageSize: CGSize) -> [CGRect] {
@@ -31,9 +31,7 @@ enum PDFText {
         guard shown.width > 0, shown.height > 0 else { return nil }
         let factor = 2400 / max(shown.width, shown.height)
         let size = CGSize(width: (shown.width * factor).rounded(), height: (shown.height * factor).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: 1, opaque: true)
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             UIColor.white.setFill()
             context.fill(CGRect(origin: .zero, size: size))
@@ -339,112 +337,3 @@ actor PDFTextReader {
     }
 }
 
-/// The colours text is highlighted in from the selection bar.
-enum HighlightColor: String, CaseIterable, Identifiable {
-    case yellow, green, pink, blue
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .yellow: String(localized: "Yellow")
-        case .green: String(localized: "Green")
-        case .pink: String(localized: "Pink")
-        case .blue: String(localized: "Blue")
-        }
-    }
-
-    var uiColor: UIColor {
-        switch self {
-        case .yellow: UIColor(hex: 0xFFD426)
-        case .green: UIColor(hex: 0x7ED98B)
-        case .pink: UIColor(hex: 0xFF8FB8)
-        case .blue: UIColor(hex: 0x7CC4FF)
-        }
-    }
-
-    static var last: HighlightColor {
-        get { UserDefaults.standard.string(forKey: SettingsKey.highlightColor).flatMap(HighlightColor.init(rawValue:)) ?? .yellow }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: SettingsKey.highlightColor) }
-    }
-}
-
-/// A highlighter stroke laid over a line of text: straight, and as tall as the line.
-enum TextHighlight {
-    /// How much taller than its points' size a marker stroke is drawn, with the chisel held across the stroke.
-    static let spread: CGFloat = 1.43
-
-    /// The stroke that covers `rect`. It takes the pressure and opacity of the stroke it stands in for, if there is one.
-    static func stroke(over rect: CGRect, ink: PKInk, replacing drawn: PKStroke? = nil, date: Date = .now) -> PKStroke {
-        let upright = rect.height > rect.width
-        let length = upright ? rect.height : rect.width, thickness = upright ? rect.width : rect.height
-        let unit = min(max(thickness / spread, 3), 60)
-        // The chisel's ends reach a little past the path's.
-        let lead = min(unit * 0.25, length / 2 - 0.5), trail = min(unit * 0.18, length / 2 - 0.5)
-        let run = max(length - lead - trail, 1), steps = max(Int(run / 16), 3)
-        let sample = drawn.flatMap { stroke in stroke.path.isEmpty ? nil : stroke.path[stroke.path.count / 2] }
-        let points = (0...steps).map { step -> PKStrokePoint in
-            let along = lead + run * CGFloat(step) / CGFloat(steps)
-            let location = upright ? CGPoint(x: rect.midX, y: rect.minY + along) : CGPoint(x: rect.minX + along, y: rect.midY)
-            return PKStrokePoint(location: location, timeOffset: 0.2 * Double(step) / Double(steps), size: CGSize(width: unit, height: unit),
-                                 opacity: sample?.opacity ?? 1, force: sample?.force ?? 1, azimuth: upright ? 0 : .pi / 2, altitude: .pi / 2)
-        }
-        return PKStroke(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: drawn?.path.creationDate ?? date))
-    }
-}
-
-/// Laid over the pages while PDF text is being selected: it takes the touches, and washes what is selected.
-/// Rectangles are in stack points, like the ink lasso's.
-final class TextSelectOverlay: UIView {
-    var scale: CGFloat = 1 {
-        didSet { if scale != oldValue { redraw() } }
-    }
-
-    private let wash = CAShapeLayer()
-    private var rects: [CGRect] = []
-    /// Where the touch that is now dragging came down: a pan only begins some way on from there.
-    private(set) var touchDown: CGPoint?
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .clear
-        isAccessibilityElement = false
-        wash.lineWidth = 1
-        layer.addSublayer(wash)
-        colour()
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func tintColorDidChange() {
-        super.tintColorDidChange()
-        colour()
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        super.touchesBegan(touches, with: event)
-        touchDown = touches.first?.location(in: self)
-    }
-
-    private func colour() {
-        wash.fillColor = tintColor.withAlphaComponent(0.26).cgColor
-        wash.strokeColor = tintColor.withAlphaComponent(0.7).cgColor
-    }
-
-    func show(_ rects: [CGRect]) {
-        self.rects = rects
-        redraw()
-    }
-
-    private func redraw() {
-        let path = CGMutablePath()
-        for rect in rects {
-            let box = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale).insetBy(dx: -1, dy: 0)
-            let corner = min(2, box.width / 2, box.height / 2)
-            path.addRoundedRect(in: box, cornerWidth: corner, cornerHeight: corner)
-        }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        wash.path = rects.isEmpty ? nil : path
-        CATransaction.commit()
-    }
-}

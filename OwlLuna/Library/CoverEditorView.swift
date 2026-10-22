@@ -15,7 +15,7 @@ struct CoverEditorView: View {
         self.record = record
         let cover = record.cover
         _spec = State(initialValue: cover)
-        _inkPair = State(initialValue: RisoInk.pairs.firstIndex { $0.0 == cover.inks.0 && $0.1 == cover.inks.1 } ?? 0)
+        _inkPair = State(initialValue: RisoInk.pairIndex(of: cover.inks) ?? 0)
     }
 
     var body: some View {
@@ -25,7 +25,7 @@ struct CoverEditorView: View {
                     let root = store.root, id = record.id
                     CoverView(request: record.coverRequest(width: CoverWidth.preview, scale: displayScale, colorScheme: colorScheme,
                                                            contrast: contrast, root: root, spec: spec), persist: false) {
-                        _ = await PageThumbnailer.ensureFirstPage(root: root, notebookID: id)
+                        await PageThumbnailer.ensureFirstPage(root: root, notebookID: id)
                     }
                     .frame(width: 200)
                     .frame(maxWidth: .infinity)
@@ -34,23 +34,10 @@ struct CoverEditorView: View {
                     ShuffleButton(style: spec.style) {
                         var generator = SystemRandomNumberGenerator()
                         spec = CoverShuffle.next(spec, using: &generator)
-                        inkPair = RisoInk.pairs.firstIndex { $0.0 == spec.inks.0 && $0.1 == spec.inks.1 } ?? inkPair
+                        inkPair = RisoInk.pairIndex(of: spec.inks) ?? inkPair
                     }
                     .frame(maxWidth: .infinity)
-                    OwlLunaSegmentedPicker("Cover", selection: $spec.style, options: CoverStyle.allCases) { Text($0.displayName) }
-                    switch spec.style {
-                    case .cloth, .firstPage:
-                        Text(spec.style == .cloth ? "Cloth" : "Spine").metaStyle(.footnote).accessibilityAddTraits(.isHeader)
-                        SwatchRow(items: ClothColor.allCases, selection: $spec.cloth, label: \.displayName) { Circle().fill($0.color) }
-                    case .print:
-                        Text("Inks").metaStyle(.footnote).accessibilityAddTraits(.isHeader)
-                        SwatchRow(items: Array(RisoInk.pairs.indices), selection: $inkPair,
-                                  label: { "\(RisoInk.pairs[$0].0.displayName) and \(RisoInk.pairs[$0].1.displayName)" }) { index in
-                            Circle().fill(LinearGradient(stops: [.init(color: Color(hex: RisoInk.pairs[index].0.hex), location: 0.5),
-                                                                .init(color: Color(hex: RisoInk.pairs[index].1.hex), location: 0.5)],
-                                                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                        }
-                    }
+                    CoverStyleOptions(style: $spec.style, cloth: $spec.cloth, inkPair: $inkPair)
                 }
                 .padding(Space.x6)
             }
@@ -59,10 +46,7 @@ struct CoverEditorView: View {
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         store.setCover(spec, for: record)

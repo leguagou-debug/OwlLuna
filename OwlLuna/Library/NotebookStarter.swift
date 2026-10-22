@@ -29,7 +29,7 @@ enum NotebookStarter: String, CaseIterable, Identifiable {
         case .planner: .weekPlanner
         case .music: .music
         case .whiteboard: .dotted
-        case .plain: UserDefaults.standard.string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled
+        case .plain: UserDefaults.standard.defaultTemplate
         }
     }
 
@@ -37,7 +37,7 @@ enum NotebookStarter: String, CaseIterable, Identifiable {
         switch self {
         case .lecture, .sketchbook, .whiteboard: .white
         case .journal, .planner, .music: .ivory
-        case .plain: UserDefaults.standard.string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white
+        case .plain: UserDefaults.standard.defaultPaperColor
         }
     }
 
@@ -86,9 +86,14 @@ enum CoverShuffle {
             next.cloth = ClothColor.allCases.filter { $0 != spec.cloth }.randomElement(using: &rng) ?? spec.cloth
         case .print:
             repeat { next.seed = UInt32.random(in: 0...UInt32.max, using: &rng) } while next.seed == spec.seed
-            let current = RisoInk.pairs.firstIndex { $0.0 == spec.inks.0 && $0.1 == spec.inks.1 }
+            let current = RisoInk.pairIndex(of: spec.inks)
             if let index = RisoInk.pairs.indices.filter({ $0 != current }).randomElement(using: &rng) { next.inks = RisoInk.pairs[index] }
         }
         return next
     }
+}
+
+extension RisoInk {
+    /// Where an ink pair sits in `pairs`, if it's one of them.
+    static func pairIndex(of inks: (RisoInk, RisoInk)) -> Int? { pairs.firstIndex { $0.0 == inks.0 && $0.1 == inks.1 } }
 }

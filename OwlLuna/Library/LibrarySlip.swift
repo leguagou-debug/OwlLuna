@@ -179,6 +179,17 @@ final class LibraryChangeCenter {
     }
 }
 
+extension LibraryChangeCenter {
+    /// Restore and Delete Permanently, the accessibility actions of a notebook in the bin.
+    @ViewBuilder
+    func trashActions(for record: NotebookRecord, in store: LibraryStore, undoManager: UndoManager?) -> some View {
+        if record.isTrashed {
+            Button("Restore") { self.restore([record], in: store, undoManager: undoManager) }
+            Button("Delete Permanently") { self.requestPermanentDelete([record.id]) }
+        }
+    }
+}
+
 /// A paper slip at the foot of the library naming the last change, with Undo.
 struct LibrarySlipView: View {
     let change: LibraryChangeCenter.Change

@@ -288,7 +288,7 @@ struct CardReview: View {
                     .accessibilityIdentifier("review.done.title")
                 Group {
                     if let next {
-                        Text("The next cards come back on \(next.formatted(.dateTime.weekday(.wide).day().month(.wide))).")
+                        Text("The next cards come back on \(next.formatted(.dayName)).")
                     } else if studied {
                         Text("Every card has been through your hands today.")
                     } else {
@@ -329,7 +329,7 @@ struct CardReview: View {
         guard let current = session.current else { return }
         if titles[current.notebook] == nil {
             let title = store.record(current.notebook)?.title ?? ""
-            titles[current.notebook] = title.isEmpty ? String(localized: "Untitled") : title
+            titles[current.notebook] = title.orUntitled
         }
         async let first = library.image(current.card.front.image, in: current.notebook)
         async let second = library.image(current.card.back.image, in: current.notebook)

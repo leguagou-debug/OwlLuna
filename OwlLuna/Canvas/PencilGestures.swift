@@ -16,10 +16,7 @@ enum ScribbleRecognizer {
         guard points.count >= 8 else { return false }
         let box = ShapeRecognizer.bounds(of: points)
         let diagonal = hypot(box.width, box.height)
-        guard diagonal >= 20 else { return false }
-        var length: CGFloat = 0
-        for (a, b) in zip(points, points.dropFirst()) { length += ShapeRecognizer.distance(a, b) }
-        guard length >= density * diagonal else { return false }
+        guard diagonal >= 20, ShapeRecognizer.length(of: points) >= density * diagonal else { return false }
         return reversals(points) >= minimumReversals
     }
 
@@ -27,15 +24,7 @@ enum ScribbleRecognizer {
     /// of its whole length, so the loops of a spring and the humps of an "m" don't.
     static func reversals(_ points: [CGPoint]) -> Int {
         guard points.count >= 3 else { return 0 }
-        let count = CGFloat(points.count)
-        let mean = CGPoint(x: points.map(\.x).reduce(0, +) / count, y: points.map(\.y).reduce(0, +) / count)
-        var sxx: CGFloat = 0, syy: CGFloat = 0, sxy: CGFloat = 0
-        for point in points {
-            sxx += (point.x - mean.x) * (point.x - mean.x)
-            syy += (point.y - mean.y) * (point.y - mean.y)
-            sxy += (point.x - mean.x) * (point.y - mean.y)
-        }
-        let angle = 0.5 * atan2(2 * sxy, sxx - syy)
+        let (mean, angle) = ShapeRecognizer.principalAxis(of: points)
         let along = points.map { ($0.x - mean.x) * cos(angle) + ($0.y - mean.y) * sin(angle) }
         guard let least = along.min(), let most = along.max() else { return 0 }
         let step = max(0.35 * (most - least), 8)
@@ -63,7 +52,7 @@ enum ScribbleRecognizer {
     }
 
     static func covered(by scribble: [CGPoint], in strokes: [[CGPoint]]) -> [Int] {
-        let hull = hull(of: scribble)
+        let hull = InkVectors.convexHull(scribble)
         let box = ShapeRecognizer.bounds(of: scribble).insetBy(dx: -reach, dy: -reach)
         func isUnder(_ point: CGPoint) -> Bool {
             guard box.contains(point) else { return false }
@@ -76,22 +65,6 @@ enum ScribbleRecognizer {
             guard LoopRecognizer.outline(points) != nil else { return true }
             return Double(scribble.count(where: { InkLasso.contains(points, $0) })) < 0.7 * Double(scribble.count)
         }
-    }
-
-    /// The convex outline round the points.
-    static func hull(of points: [CGPoint]) -> [CGPoint] {
-        let sorted = points.sorted { $0.x == $1.x ? $0.y < $1.y : $0.x < $1.x }
-        guard sorted.count >= 3 else { return sorted }
-        func cross(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat { (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x) }
-        func half(_ points: [CGPoint]) -> [CGPoint] {
-            var chain: [CGPoint] = []
-            for point in points {
-                while chain.count >= 2, cross(chain[chain.count - 2], chain[chain.count - 1], point) <= 0 { chain.removeLast() }
-                chain.append(point)
-            }
-            return Array(chain.dropLast())
-        }
-        return half(sorted) + half(sorted.reversed())
     }
 }
 
@@ -109,18 +82,16 @@ enum LoopRecognizer {
             previous = point
         }
         guard abs(twice) / 2 >= 0.3 * box.width * box.height else { return nil }
-        var length: CGFloat = 0
-        for (a, b) in zip(points, points.dropFirst()) { length += ShapeRecognizer.distance(a, b) }
         // Once round, or a little more: a scribble that ends where it began is not a loop.
-        guard length <= 3 * (box.width + box.height) else { return nil }
+        guard ShapeRecognizer.length(of: points) <= 3 * (box.width + box.height) else { return nil }
         return points
     }
 }
 
 /// Scribble to erase and circle and hold to select: the two recognisers applied to PencilKit strokes.
 enum PencilGestures {
-    static var scribbleErases: Bool { UserDefaults.standard.object(forKey: SettingsKey.scribbleErases) as? Bool ?? true }
-    static var circleSelects: Bool { UserDefaults.standard.object(forKey: SettingsKey.circleSelects) as? Bool ?? true }
+    static var scribbleErases: Bool { UserDefaults.standard.bool(forKey: SettingsKey.scribbleErases, default: true) }
+    static var circleSelects: Bool { UserDefaults.standard.bool(forKey: SettingsKey.circleSelects, default: true) }
 
     /// `-fakePencilGestures` lets a UI test, which can only drag in straight lines, stand in for both gestures:
     /// any stroke counts as a zigzag, and a straight stroke that was held is the diagonal of a box.
@@ -159,7 +130,7 @@ enum PencilGestures {
         let near = drawing.strokes.indices.filter { drawing.strokes[$0].renderBounds.intersects(box) }
         let hit = Set(ScribbleRecognizer.covered(by: path, in: near.map { points(of: drawing.strokes[$0]) }).map { near[$0] })
         guard !hit.isEmpty else { return nil }
-        return (PKDrawing(strokes: drawing.strokes.enumerated().filter { !hit.contains($0.offset) }.map(\.element)), hit.count)
+        return (drawing.removingStrokes(at: hit), hit.count)
     }
 
     /// The outline `stroke` draws, in the page's points, if it is a loop with ink of `drawing` inside it.

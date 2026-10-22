@@ -123,7 +123,7 @@ struct NotebookCatalogueRow: View {
                         if isSelected { SelectionBox(isSelected: true).offset(x: Space.x2, y: Space.x2) }
                     }
                 VStack(alignment: .leading, spacing: Space.x1) {
-                    Text(record.title.isEmpty ? String(localized: "Untitled") : record.title)
+                    Text(record.title.orUntitled)
                         .displayFont(20, relativeTo: .body)
                         .foregroundStyle(Color.ink)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -142,12 +142,8 @@ struct NotebookCatalogueRow: View {
         .hoverEffect(.highlight)
     }
 
-    @ViewBuilder
     private var filing: some View {
-        let folder = showsFolder ? record.folder : nil
-        if folder != nil || !record.tags.isEmpty {
-            NotebookFiling(folder: folder, tags: record.tags, folderWidth: showsSide ? 120 * scale : nil)
-        }
+        NotebookFiling.of(record, showsFolder: showsFolder, folderWidth: showsSide ? 120 * scale : nil)
     }
 }
 
@@ -156,6 +152,15 @@ struct NotebookFiling: View {
     let folder: FolderRecord?
     let tags: [String]
     var folderWidth: CGFloat?
+
+    /// A notebook's filing, when it has a folder to show or any tags.
+    @ViewBuilder
+    static func of(_ record: NotebookRecord, showsFolder: Bool, folderWidth: CGFloat? = nil) -> some View {
+        let folder = showsFolder ? record.folder : nil
+        if folder != nil || !record.tags.isEmpty {
+            NotebookFiling(folder: folder, tags: record.tags, folderWidth: folderWidth)
+        }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.x3) {
@@ -245,17 +250,14 @@ struct NotebookLedgerRow: View {
                 RecordCover(record: record, width: CoverWidth.row, showsShadow: false)
                     .frame(width: min(coverWidth, CoverWidth.row))
                 VStack(alignment: .leading, spacing: Space.x1) {
-                    Text(record.title.isEmpty ? String(localized: "Untitled") : record.title)
+                    Text(record.title.orUntitled)
                         .font(.headline)
                         .foregroundStyle(Color.ink)
                     Text(record.metaLine)
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(Color.textSecondary)
                     UploadMark(id: record.id)
-                    let folder = showsFolder ? record.folder : nil
-                    if folder != nil || !record.tags.isEmpty {
-                        NotebookFiling(folder: folder, tags: record.tags)
-                    }
+                    NotebookFiling.of(record, showsFolder: showsFolder)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

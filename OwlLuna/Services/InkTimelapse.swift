@@ -91,19 +91,15 @@ enum InkTimelapse {
 
     static func export(_ input: NotebookExporter.Input, progress: @escaping @Sendable (Double) async -> Void) async throws -> URL {
         guard let page = input.pages.first else { throw Failure.noInk }
-        let ink = input.inMemoryInk[page.id] ?? NotebookExporter.savedInk(page, in: input.package)
+        let ink = input.ink(for: page)
         let plan = Plan(drawing: ink)
         guard !plan.spans.isEmpty else { throw Failure.noInk }
 
-        let directory = try ExportFolder.make(.export)
-        let url = directory.appending(path: NotebookExporter.fileName(input.title, extension: "mp4"))
-        do {
+        return try await ExportFolder.make(.export) { directory in
+            let url = directory.appending(path: NotebookExporter.fileName(input.title, extension: "mp4"))
             try await film(page, ink: ink, plan: plan, assets: input.package.assetsDirectory, links: LinkTitles(pages: input.allPages), to: url, progress: progress)
-        } catch {
-            try? FileManager.default.removeItem(at: directory)
-            throw error
+            return url
         }
-        return url
     }
 
     private static func film(_ page: NotebookPage, ink: PKDrawing, plan: Plan, assets: URL, links: LinkTitles, to url: URL,
@@ -134,9 +130,7 @@ enum InkTimelapse {
         guard let base = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: bitmap) else {
             throw Failure.writer("")
         }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: 1, opaque: true)
         let paper = UIGraphicsImageRenderer(size: size, format: format).image { context in
             PageRenderer.drawBackground(page, assets: assets, in: context.cgContext, size: size, links: links)
         }

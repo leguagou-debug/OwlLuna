@@ -1,219 +1,179 @@
 # OwlLuna design notes
 
-The visual system is **Clothbound**: a library that looks like a shelf of cloth-bound notebooks, and a quiet warm desk around the page. **Print** is a second cover style borrowed from riso printing. From the other audit directions, only Drafting Table's tabular numerals come along.
+The look is Clothbound: the library is a shelf of cloth-bound notebooks, and the editor a quiet, warm desk round the page. Print is a second cover style, taken from riso printing. Of the other directions we tried, only Drafting Table's tabular numerals stayed.
 
 ## Principles
 
 - The canvas stays quiet. Paper and ink only, and nothing moves while you write.
-- Controls are bound like the notebooks. Buttons and bars are boards standing on the desk, fields and tab tracks are wells pressed into it, and the action that finishes a task is cloth. No Liquid Glass and no blur of our own. Menus, alerts and the share sheet stay system.
-- Each control appears in one place, with two exceptions. The tool tray's shortcuts: Picture, Text Box and the rest are also in the Add and More menus, and stand in the tray only if they are chosen to. And a text box's Bold, Italic and Underline: they are on its Text Style card, and also stand in the arrange bar where it has room.
-- Colour never carries meaning alone. Favourites get a ribbon plus a spoken label; selection gets stitching plus a check mark.
+- Controls are bound like the notebooks: plates ruled onto bars, boards standing on the desk, wells pressed into it, and cloth for the action that finishes a task. No Liquid Glass and no blur of our own.
+- We draw our own menus, alerts, lists, switches, progress and empty states. Only the library sidebar (a `List`, for its selection and drag and drop) and the share sheet are system.
+- Cut square. Controls use the corner scale below, never capsules.
+- Each control lives in one place. The exceptions: the tool tray's shortcuts are also in the Add and More menus, and a text box's Bold, Italic and Underline are on its Text Style card and in the arrange bar where it has room.
+- Colour never carries meaning alone. Favourites get a ribbon and a spoken label, selection gets stitching and a check mark, and a wash that marks something has an edge too.
+- Printed matter keeps its colours at night: covers, labels, tags, stickers, index cards, the splash tiles.
 
 ## Colour tokens
 
-All tokens live in `Assets.xcassets` with light, dark, and Increase Contrast variants. Use the generated symbols (`Color.paper`, `UIColor.ink`).
+Tokens live in `OwlLuna/Assets.xcassets` with light, dark and Increase Contrast variants. Use the asset symbols (`Color.paper`, `UIColor.ink`).
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| Paper | `#F1EDE4` | `#181613` | Library ground |
-| Desk | `#E7E2D7` | `#121110` | Around the page in the editor |
-| Surface | `#F8F6F1` | `#211F1B` | Sidebar, sheets, and the rows of Settings (which lie on Paper) |
+| Paper | `#F1EDE4` | `#181613` | Library and Settings ground |
+| Desk | `#E7E2D7` | `#121110` | Round the page in the editor |
+| Surface | `#F8F6F1` | `#211F1B` | Sidebar, sheets, menus, Settings cards |
 | Ink | `#1B2230` | `#ECE6DA` | Text |
-| InkSecondary | `#5A6070` | `#A8A194` | Secondary text, small-caps metadata |
-| AccentColor (cobalt ink) | `#2747B8` | `#8FA8FF` | Tint, links, selection |
-| Tomato | `#C9452F` | `#FF7B61` | Favourite ribbon, recording |
-| OnTomato | `#FFFFFF` | `#181613` | Text on tomato. White fails on dark tomato (2.5:1). |
-| Mustard | `#E8B023` | `#F0BE45` | Highlight, stitched selection |
-| OnMustard | `#1B2230` | `#1B2230` | Text on mustard |
-| LabelCream | `#F7F1E3` | `#E9E1CE` | Cloth cover labels (kept light in dark mode) |
+| TextSecondary | `#404656` | `#BDB6A9` | Secondary text, placeholders, `.metaStyle()`. Holds 7:1 |
+| InkSecondary | `#5A6070` | `#A8A194` | Thumb and knob edges with Increase Contrast |
+| AccentColor | `#2747B8` | `#8FA8FF` | Cobalt ink: tint, links, focus, the tool in hand |
+| SidebarTint | `#2747B8` | `#4466DD` | Sidebar icons on Surface (3:1) |
+| Tomato | `#C9452F` | `#FF7B61` | Favourite ribbon, recording, destructive icons |
+| OnTomato | `#FFFFFF` | `#181613` | Text on Tomato. White fails on dark tomato (2.5:1) |
+| Mustard | `#E8B023` | `#F0BE45` | Highlights, stitched selection, chosen tags |
+| OnMustard | `#1B2230` | `#1B2230` | Text on Mustard |
+| LabelCream | `#F7F1E3` | `#E9E1CE` | Cover labels and tags, light at night too |
 | LabelInk, LabelInkSecondary | `#1B2230`, `#5A6070` | `#1B2230`, `#505665` | Text on labels |
-| Hairline | Ink at 15% | Ink at 15% | Rules, page edges; 32% with Increase Contrast |
-| Board | `#FAF7F0` | `#2A2722` | Buttons, bars and tab thumbs (lighter than a dark sheet, so they lift at night) |
-| Well | `#5A4526` at 9% | Black at 38% | Fields and tab tracks, over any ground; 14% and 55% with Increase Contrast |
-| PrimaryCloth, OnPrimaryCloth | `#2747B8`, `#F1EDE4` | `#3A5BB8`, `#ECE6DA` | The finishing button. At night it is a deeper cobalt cloth, not the bright tint |
-| DestructiveCloth, OnDestructiveCloth | `#C9452F`, `#FFFFFF` | `#A83E2B`, `#ECE6DA` | The stop-recording button |
+| Hairline | Ink at 15% | Ink at 15% | Rules and edges. 32% with Increase Contrast |
+| Board | `#FAF7F0` | `#2A2722` | Raised panels, tab thumbs. Lighter than a dark sheet, so it lifts at night |
+| Well | `#5A4526` at 9% | Black at 38% | Fields and tracks. 14% and 55% with Increase Contrast |
+| PrimaryCloth, OnPrimaryCloth | `#2747B8`, `#F1EDE4` | `#3A5BB8`, `#ECE6DA` | The finishing button. Deeper than the tint at night |
+| DestructiveCloth, OnDestructiveCloth | `#C9452F`, `#FFFFFF` | `#A83E2B`, `#ECE6DA` | Stop recording, confirm a deletion |
 
-Every text pair is checked by `DesignTokenTests.testEveryTextPairReachesAA` in all four appearances. The lowest ratios:
+`DesignTokenTests.testEveryTextPairReachesAA` checks every text pair in all four appearances. The lowest:
 
-| Pair | Light | Light + HC | Dark | Dark + HC |
+| Pair | Light | Light + IC | Dark | Dark + IC |
 |---|---|---|---|---|
 | InkSecondary on Desk | 4.86 | 6.62 | 7.36 | 10.97 |
 | OnTomato on Tomato | 4.80 | 6.52 | 7.10 | 9.06 |
 | LabelInkSecondary on LabelCream | 5.58 | 8.29 | 5.64 | 8.27 |
 | Accent on Desk | 6.07 | 7.72 | 8.27 | 10.59 |
+| TextSecondary on Desk | 7.30 | 9.19 | 9.37 | 12.40 |
 
-- **Cloth colours:** Oxblood `#6E2A2A`, Tomato `#C9452F`, Mustard `#D6A02A`, Moss `#3D5A40`, Jade `#2F7D6B`, Cobalt `#2F4DA0`, Navy `#1E2A45`, Slate `#56606B`, Rose `#C98A86`, Oat `#CDBF9F`. They are cover and spine content, never text backgrounds, so they live in code (`ClothColor`).
-- **Riso inks:** pink `#FF48B0`, yellow `#FFE800`, teal `#00838A`, blue `#0078BF`, black `#1C1C21`, on paper stock `#F7F4EC`. They appear only on Print covers, never on controls.
+Cloth colours (`ClothColor`): Oxblood `#6E2A2A`, Tomato `#C9452F`, Mustard `#D6A02A`, Moss `#3D5A40`, Jade `#2F7D6B`, Cobalt `#2F4DA0`, Navy `#1E2A45`, Plum `#5A2F52`, Slate `#56606B`, Rose `#C98A86`, Oat `#CDBF9F`. They are cover and spine content, never text grounds, so they live in code. Ribbon text uses `onCloth`.
+
+Riso inks (`RisoInk`): pink `#FF48B0`, yellow `#FFE800`, teal `#00838A`, blue `#0078BF`, black `#1C1C21`, on paper stock `#F7F4EC`. Only on Print covers and the Print icon, never on controls.
 
 ## Type
 
-- **Fraunces** (SIL OFL): library headings, empty states, cloth labels, and typed text in a text box set in it.
-  - In SwiftUI, use `Font.display(_:relativeTo:)` and `Font.displayText(_:relativeTo:)`. These are `Font.custom` on the named instances `Fraunces-SemiBold` and `Fraunces-Regular`, so they scale with Dynamic Type.
-  - Cloth labels are drawn with Core Text: SOFT 50, WONK 1, optical size matched to the point size.
-  - Typed text is plainer: Regular or Bold, SOFT 0, WONK 0, optical size following the type size. Only the upright is bundled, so italic leans it over.
-- **Bricolage Grotesque** (SIL OFL): Print cover titles only. Condensed ExtraBold (wdth 75, wght 800) through variation axes, because there is no named condensed instance.
-- **Archivo** (SIL OFL): the launch splash only. Black (wght 900) through variation axes: at its narrowest (wdth 62) for the wordmark, the volume number and the stamp, and a little under its usual width (wdth 95) for the ticker. It is drawn as outlines (`SplashType`), so a line can be scaled to its tile and each letter moved alone.
-- **SF Pro**: all other UI. Metadata uses `.metaStyle()`: small caps, tracking and tabular digits.
-- **Font files:** all three are bundled unmodified from google/fonts with their OFL texts (`OFL-*.txt`), and Settings › Acknowledgements shows each. They are registered at launch with `CTFontManagerRegisterFontURLs`, because the Info.plist is generated. None of the licences declares a Reserved Font Name, and we neither instance nor rename the fonts.
+- Fraunces (SIL OFL): library headings, empty states, cover labels, and text boxes set in it. Use `.displayFont(_:relativeTo:)` for headings and `.displayTextFont(_:relativeTo:)` for running text: `Font.custom` on `Fraunces-SemiBold` and `Fraunces-Regular`, so they scale with Dynamic Type, one weight heavier with Bold Text. Cover labels (`OwlLunaFonts.coverLabel`) are SOFT 50, WONK 1; typed text (`OwlLunaFonts.text`) is SOFT 0, WONK 0. Only the upright is bundled, so italic is a slant.
+- Bricolage Grotesque (SIL OFL): Print cover titles only, condensed ExtraBold (wdth 75, wght 800) through the axes (`OwlLunaFonts.printTitle`), since there's no named condensed instance.
+- Archivo (SIL OFL): the launch splash only. Black (wght 900) at wdth 62 for the wordmark, volume number and stamp, wdth 95 for the ticker (`OwlLunaFonts.splashTitle`). Drawn as outlines (`SplashType`), so a line can be scaled to its tile and each letter moved alone.
+- SF Pro: all other UI. Metadata uses `.metaStyle()`: small caps, tracking, tabular digits.
+
+The fonts are bundled unmodified from google/fonts in `OwlLuna/Resources/Fonts`, beside their `OFL-*.txt`, and Settings › Acknowledgements shows each. `OwlLunaFonts.register()` registers them at launch with `CTFontManagerRegisterFontURLs`, because Xcode writes the Info.plist from build settings. No licence declares a Reserved Font Name, and we neither instance nor rename the fonts. Widgets don't bundle them and use the system serif.
 
 ## Spacing, shape, motion
 
-- **Spacing:** a 4-point grid (`Space.x1` = 4 through `Space.x12` = 48).
-- **Covers:** 3:4. The spine corners are 1.3% of the width and the fore-edge corners 3.5%.
-- **Motion:**
-  - 0.18 s ease-out (`Motion.standard`). The favourite ribbon drops on a spring (`Motion.ribbon`).
-  - Opening a notebook zooms from its cover on iOS 18+.
-  - With Reduce Motion, or on iOS 17, every one of these becomes a cross-fade.
+- Spacing: a 4 pt grid, `Space.x1` (4) to `Space.x12` (48).
+- Corners (`Radius`, and the shapes `RoundedRectangle.plate`, `.thumb`, `.track`, `.bar`): `plate` 4 for buttons, chips, fields, cards, menus and notices; `thumb` 3 for what slides inside something; `track` 6 for the well it slides in; `bar` 8 for boards floating over a page; `sheet` 12, which every `.sheet` gets through `.presentationCornerRadius(Radius.sheet)`. No other radii for controls.
+- Covers: 3:4. Spine corners 1.3% of the width and fore-edge corners 3.5% in the renderer; `Radius.coverSpine` and `Radius.coverEdge` in SwiftUI.
+- Motion: `Motion.standard` (0.18 s ease-out), `Motion.quick` (0.15 s), and a spring for the favourite ribbon and the ink dish (`Motion.ribbon`). Opening a notebook zooms out of what was touched: a cover, the open spread, a search result. With Reduce Motion, `Motion.adaptive` makes all of it a short cross-fade.
+
+## Materials
+
+In `Design/Surfaces.swift`. Boards never sit inside scrolling grids or lists, where their shadows would be drawn live.
+
+- Plate (`.plate(in:fill:)`): flat, ruled in ink at 35% (70% with Increase Contrast), no shadow. Bars, menus, notices and ledgers are cut from it.
+- Board (`.board(in:)`): Board fill, a Hairline edge, a lit top edge and an umber shadow (`Elevation.shade`, black at night). For what stands clear of the ground: floating bars, tab thumbs, buttons outside bars. Pressed, it sinks into a well; disabled, it is an edgeless slab at half strength.
+- Well (`.well(in:focused:)`): an inner shadow and a lit lower lip, for fields and tracks. A 1.5 pt accent ring while focused.
+- Cloth: PrimaryCloth or DestructiveCloth with the covers' weave (`ClothWeave`) and a bevel. Increase Contrast drops the weave, the bevel and the board's lit edge.
 
 ## Controls
 
-Every button, bar, field, tab and switch we draw comes from `Design/Controls.swift`, in three materials. Menus (and the switches inside them), rows in system lists and the system's back chevron on pushed pages stay system:
+- Buttons: `.owlLuna` is Ink on a board, or on a plate in a bar (`inBar: true`). `.owlLuna(.primary)` is cobalt cloth, for the one action that finishes a task: Done, Create, Save, Share. `.owlLuna(.destructive)` is tomato cloth, for stopping a recording and confirming a deletion. Anything else that deletes is a tomato icon or an Ink word, and asks first or can be undone.
+- Bar icons: `.barIcon` is a 44 pt Ink icon that presses into a small well. `BarGroup` rules a run of them onto one plate. `.plateIcon` is one icon on its own plate, and `.plateIcon(lifted: true)` stands it on a board over a page.
+- Bars: `.boardBackground()` drops the system glass from a toolbar item, and `.barGround(_:)` keeps a bar its ground colour under scrolling content. Bar controls stop growing at the largest standard text size and show the Large Content Viewer. A field or tabs that don't fit take a row under the bar, never the overflow menu.
+- Fields: `OwlLunaSearchField` in bars (Escape clears it, then leaves it); `.owlLunaField(focused:)`, a well, in sheets.
+- Tabs: `OwlLunaSegmentedPicker`, equal segments on a track with a board thumb that slides. The chosen label is Ink semibold, the rest TextSecondary.
+- Switches: `.toggleStyle(.owlLuna)`, the Slab. A 54 by 30 pt track and a square knob; on, the track is woven PrimaryCloth. VoiceOver and tests see an ordinary switch.
+- Selection: `StitchedSelection`, a mustard dashed outline with a check, on covers and thumbnails. On the page, mustard dashes over an ink line, so it shows on any paper.
+- Tags: `TagChip`, a LabelCream paper label with a punched hole (`TagHole`), Mustard with a check when chosen, a dashed edge when only some notebooks carry it.
 
-- **Board** (`.board(in:)`): Board fill, a Hairline edge, a lit top edge (white at 85%, 9% at night) and a two-layer umber shadow (`#2A2116`, 10% at 0.5 pt and 7% at 6 pt; black at night). Pressed, it sinks into the well and loses its shadow; disabled, it is an edgeless slab at half strength with secondary text, so the state shows by shape in dark mode and with Increase Contrast too. Increase Contrast drops the lit edge.
-- **Well** (`.well(in:)`): the Well colour with an umber inner shadow and a lit lower lip. Its edge is the Hairline, ink at 50% with Increase Contrast, and a 1.5 pt accent ring while it has focus.
-- **Cloth** (`.owlLuna(.primary)`): PrimaryCloth with the covers' own two-way weave (a 4 pt tile, white 6% and black 7%), the cover board's bevel (white 18% over black 20%) and an umber shadow. Disabled cloth is a plain Well fill with secondary text and no edge. Increase Contrast drops the weave and bevel.
+## Named components
 
-The pieces:
+Each was picked from a set of mocks and replaces the system piece.
 
-- **Buttons.** `.owlLuna` is a board with Ink in the medium weight; `.owlLuna(.primary)` is cloth in semibold, for the one action that finishes a task (Done, Create, Save, Share); `.owlLuna(.destructive)` is tomato cloth, used only for the stop-recording button. Anything else that deletes is a tomato icon on a board, or an Ink word, and asks before it acts or can be undone. Shapes are 22 pt continuous rounded rectangles, so a one-line button is a capsule and a wrapped one stays a slab. `compact` draws 34 pt inside a 44 pt target. At accessibility sizes, buttons in content wrap to three lines.
-- **Bars.** `BarGroup` puts a row of 44 pt icons (`.barIcon`, Ink, a small well while pressed, Tomato for a destructive role) on one board capsule; `.boardIcon` is a single icon on a round board. Toolbar items wear `.boardBackground()`, which removes the system glass on iPadOS 26 and later. Everything in a navigation bar stops growing at the largest standard text size and shows the Large Content Viewer, with its name, instead; the floating bars over the page grow with the text size, words and field alike. A bar keeps the colour of its ground when content scrolls under it (`barGround`), never the system's blurred band. The sidebar's bar tints whatever sits in it, so on iPadOS 26 and later the sidebar draws its title and buttons in a row of its own.
-- **Under the bar.** When a bar has no room for a field or a set of tabs (a narrow window, a long translation, text above the Large size), they take a row of their own under it: the navigator's go-to field, the link sheet's tabs, the library's search.
-- **Fields.** `OwlLunaSearchField` is a capsule well with a glyph, a 44 pt clear button and room for one more control (the navigator's Go arrow). Escape clears it, then leaves it. Sheet fields use `.owlLunaField(focused:)`, a rounded well.
-- **The library bar.** A board with Sort, New and Select, then the search well (260 pt). When the bar has no room for the field (a narrow window, or a long translation beside the sidebar), it moves to a row of its own under the bar instead of into the system's overflow menu. The sidebar button is a round board like Settings beside it; it shows and hides the sidebar the way the system's did, over the shelves in portrait and beside them in landscape.
-- **Tabs.** `OwlLunaSegmentedPicker` lays its segments out in equal widths on a well, with one board thumb that slides to the chosen one (it jumps with Reduce Motion). The chosen label is Ink semibold, the others TextSecondary medium, so it never relies on colour alone. In dark mode the thumb carries a 10% ink wash, and with Increase Contrast an InkSecondary edge. VoiceOver reads the segments as tabs.
-- **Switches.** `.toggleStyle(.owlLuna)` is a slab, not a pill: a 54 by 30 pt well with 9 pt corners for a track and a 24 pt square knob with 6 pt corners. On, the track is PrimaryCloth with the weave and an accent edge, which at night is the bright tint round the deeper cobalt; the knob is Board by day, and at night cream when on and a lifted grey when off. Pressed, the knob widens toward the middle. Disabled, the whole switch is at half strength and its label is TextSecondary. With Differentiate Without Colour or the system's On/Off Labels it carries a bar and a ring. VoiceOver and tests see an ordinary switch. Only the switch takes the tap, in a 44 pt target.
-- **Settings.** No system form: chapters on Paper, each a Fraunces heading over one Surface card with 12 pt corners and Hairline rules between its rows, and its note beneath in the footnote size (`Settings/SettingsParts.swift`). A choice shows its value on a small square well that opens a menu; Draw With is the segmented tabs. A row that acts or leaves the app leads with its mark on a 30 pt square well tile, accent or Tomato for one that deletes, and ends with an arrow or chevron. About opens with a colophon: the mark, the name in Fraunces, the version in small caps, what the app costs, and who built it, linked.
-- Boards never sit inside scrolling grids or lists, where their shadows would be drawn live.
+- Bookplate bar: the library bar, and the model for the rest. Ink-ruled plates with worded actions (Sort, Select) and one cloth button for the main action (New: tap to create, hold for the menu).
+- Card menus (`Design/Menus.swift`, presented by `Design/PanelPresenter.swift`): every menu and popover. A Surface plate under a woven cloth band that names it, rows ruled like an index card. Use `OwlLunaMenu`, `OwlLunaPicker(_:selection:)`, `MenuBreak()`, `.menuChosen(_:)` and `.panel(_:isPresented:)` (`adapts: true` becomes a sheet when narrow). Long-press menus use `.heldMenu(_:when:draggable:)`, with `draggable: true` where the view can also be dragged.
+- Stamp alerts (`.notice` in `Design/Notices.swift`): every alert and confirmation. A plate with a cloth edge down its leading side (tomato when something is destroyed), a flat Cancel and one cloth button. Write Cancel first and the main button last. A cancel-role button is its only way out.
+- Ledger lists (`Ledger`, `.ledgerSwipe` in `Design/Ledger.swift`): lists in sheets. One ink-ruled plate per run of rows under a well band; a swipe uncovers cloth blocks.
+- Thread progress (`ThreadProgressStyle`): every `ProgressView` wears `.thread`, set at the app root. A thin well with a cobalt thread.
+- Bookplate empty states (`EmptyPlate`): an empty sheet or list. A plate with the symbol in a small square, a Fraunces title, one line. The library's own empty states are drawings (`ShelfIllustration`, `RibbonIllustration`).
+- Mixing strips (`InkMixer` in `Editor/PenOptions.swift`): a pen's custom colour, as a hue strip and a shade strip with square knobs beside a blot of the ink.
+- Cloth sidebar row (`RowCloth`, `scoped(_:chosen:)` in `Library/LibrarySidebar.swift`): the chosen shelf on a woven PrimaryCloth plate. `CellFocusRing` removes UIKit's focus ring there.
+- Bar-plate sync notice (`SyncNoticeButton` in `Library/SyncNotice.swift`): failures and conflicted copies, as a worded "iCloud" plate in the library bar with a count square (tomato for trouble) that opens a Card.
+- Bar-thread sync progress (`SyncThread`, `UploadMark`, `SyncTicks`, same file): a 3 pt cobalt thread along the foot of the library bar once a pass has run 0.3 s, "Not uploaded yet" in words under a cover, and square ticks in Settings.
+- Catalogue list (`NotebookCatalogueRow`, `ShelfListSort` in `Library/ShelfList.swift`): the library's List layout. Rows on the paper, a 44 pt cover, a Fraunces title, folder and tag labels, sort tabs over the rows.
+- Large-text ledger (`NotebookLedgerRow`, `ShelfView.ledger(_:)`): Shelf at accessibility text sizes. A board per run, covers growing with the text up to 64 pt.
+- Proof-strip export options (`ExportChoices`, `ProofStrip`, `PlatePair` in `Services/ExportChoices.swift`): page thumbnails with mustard ends dragged to choose the range, a pair of plates per either-or choice, a Slab for searchable handwriting, and a cloth "Export 9 Pages".
+- Settings parts (`Settings/SettingsParts.swift`): no `Form`. Each `SettingsSection` is a Fraunces heading over one ruled Surface plate with a note beneath. Choices (`SettingsChoiceRow`) show their value on a small square well.
 
 ## Covers
 
-All three styles share the 3:4 shape, a left spine band, the tomato favourite ribbon and a meta line under the cover. From 100 pt wide (shelf, spread and previews), every cover is drawn as a closed notebook:
+`CoverRenderer` draws each cover once per request, off the main thread, into an 80 MB LRU and `Caches/Covers` on disk. A render or disk read fades in (0.15 s); a memory hit appears at once. Nothing is blended or shadowed live in a scrolling grid. The ribbon (`FavoriteRibbon`) and selection are SwiftUI overlays, so they can animate.
 
-- **Page block.** Cream leaves (`#F7F1E3`, `#D9D1BF` in dark mode) show past the board, 2.8% of the width along the fore-edge and 1.6% of the height along the tail, with three leaf hairlines that round the corner. The board is measured inside the page block, and the ribbon hangs from the board.
-- **Board.** A 1 px bevel: white at 18% along the head and spine, black at 20% along the fore-edge and tail.
-- **Shadow plate.** Every cover sits on a soft contact and ambient shadow drawn once into a 9-slice plate (`CoverShadowPlate`, stronger on the night desk). Nothing is shaded live.
+From 100 pt wide, a cover is a closed notebook: cream leaves past the board, a 1 px bevel, and a shadow baked into a 9-slice plate (`CoverShadowPlate`).
 
-The styles:
+- Cloth: weave, rounded spine, hinge groove and a cream label with a double hairline, a Fraunces title and a small-caps meta line (shelf name or start month). Never the page count, which sits under the cover so a new page doesn't re-render it.
+- Print: two riso inks overprinted on paper stock, saddle-stitched. Patterns come from `CoverRNG(id:seed:)`, misregistered by up to 0.3 pt. The uppercase Bricolage title sits on a paper-stock knockout, so the pattern never touches its contrast.
+- First page: the page thumbnail behind a narrow cloth spine. Imported PDFs default to it.
 
-- **Cloth.** The cloth colour, a faint two-way weave, a rounded spine (a three-stop shade) and a hinge groove at 11% of the board, and a cream label.
-  - The label sits 17% in from the spine, 9% from the fore-edge and 17% from the top.
-  - It has a double hairline border, a Fraunces title (up to three lines) and a small-caps meta line: the shelf's name, or the month the notebook was started (`SEP 2026`). Never the page count, which is printed under the cover, so adding a page never re-renders it.
-- **Print.** Two riso inks on paper stock, overprinted with multiply and baked into the image, and saddle-stitched like a zine: a fold at the spine edge and two staples (`#B9B6AE`, edged `#8E8A80`) at 28% and 72% of the height.
-  - Patterns come from `CoverRNG(notebook id, seed)`: a base layer (dots, stripes, rings, halftone, or a flat fill) and an overlay (disc, band, dots or stripes). Positions, spacing and angles are jittered.
-  - The overlay is misregistered by at most 0.3 pt.
-  - The title is uppercase Bricolage on a paper-stock knockout, so its contrast (15.4:1) never depends on the pattern.
-  - Shuffle rolls a new seed in another pair of inks. Increase Contrast replaces the patterns with two solid blocks.
-- **First page.** The page thumbnail sits behind a 9% cloth spine, with the hinge groove. Imported PDFs get a `PDF` tag, and they default to this style.
+At night the cover boards dim about 10% and labels stay light; paper and ink never invert. Increase Contrast drops the weave and shaded spine, adds a 1 pt Hairline outline, and gives Print two solid blocks.
 
-### Rendering and appearance
+## Library and editor
 
-- Covers are rendered once per request, off the main thread, by `CoverRenderer`. A request is the spec, title, meta, width bucket, scale, appearance, contrast and first-page hash.
-- They are cached in a bounded in-memory LRU (80 MB) and on disk in `Caches/Covers`. A cover that has to be rendered or read from disk fades in (0.15 s); a cache hit appears at once.
-- There are no live blend modes or shadows in scrolling grids. The ribbon and selection are SwiftUI overlays, so they can animate.
-- **Dark mode is a night desk.** Boards are dimmed about 10% so they don't glow, the page block uses its own dimmed cream, cloth labels stay light, and paper and ink never invert.
-- **Increase Contrast.** No weave or shaded spine, stronger leaf lines, and a 1 pt Hairline outline, so a cover stands off the ground without its shadow.
-
-## Library
-
-- The library opens with an editorial Fraunces heading and a small-caps summary, then **Continue writing**: the last notebook opened, lying open.
-  - Its case (the cloth, dimmed for Print and first-page covers) peeks round two facing pages: the current page on the right, the one before it on the left. Page 1 faces an *ex libris* bookplate with the title and the month it was started.
-  - A ribbon in the cloth colour marks the page and carries its number. The seam is shaded, or a plain rule with Increase Contrast.
-  - Opening zooms out of the right-hand page, and closing zooms back into it. Every open grows out of what was touched: a cover, the spread, or a search result's page card.
-- Below that are shelves grouped by recency (Today, Yesterday, This week, Earlier this month, then by month) or by folder, each with a small-caps label and a hairline rule; folder shelves lead with their spine chip.
-- **Shelves fill the width.** `ShelfMetrics.fit` picks the column count for the width (about 176 pt a cover, 136 to 232 pt), so there's no gutter in any size or orientation: on an 11-inch iPad, two covers of about 213 pt in portrait with the sidebar, four in portrait without it or in landscape with it, and six in landscape without it. Covers render from the 176 or 220 pt bucket.
-- **Every row stands on a ledge:** a 5 pt Surface band with a Hairline top edge and a baked shadow beneath, 8 pt wider than the row on each side. The "pages, edited" line sits just under it, at the cover's width.
-- Search results show page cards whose matches are bold on a highlighter band (never colour alone): mustard under OnMustard in dark mode, ochre `#806113` under LabelCream on light paper (5.3:1 on Surface, 5.1:1 for the text), because Apple's audit reads a pale band as faint text. The Pages row fades in.
-- The sidebar shows a cloth spine chip for each folder. A folder inside another is indented one step under it, and a folder that holds folders has a chevron on its trailing edge that folds them away. The shelf on show lies on a PrimaryCloth plate, woven like the cloth buttons, with its name, icon and count in OnPrimaryCloth and its spine chip edged in the same. The plate stands in for the system's focus ring on these rows; New Folder and New Smart Shelf keep the ring.
-- **Tags** are paper labels, like a cover's label and the kraft tag sticker: a LabelCream capsule with a Hairline edge, a small punched hole (a ring) at its leading end, and the name in LabelInk, footnote semibold. Like covers and stickers they are content, so they stay cream at night. Each chip sits in a 44 pt target. In the tag sheet (Surface, with a well to type in and a cloth Done) the chips of the notebook or page carry a small cross and come off with a tap, and the library's other tags carry a plus. A chosen chip in the smart shelf sheet is Mustard with OnMustard text and a check mark, never colour alone. The sidebar gains Smart shelves and Tags once something is tagged; a tag's shelf is titled with the tag and stands its notebooks on their rows, then lists the tagged pages as page cards. A tagged page wears a small blank label at the foot of its navigator thumbnail.
-- **Locked notebooks.** The cover is blurred past reading (9% of its width) under a cream disc with an ink padlock, and its title is written beneath it, since the cover no longer says it. Behind the lock, the editor shows a padlock in a Surface circle, the notebook's name in the display face, and Unlock beside the way back.
-- **Covers are real buttons.** Each has a full VoiceOver description (title, page count, last edit, favourite, folder), a hover lift, and a typed drag payload (`com.owais.owlluna.notebook-reference`).
-- **The list.** Shelf or List is chosen in the library's bar. List rows lie on the paper under the shelves' own labels and rules, like a library catalogue: a 44 pt cover, the title in Fraunces, pages and the last change in small caps, then the folder (its spine chip and name) and the tags as paper labels, beside the title where the pane has room and under it where it hasn't. Over the rows, tabs for the four orders and a board with an arrow that turns the order round; at the accessibility sizes they give way to the bar's Sort menu. A chosen row is stitched in mustard with a ticked mustard square on its cover.
-- At accessibility text sizes, Shelf becomes a ledger: a first board with Continue writing, this week and the desk cards as rows, then a board for each run under a well band naming it. Covers grow with the text up to 64 pt, and each title has its pages, last change, folder and tags under it. Selecting puts a square box before each row, ticked in mustard, with a mustard edge on the chosen ones.
-- **Sync shows itself quietly.** While a pass moves notebooks, a 3 pt PrimaryCloth thread shuttles along the foot of the library's bar, a third of its width, a lap every 1.4 s; it appears only once a pass has run 0.3 s, so a quick one shows nothing, and with Reduce Motion it stands still and grows with the count. A notebook iCloud hasn't uploaded all of yet says "Not uploaded yet" under its cover, and in the list, beside a small accent cloud with an arrow, in words rather than a badge on the cover, and VoiceOver reads it with the cover. Settings counts two or more as "Uploading 3 of 12 notebooks to iCloud" over a row of square ticks, PrimaryCloth for each one done and Well for the rest, up to twenty (past that each tick stands for a share). Trouble and conflicted copies still go to the worded iCloud plate in the bar (`SyncNoticeButton`). In the editor, a notebook another device changed too shows its notice banner with a cloth **Keep Both**.
-- **Empty states look like the library.** A new library shows a small illustrated shelf (ghost spines leaning on a cloth notebook) above "Your shelf is ready."; an empty folder says so by name and offers a new notebook there; empty Favourites shows the ribbon.
-
-## On the page
-
-- **Ribbons.** The page ribbon wears the notebook's cloth. Beside it hangs a slimmer bookmark ribbon: a Surface ghost with a Hairline edge until the page is bookmarked, then Mustard with an OnMustard bookmark. Bookmarked pages carry a small mustard ribbon on their navigator thumbnail.
-- **Presenter view.** A 300 pt Surface panel on the trailing side with a Hairline edge: elapsed time in semibold tabular numerals with the clock beside it, then small-caps "Next" over the next page's thumbnail and "Notes" over the notes in the title 3 size, so they read at arm's length. The bar's panel button fills while it is showing.
-- **Two notebooks.** The divider between panes is a Desk strip with a Hairline down its middle and a short grip. The second pane's bar leads with a cross where the first has the back chevron, and each pane keeps its own cloth ribbon, so it is always clear which notebook a page belongs to.
-- **Tabs.** Several notebooks in one window wear a tab bar above the editor's own bar: a well the width of the window with a board under the tab on show, the way the app's other tabs are drawn. Each tab carries its notebook's spine chip, its title (Ink semibold on show, TextSecondary medium otherwise) and a cross; a round board with a plus opens another. A tab that is held or dragged lifts off the bar as a board of its own, with its spine chip and its title in Ink semibold; while it is dragged, the dashed Mustard rule the navigator uses for pages stands on the edge where it will land, stepping in at either end of the bar to clear the well's round corners. Like every bar it stops growing at the largest standard text size.
-- **The tray's shortcuts.** The last button of the tray opens a popover of tags, cut like the paper tags notebooks are filed under, each with the shortcut's own mark where the hole would be: one that stands in the tray is mustard with a check mark, one that doesn't is plain with a plus (paper by day, a well at night). At accessibility text sizes the tags become a list, each the whole width with its name on as many lines as it needs, and past the second of those sizes the popover is wider (440 pt, not 328), so a short name such as "Imagen" stays on one line. A tap ties it on or takes it off, and the popover stays open. Touch and hold on a pen opens its options; there is no system menu on the tray. Under the tags, past a hairline, a line led by the Shapes mark says how draw and hold works, so it can be found where the shortcuts are chosen.
-- **The shape strip.** Tapping Shapes in the tray brings a second board out just over it, built like the tray: the line, arrow, circle, rectangle and triangle as 44 pt icons, a hairline, and Undo. In a pane too narrow for that, its buttons narrow as far as their 32 pt wells, so it stays within the pane as long as the tray does. The shape picked wears the accent edge on a well, as the tool in hand does, and so does Shapes in the tray while the strip is out. A drag on the page shows the shape in the pen's ink as it is dragged out. The website's draw and hold demo has the line, arrow, circle, rectangle and triangle and Undo.
-- **The tool tray.** One slim board (48 pt, a capsule) at the foot of the editor, over the desk: the pens, the eraser, the lasso and the chosen shortcuts. It takes nothing from the page's width, and the last page scrolls clear of it. Each pen is a 32 pt label with the ink as a blot, as large as the pen is wide, and the mark of its kind in a corner. By day the label is paper (LabelCream); at night it is a well in the tray, as dark as the rest of it, and the blot keeps its colour inside a lighter rim, so black ink is still told from the label. On a Chalkboard page it is Chalkboard's green either way, with the ink as light as it is written there. The same holds for everything a pen's ink is shown on in its options: the label, the pen roll's lining and the width and opacity strips are paper by day and wells at night, where the line, the tools and the stroke are edged in the same light rim. A pen set faint shows it: its blot and the line on its label are as faint as it writes. By day that is the ink at its opacity over the paper; at night, where it isn't paper the ink lies on, it is the pale colour the ink has on a white page. The tool in hand has an accent edge, and a pen a small cloth check mark as well, so it is never told by colour alone; the eraser, the lasso and a helper that is on (the ruler, the zoom window, Handwriting to Text) wear the same edge on a well. An empty label with a dashed edge and a plus adds a pen; it is drawn as a label so it isn't taken for the bar's Add. Pens that don't fit scroll within their part of the tray, fading at the edge where more wait.
-- **A pen's options.** A popover from the pen, with nothing of the system's in it but the colour well: the pen's label, the kinds, the palette as 28 pt dots (the chosen one ringed in the accent), the width, and a last row that moves the pen along the tray or takes it off. The label is a strip of the label's paper on which the pen writes its own line, drawn by PencilKit itself in the pen's ink and colour and as broad as the pen is set, so a change of kind, colour or width is seen as it will write; the kind and colour stand beside it in words. The line is written again when the kind changes (not with Reduce Motion). The kinds are not a system menu: they are a pen roll, a strip of the label's paper with a pocket of the primary cloth across its foot, piped in mustard along its top edge and swelling a little between its seams (shade at each seam, a little light on the middle; no stitching is drawn), and one drawn tool standing tip up in each pocket (pen, fineliner, fountain pen, calligraphy pen, pencil, highlighter, crayon, brush), all wearing the pen's colour. The pen's own kind stands out of its pocket over a check mark on the cloth, so it is told by place and mark as well as colour. The tools carry no names, which would not fit under them at large text sizes or in German; VoiceOver and the Large Content Viewer name each. At accessibility text sizes the kind and colour go under the label, where they have the whole width, and the options scroll if the screen is too short for them. The width is not a system slider: it is a strip of the label's paper with a stroke of the pen's ink that swells from a hairline to full breadth, and a knob ringed in the accent that holds a blot as large as the stroke is there.
-- **A whiteboard's controls.** One Whiteboard button in the bar, left of undo and redo, holds Show Everything, Actual Size, Pages and the guide. Nothing stands over the board.
-- **Selecting text.** The bar at the top says what to do in a short sentence until something is selected, then offers Select All on This Page, Copy, Highlight, the highlight colour as a dot (Yellow, Green, Pink or Blue) and a cloth Done. Selected text gets a 26% accent wash with an accent edge.
-- **Selecting ink.** The lasso is the stitched line (mustard dashes over an ink line) and what it caught gets the same stitched box as a selected sticker. The bar at the top says what to do in a short sentence, then offers Duplicate, Delete (Tomato), Undo and a filled Done.
-- **Replay.** The transport is the floating bar at the bottom: play or pause, the time in semibold tabular numerals, a scrubber, the length, and a filled Done. Ink still to come stays on the page at 16% opacity.
-- **Opacity.** Under the width in a pen's options is a second strip of the same build: three ruled lines of a page with the ink washed over them, from as faint as a pen can be (10%) at one end to full strength at the other, so the lines show through less as it goes. The knob's blot is the ink as faint as it is set, with a line passing behind it, and the figure beside the title moves in steps of 5%; at the largest text sizes, where the two don't fit side by side, the figure goes under the title. A new colour is as faint as the last, and a new pen as faint as the one it copies. The tools of the roll and the width's stroke stay at full strength.
-- **The ink dish.** A squeeze of the Pencil (or a double-tap set to it) brings the tools to the tip: a round mixing dish, a board 244 pt across, with a well of ink for each pen on the shelf set evenly round its rim, the first at the top, and the eraser, the lasso, Undo and Redo inside a ring in its middle. A well is full of its pen's ink, a little in shadow at its upper edge as a hollow is, with the mark of its kind in white or in LabelInk, whichever the ink is dark or light enough for; the pen in hand wears the accent edge and the cloth check mark. A tap on a well takes that pen up and puts the dish away, as does a tap or a drag anywhere off it, or a second squeeze; Undo and Redo leave it out. It springs out from the tip (a cross-fade with Reduce Motion), stays wholly on the pages and clear of the tray, and comes out with the tray put away too. With the Pencil too far off to say where its tip is, it comes to the middle of the pages.
-- **Handwriting to Text** is a helper in the tray, like the ruler: tied on from the shortcuts' tags and worn with the accent edge while it is on. Nothing else on the screen changes: what is written with a pen stays ink while the pen moves, and when it has rested for a second the ink gives way to type in its place, about as tall, in the text colour nearest the pen's (Ink for black, grey, brown and yellow). Writing that goes on along the line, or starts the line below, joins the text made just before, so a paragraph is one box. Shapes aren't straightened while it is on. Ink that reads as nothing is left as ink.
-- **Pencil gestures** stay out of the way of writing. Scribbling back and forth over ink with a pen erases what lies under it as one undo step; a zigzag on bare paper, over earlier shading or inside an outline it is filling is left as ink, and the highlighter never erases. A loop drawn round ink and held still starts the cross-page selection with that ink caught, and leaves no stroke and no undo step behind; a loop round nothing still snaps to a circle. Double-tap and squeeze follow the system setting by default, including while the tools are hidden, and can each be set to the eraser, Undo, Select Ink, showing or hiding the tools, the tool palette at the Pencil (the ink dish), or the zoom window. Where the system's setting asks for one of its palettes, the ink dish comes out.
-- **Study tape.** A strip of washi tape in Mustard, Rose, Sage or Sky with pinked ends, pale diagonal stripes and a darker lower edge, 200 by 30 points when placed. It is opaque, because its job is to hide. Lifted, it is a dashed outline in the deeper shade of its colour over a 14% wash, so the answer reads clearly and the strip can still be found.
-- **Transcript.** Lines are rows with the time in small tabular numerals and the words in the body size. The line being said is semibold on a 20% Mustard wash with a Mustard edge, so it never relies on colour alone. Beside a replay it is a 300 pt Surface panel with a Hairline edge, like the presenter view.
-- **Find.** The find bar is a floating bar at the top: a magnifying glass, the field, "3 of 12" in tabular numerals, up and down arrows and a filled Done. Every match on a page gets a 30% Mustard wash with a darker Mustard edge; the one being shown is a 50% wash with an Ink outline (cream on dark paper), so it is told apart by more than colour.
-- **Zoom window.** A Board strip along the foot of the editor with a Hairline top edge: a row of 44 pt bar icons over the magnified paper. The area it shows is outlined on the page in the accent colour, with a small filled tab to drag it by. The last three tenths of both the outline and the strip carry an 8% accent tint: writing there moves the window on.
-- **Today's events.** Plain text in the small size, one event to a line with the time first, below a journal page's printed date and against the right margin. It is a text box like any other once it is there.
-- **Floating bars.** The arrange bar (top, while something on the page is selected), the way back from a link (top) and the presenter's bar (bottom) are one style: a board capsule (see Controls), 44 pt targets, never blurred, and a compact cloth Done.
-- **Selection.** A selected picture, sticker, text box or link gets the stitched outline (mustard dashes over an ink line, so it shows on any paper) and one round handle at its lower corner. A picture also has a grip in the middle of each side, the text box's width grip turned to suit: a side grip squeezes or stretches it while the opposite side stays put, and it settles on the picture's own proportions within 3% of them. The corner handle and a pinch keep its proportions. A side that is too short to keep its grip clear of the corner handle has none. VoiceOver hears two of the grips, "Change width" and "Change height", which step a tenth at a time. The handle, the grips and a crop's knobs are Surface with an ink edge at 35%; in Dark Mode they turn to LabelCream with a LabelInk edge, so they show on a dark page and on a crop's dimmed picture, and Increase Contrast takes the edge to 75%.
-- **Stickers** are drawn in code (`Sticker`), 100 units wide, in four families. They share one look, taken from the sticky notes: a soft pastel fill, a thin edge in the deeper shade of the same hue, a little light across the top and a faint layered shadow, so each reads as a piece of paper resting on the page. Nothing has a hard white border.
-  - Notes and Tape: sticky notes with a folded corner in butter, pink, blue, mint, lavender and peach; a ruled index card, a grid note held by a strip of tape, a torn strip of ruled paper, a kraft tag on a string, the cream label with the cloth label's double hairline, a speech bubble, a ribbon banner, and five washi tapes with pinked ends (three striped, one dotted, one gingham).
-  - Doodles: sparkles, a daisy, a leaf sprig, a cloud, a sun, a crescent moon, a rainbow, a paperclip and a pushpin.
-  - Marks: star, heart, check, exclamation, question, a curved arrow, a pennant flag, a marker ring and a highlighter line.
-  - Tags: IMPORTANT, TO DO, DONE and IDEA as pastel pills with a dot and tracked rounded capitals.
-  - The palette is six pastels with their deeper companions (butter, rose, peach, sky, mint, lavender) plus kraft and cream. Stickers are content, like covers, and never invert in dark mode. Shadows are layered tints, not blurs, so a sticker stays vector in an exported PDF.
-- **Stickers of your own** keep the die-cut look: the subject of a photo with a white edge about 2% of its long side. In the drawer they come first, after a dashed "From Photo…" tile.
-- **Paper of your own** leads the paper drawer and New Notebook's strip as My Paper: a dashed "Add Paper…" tile the shape of the page, which opens a Card menu (From Files…, From Photos…), then each paper as a miniature at its own shape with its name under it. It takes the stitched selection like a template. Holding one opens a Card with Rename… and Delete Paper. While a page on it is changing paper, the colour chips are dimmed with a line saying it keeps its own colours.
-- **Text boxes** are set in one of four faces, System, Serif (New York), Mono (SF Mono) or Fraunces, Regular or Bold, with italic and underline. Italic is the face's own where it has one. Sizes are Small (13), Body (17), Large (24) and Title (34), and there are five tints from the cloth palette: Ink, Tomato, Cobalt, Moss and Plum. On Charcoal and Chalkboard each tint switches to a lighter value. A highlight is a wash behind the words in one of the highlighter's four tints, at 55%, and lighter on dark paper (40%) so the light text over it stays readable. A box can be a list of bullets, numbers or checkboxes: each line starts with its marker, right-aligned before an indent the rest of the line keeps to, and a line with nothing on it is passed over. A checkbox is a rounded square drawn in the text's colour, about as tall as a capital, and a ticked line is drawn at half strength. A list keeps to the left: choosing one sets Left, and Centre or Right takes the list away. The Text Style card holds everything at once: Typeface ("Ag" set in each face over its name, or alone where the names won't fit), Size (in points where the names won't fit), Bold, Italic and Underline beside Alignment, List, then the text and highlight colour strips beside a sample of the words on their paper. Bold, Italic and Underline also stand in the arrange bar where it has room, and ⌘B, ⌘I and ⌘U work either way. While selected a text box has two handles: the round one at its lower left scales the type, the pill on its right edge changes the width.
-- **Links** are an index tab: a Mustard square with an ink arrow, then the page's name in semibold on label cream, with a white die-cut edge. A link to another notebook has a sage square with a small book, and a web link a sky-blue square with an arrow leaving the page; a link whose page or notebook was deleted has a grey square. After following one, a floating "Back to Page N" (or "Back to" the notebook it came from) sits where the arrange bar would.
-- **The second screen** shows only the page on black, and the laser drawn larger so it reads from across a room. The presenter's bar on the iPad gains a small screen symbol while it is in use.
-- **Focus mode** leaves one control: a 44 pt round board at the top right to come back.
-- **The laser** is red `#FF3B2F` or green `#22D36B` with a white core and a glow, and a tail that fades over 0.9 s.
-
-## Flashcards and the study guide
-
-- **Index cards.** A flashcard is a cream index card (`CardPaper`): LabelCream stock, a red head rule (`#C9452F` at 75%), faint ruling (LabelInk at 7%, dropped with Increase Contrast) and a LabelInk edge at 18%. Like covers and stickers it is content, so it stays cream at night. The side's name is small caps at the head, with the notebook's name opposite; typed words are Fraunces, centred.
-- **Clippings.** A piece cut from a page keeps its own paper and sits on the card under a strip of washi tape drawn by `TapeArt`: mustard on the question, sage on the answer. A tape card's answer leaves the lifted strip's dashed outline where the tape was, so the eye goes to what was hidden.
-- **Studying** is the desk with nothing else on it: one card on a small pile (up to two leaves under it, turned a degree or two), a round board to close and one for the card's options, "Card 3 of 12" in small caps over a well that fills with cloth. Under the card, Show Answer is cloth; then Again and Easy are boards either side of a cloth Good, each with when the card comes back written beneath. The card swings edge-on, changes side and swings back; with Reduce Motion the sides cross-fade.
-- **Nothing left** shows three fanned cards with a check mark, "All caught up." in Fraunces and the day the next cards return.
-- **The desk card** in the library is the Today card's sibling: two tilted miniature cards, "Flashcards" in small caps, "12 cards to review", and an arrow in an accent disc that becomes a check mark when nothing is due.
-- **The deck sheet** leads with the count in Fraunces over small-caps "3 due today" and a cloth Study button; cards are plain rows with a miniature card, never boards. With none, the fanned cards sit over "No flashcards yet."
-- **The study guide** is a Surface sheet with Summary and Practice Questions tabs. The summary is written on a leaf (Paper fill, Hairline edge): small caps for where it came from, "Key Points" in Fraunces, numbered points with accent numerals, and a footnote with a lock saying it was written on the iPad. Each practice question is a small index card whose answer appears beside a red rule when asked for. The finishing action is cloth: Add to Page, or Save as Flashcards.
-
-## Widgets
-
-- Paper ground and Ink text in the app's light and dark values; headings in the system serif (the app's fonts aren't bundled in the extension), metadata in small caps.
-- **Continue Writing** shows the cover exactly as the shelf draws it (the app renders it), the title, "Page 3 of 12" and, in the medium size, the week strip. The title and cover are private: on a locked iPad the title becomes a bar and the cover a blank board.
-- **This Week** is the page count for the week over seven leaves, filled on the days written, with today's initial in heavy type. A run of days is mentioned only from two days up, and never as a streak to keep.
-- **Today's Page** is a tear-off calendar leaf: weekday, a large day number, the month, and whether today's page in the journal has been written, which it knows with Writing History off.
-- **Quick Note** is the pencil-on-square symbol in the accent colour over its name, and the bare symbol on the Lock Screen. The Control Center buttons use the same symbol, and a calendar for Today's Page.
+- Continue writing (`OpenBookSpread`) leads the library: the last notebook lying open. Below it, `ShelfMetrics.fit` picks columns for about 176 pt a cover (136 to 232), so there's never a gutter, and each row stands on a `ShelfLedge`.
+- Search matches are bold on a highlighter band: mustard at night, ochre `#806113` under LabelCream by day, because Apple's audit reads a pale band as faint text.
+- The tool tray (`ToolTray`) is one 48 pt board at the foot of the editor, over the desk, so it takes nothing from the page. Pens are labels with the ink as a blot: paper by day, wells at night with a lighter rim round the blot. The pen roll (`PenRoll`) and the ink dish (`InkDish`) draw ink the same way.
+- Floating bars (arrange, link back, presenter, replay) are boards with `Radius.bar` corners and a compact cloth Done. They grow with the text.
+- Washes always have an edge: selected text (accent), find matches and the transcript's current line (mustard). The current find match also gets an Ink outline.
+- Stickers (`Sticker`) are pastel paper with a deeper edge and a shadow of layered tints, not blurs, so they stay vector in a PDF. Study tape (`TapeArt`) is opaque washi; lifted, it leaves a dashed outline.
+- Flashcards are cream index cards (`CardPaper`). In study, Show Answer and Good are cloth; Again and Easy are boards.
+- Widgets use Paper and Ink, the system serif and small caps. This Week never frames a run of days as a streak to keep.
 
 ## App icon
 
-The Home Screen icon is the OwlLuna owl: a brown owl in round black glasses perched on a crescent moon, a spiral pad under its left wing and a pencil in its right, with a sparkle above and an asterisk star below. It's drawn in code by `Shared/OwlLunaArt.swift` (Foundation and Core Graphics only, compiled into the app, the widget extension and the icon script), so the icon, its alternates, the Settings previews and the mark in Settings › About come from one source. `Scripts/AppIcon` renders it with ImageIO and sets the review sheet's labels with Core Text; no UIKit or AppKit.
+A brown owl in round glasses on a crescent moon, with a pad and a pencil. `Shared/OwlLunaArt.swift` draws it without UIKit or AppKit, as layers in draw order (`OwlLunaLayer`), so the icons, the Settings previews and the About mark share one source.
 
-- **Composition, at 1024 px.** The moon is a crescent of radius 395 about (512, 506) with a 300 px circle about (590, 416) cut out of it, a 30 px highlight band along its outer edge and a 26 px shade band along the inner. The owl is laid out around (480, 580) and drawn 10% larger, so the glasses still read at 40 px. The sparkle sits at (772, 262) and the asterisk at (165, 845). The pencil leans 28° from the grip at the right wing's tip, with the wood and graphite of its point showing past the wing; at 58 px it still shows pink, orange and a dark tip. The feet are three capsule toes each, in front of the body's lower edge. The parts are listed in draw order (`OwlLunaLayer`).
-- **Six skies.** Settings › App Icon offers Cobalt (the primary icon, violet `#4F2DD3` to `#3E20B5`), Tomato, Moss, Oxblood and Mustard, each a two-stop gradient in its cloth colour with the moon and stars warmed to suit, and Print: riso paper stock `#F7F4EC` under a riso-blue halftone, a riso-yellow moon and a pink star. The owl is the same in all six.
-  - The alternates are listed in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`, which puts them in the generated Info.plist; `AppIconTests` checks that they arrive there.
-  - The tiles are 60 pt previews (`IconPreview-*`, light and dark) with the stitched selection and a check mark. They wrap onto more rows as text grows. iPadOS confirms the change itself.
-- **Light.** The sky, a halo disc round the moon (the highlight colour at 14%) and two soft glows under the crescent (blur 46 and 22 px), then the owl. The glow stays 80 px inside the edge, so the Home Screen's mask never cuts it; Print has none. The primary PNG has no alpha channel.
-- **Dark.** The same owl, moon and glow on a transparent background, for the system's dark backdrop. With no sky, the six dark icons differ only in the tints of their moon and stars.
-- **Tinted.** Greyscale on transparent, by luminance, except that the moon drops to mid-grey (0.72, highlight 0.80, shade 0.60) and the stars (0.92), pad (0.95), belly (0.88) and face (0.82) lift, so the owl stands off the moon and the crescent stands off the system's wash.
-- **Regenerating.** Run `swiftc -O Scripts/AppIcon/*.swift Shared/OwlLunaArt.swift -o .build/make-icon && .build/make-icon OwlLuna/Assets.xcassets docs`. It rewrites every icon set, the previews and `docs/icon-sheet.png`, a review sheet with each theme in light, dark and tinted and the light icon at 152, 120, 80, 58 and 40 px. The output is deterministic and committed.
+- Six skies in Settings › App Icon: Cobalt (the primary, violet `#4F2DD3` to `#3E20B5`), Tomato, Moss, Oxblood, Mustard and Print. The alternates are in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`, checked by `AppIconTests`. The picker uses `IconPreview-*` tiles.
+- Light has the sky and a glow kept 80 px inside the edge, and no alpha. Dark is the same art on transparent. Tinted is greyscale with the moon dropped to mid-grey, so the owl stands off it.
+- To redraw: `swiftc -O Scripts/AppIcon/*.swift Shared/OwlLunaArt.swift -o .build/make-icon && .build/make-icon OwlLuna/Assets.xcassets docs`. It rewrites every icon set, the previews and `docs/icon-sheet.png`. The output is deterministic and committed.
+- `OwlLunaMark` (`Design/OwlLunaMark.swift`) is the icon as a SwiftUI tile for Settings › About, built from `OwlLunaArt.parts` (`OwlLunaMarkGroups`). Violet by day, midnight navy-violet (`#1E1449` to `#140D33`) at night.
 
-### Launch
+## Launch
 
-- **The splash.** `BentoSplash` (`Launch/BentoSplash.swift`) fills the window with seven flat tiles on Paper, each outlined in ink (0.42% of the window's shorter side, corners 1.1%, gutters 1.8%) on a twelve-column grid: the owl on its perch with a pad and a pencil (moon yellow `#F4DE3C`), a ruled note page (Board), a crescent moon (ink), three index cards under a STUDY stamp (yellow), VOL. 01 (Board), a ticker of WRITE, SKETCH and STUDY (Tomato), and the wordmark on an ink slab, OWL in paper and LUNA in yellow. A window wider than tall has twelve rows, with the owl and the page over the slab; a taller one has fourteen, with the owl across the top; one at least twice as wide as tall stands the owl down its left side. The grid starts under the status bar. The tiles are printed matter, like covers and index cards, so they keep their colours at night: only the Paper under them and their outline, ink by day and cream at night, change.
-- **The words.** NOTEBOOK, NOTES, P. 12, VOL., WRITE, SKETCH and STUDY are in the string catalog, in capitals (`BentoWords`), so the labels, the ticker, the stamp and the checklist follow the reader's language; the wordmark and the 01 do not. The ticker and the stamp are Archivo outlines: a word with a letter Archivo lacks gives way to its English, a long word on the stamp is set smaller rather than squeezed by more than a quarter, and the ticker runs at one pace whatever the words' length. The checklist is printed by `NoteHand` (`Launch/BentoNoteTile.swift`): pen strokes for A to Z, the marks a capital may carry (grave, acute, circumflex, tilde, diaeresis, cedilla), the hyphen and the apostrophe, each letter leaning nine degrees and standing a little off its neighbours' line. The three words share one size, the largest that ends the longest before the star and keeps the tallest clear of the rule above, and the highlighter follows the third. A word the hand cannot print gives way to its row's English one.
-- **The choreography.** Every value is a pure function of one clock in milliseconds (`SplashClock`, `SplashBeat` and `SplashTrack` in `Launch/SplashTimeline.swift`), and each tile draws itself in a `Canvas`, again only when its own moment has changed; SwiftUI animates nothing.
-  - From 30 ms the tiles spring in from their nearest edges, 55 to 60 ms apart, each tilted, each passing its place and locking (0.9 s, damping 0.56 to 0.64). VOL. 01 is stuck on last, at 0.56 s.
-  - The owl: the perch draws and the pale disc pops (0.33 s), the owl hops up (0.47 s), swings its pencil down (0.8 s), writes a line on its pad (1.04 to 1.56 s), then looks up and tilts its head.
-  - The wordmark's letters rise out of a clipped line 55 ms apart, from 0.59 s, over a rule that grows from the left; the digits of 01 rise the same way.
-  - The page rules itself; then the checklist's three words are printed by hand, two are ticked in red, a star and a row of moon phases are drawn and the third word is highlighted (0.84 to 1.7 s).
-  - The moon rises and rocks and its stars pop; the cards fan up and the stamp lands on them (1.34 s).
-  - By 1.7 s the tiles' scenes have played, but for the owl's head, which settles by 2.16 s. After that only the loops run: the ticker, the moon, the twinkling stars, the stamp's wobble and a blink every 2.6 s.
-- **The hand-over.** From 2.15 s, once the library is ready, the paper under the tiles is exchanged for a paper plate under each one, the library appears beneath a little large (1.05) and settles over 0.5 s, and the tiles peel off one after another, 26 ms apart, the wordmark first and the moon last, each to its nearest edge with its tilt (0.27 to 0.32 s). Once the tiles have all landed, the library is only ever seen where a tile has left. If the library isn't ready the splash holds, its loops running, until it is. Nothing is shown from under the splash (`LaunchCurtain`): a link or a shortcut that arrives while it plays sends the tiles off as soon as the library is ready, and is carried out when the last has gone. Sent off before they have all landed, the tiles stop coming and leave from where they are, those not yet in never come, and the library is seen at once wherever no tile is; if none has come into view yet (the first 60 ms) the splash is simply over. `LaunchOverlay` (`App/LaunchOverlay.swift`) moves the clock on frame by frame and by no more than 50 ms a frame, so a busy main thread at start-up holds the splash up rather than skipping it ahead. The overlay takes no touches and is one VoiceOver element, "OwlLuna", an image; the library beneath is hidden from VoiceOver until the hand-over begins.
-- **Reduce Motion.** The splash is a still of its finished scene, as at 2.16 s: it fades in (0.25 s), holds until the library is ready and, unless something is waiting to be shown, until 1.45 s, and fades out (0.35 s) as the library fades in. Nothing moves.
-- **When it plays.** `LaunchAnimation.isEnabled`: the first scene of the process only, never under tests, and not with `-storageRoot` or `-skipLaunchAnimation`. A second window, and every UI test, starts with the library as it is. So does a launch that is about to show something of its own: a window that had a notebook open goes straight back to it, and one opened by a link, a search result or a shortcut goes straight to what was asked for, in place of the notebook it had. In Debug builds `-splashFreeze <ms>` holds the splash at one moment of its run, for screenshots.
-- **The mark.** `OwlLunaMark` (`Design/OwlLunaMark.swift`) is the icon as a SwiftUI tile: a continuous 22.5%-corner gradient of the sky, then one `Canvas` for each group of parts (the moon with its halo and glow, each star, the owl, the eyes, the glasses, beak and pad, the pencil), converted once per palette from `OwlLunaArt.parts` (`OwlLunaMarkGroups.launchLight` and `launchDark`). By day it wears the primary icon's violet sky, at night a midnight navy-violet (`#1E1449` to `#140D33`). Settings › About shows it at 72 pt.
+`BentoSplash` (`Launch/BentoSplash.swift`) fills the window with seven flat, ink-outlined tiles on Paper, on a twelve-column grid under the status bar:
+
+- the owl on its perch with a pad and pencil, on moon yellow `#F4DE3C`
+- a ruled note page, on Board
+- a crescent moon, on ink
+- three index cards under a STUDY stamp, on yellow
+- VOL. 01, on Board
+- a ticker of WRITE, SKETCH and STUDY, on Tomato
+- the wordmark on an ink slab, OWL in paper and LUNA in yellow.
+
+A landscape window has twelve rows, a portrait one fourteen with the owl across the top, and one twice as wide as tall stands the owl down its left side. At night only the Paper under the tiles and their outline (cream) change.
+
+The labels, ticker and stamp words are localised capitals (`BentoWords`); the wordmark and 01 are not. A word with a letter Archivo lacks falls back to its English, and a long stamp word is set smaller rather than squeezed past a quarter. The checklist is hand-printed by `NoteHand` (`Launch/BentoNoteTile.swift`), A to Z with the common accents, each letter leaning nine degrees.
+
+### Choreography
+
+Every value is a pure function of one millisecond clock (`SplashClock`, `SplashBeat`, `SplashTrack` in `Launch/SplashTimeline.swift`). Each tile draws itself in a `Canvas`, only when its own moment changes. SwiftUI animates nothing.
+
+- From 30 ms the tiles spring in from their nearest edges, 55 to 60 ms apart, tilted, overshooting and locking (0.9 s, damping 0.56 to 0.64). VOL. 01 is stuck on last, at 0.56 s.
+- The owl: the perch draws and the pale disc pops (0.33 s), it hops up (0.47 s), swings its pencil down (0.8 s), writes a line (1.04 to 1.56 s), then looks up and tilts its head.
+- The wordmark's letters rise out of a clipped line 55 ms apart from 0.59 s, over a rule growing from the left. The digits of 01 rise the same way.
+- The page rules itself, the checklist is printed, two words are ticked in red, a star and moon phases are drawn and the third word highlighted (0.84 to 1.7 s).
+- The moon rises and rocks, its stars pop, the cards fan up and the stamp lands (1.34 s).
+- By 1.7 s the scenes have played, except the owl's head, which settles by 2.16 s. Then only loops run: ticker, moon, twinkling stars, the stamp's wobble, a blink every 2.6 s.
+
+### Hand-over
+
+From 2.15 s, once the library is ready, each tile gets a paper plate under it, the library appears beneath at 1.05 scale and settles over 0.5 s, and the tiles peel off 26 ms apart, wordmark first and moon last, each to its nearest edge (0.27 to 0.32 s). If the library isn't ready, the splash holds with its loops running.
+
+`LaunchOverlay` (`App/LaunchOverlay.swift`) moves the clock on by at most 50 ms a frame, so a busy main thread holds the splash rather than skipping it. It takes no touches and is one VoiceOver image, "OwlLuna"; the library stays hidden from VoiceOver until the hand-over.
+
+Nothing is shown from under the splash (`LaunchCurtain`). A link or shortcut that arrives mid-splash sends the tiles off once the library is ready, and runs when the last has gone. Tiles sent off early leave from where they are, ones not yet in never come, and in the first 60 ms the splash just ends.
+
+With Reduce Motion the splash is a still of its finished scene. It fades in over 0.25 s, holds until the library is ready (and for 1.45 s, unless something is waiting), and fades out over 0.35 s as the library fades in.
+
+`LaunchAnimation.isEnabled` allows the first scene of the process only: never under tests, and not with `-storageRoot` or `-skipLaunchAnimation`. A launch that is about to show something (a notebook left open, a link, a search result, a shortcut) skips the splash too. In Debug, `-splashFreeze <ms>` holds the splash at one moment, for screenshots.

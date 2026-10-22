@@ -20,10 +20,16 @@ enum ActivityStats {
     }
 
     static func totals(in interval: DateInterval, log: ActivityLog, calendar: Calendar) -> (pages: Int, days: Int) {
+        let inside = keyFilter(interval, calendar: calendar)
+        let pages = log.days.filter { inside($0.key) }.map(\.value.pageCount).filter { $0 > 0 }
+        return (pages.reduce(0, +), pages.count)
+    }
+
+    /// Whether a day key falls in `interval`: from its first day up to, not including, the day it ends on.
+    private static func keyFilter(_ interval: DateInterval, calendar: Calendar) -> (String) -> Bool {
         let start = ActivityFile.dayKey(for: interval.start, calendar: calendar)
         let end = ActivityFile.dayKey(for: interval.end, calendar: calendar)
-        let pages = log.days.filter { $0.key >= start && $0.key < end }.map(\.value.pageCount).filter { $0 > 0 }
-        return (pages.reduce(0, +), pages.count)
+        return { $0 >= start && $0 < end }
     }
 
     static func yearTotals(year: Int, in log: ActivityLog, calendar: Calendar) -> (pages: Int, days: Int) {
@@ -34,9 +40,9 @@ enum ActivityStats {
 
     /// The most consecutive days with writing, optionally only counting days inside `interval`.
     static func longestRun(in log: ActivityLog, calendar: Calendar, within interval: DateInterval? = nil) -> Int {
-        let bounds = interval.map { (ActivityFile.dayKey(for: $0.start, calendar: calendar), ActivityFile.dayKey(for: $0.end, calendar: calendar)) }
+        let inside = interval.map { keyFilter($0, calendar: calendar) }
         let written = Set(log.days.filter { key, day in
-            day.pageCount > 0 && bounds.map { key >= $0.0 && key < $0.1 } ?? true
+            day.pageCount > 0 && inside.map { $0(key) } ?? true
         }.keys)
         func next(_ key: String, by days: Int) -> String? {
             ActivityFile.date(forKey: key, calendar: calendar)

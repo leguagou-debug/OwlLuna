@@ -36,7 +36,7 @@ struct LibraryRootView: View {
     /// What sync is waiting to be told, shown once the library is in front.
     @State private var syncQuestion: SyncCenter.Question?
     @State private var window = EditorWindow()
-    @SceneStorage("owlluna.openNotebook") private var restoredNotebook = ""
+    @SceneStorage(WindowMemory.openNotebookKey) private var restoredNotebook = ""
     @SceneStorage("owlluna.besideNotebook") private var restoredBeside = ""
     @Namespace private var zoom
     @State private var sidebar = SidebarControl()
@@ -47,10 +47,7 @@ struct LibraryRootView: View {
     /// With Reduce Motion the editor cross-fades in over the library instead of zooming out of the cover.
     private var usesZoom: Bool { !reduceMotion }
 
-    private var folder: FolderRecord? {
-        if case .folder(let id) = scope { return folders.first { $0.id == id } }
-        return nil
-    }
+    private var folder: FolderRecord? { scope?.folder(in: folders) }
 
     var body: some View {
         ZStack {
@@ -62,8 +59,7 @@ struct LibraryRootView: View {
                               onOpenPage: { openNotebook($0.id, pageID: $1) },
                               onOpenZoomed: { openNotebook($0.id, pageID: $1, zoomSource: $2) }, onCreate: { creating = true },
                               onQuickNote: quickNote, onWhiteboard: newWhiteboard, isCovered: open != nil || creating || showingSettings)
-                        .modifier(BoardSidebarToggle(shows: sizeClass == .regular && !sidebarBeside, title: "Show Sidebar",
-                                                     placement: .topBarLeading) { sidebar.toggle() })
+                        .modifier(BoardSidebarToggle(shows: sizeClass == .regular && !sidebarBeside) { sidebar.toggle() })
                 }
                 .background(SidebarAnchor(control: sidebar))
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
@@ -87,7 +83,7 @@ struct LibraryRootView: View {
         .fullScreenCover(item: Binding(get: { usesZoom ? open : nil }, set: { open = $0 })) { item in
             EditorPanes(primary: item, sceneID: sceneID) { open = nil }
                 .environment(window)
-                .zoomTransition(id: item.zoomSource, in: zoom)
+                .navigationTransition(.zoom(sourceID: item.zoomSource, in: zoom))
                 // A sideways finger drag on the page would otherwise pull the editor shut without its save-and-close.
                 .interactiveDismissDisabled()
         }
@@ -101,10 +97,7 @@ struct LibraryRootView: View {
             OwlLunaSettingsView()
                 .presentationCornerRadius(Radius.sheet)
         }
-        .notice("The note couldn't be created", isPresented: Binding(get: { quickNoteError != nil }, set: { if !$0 { quickNoteError = nil } }),
-                message: Text(quickNoteError ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("The note couldn't be created", message: $quickNoteError)
         .onChange(of: app.sync.question, initial: true) { _, question in syncQuestion = question }
         .notice(Text(SyncQuestion.title(syncQuestion ?? .firstSync)),
                 // Taken down because something came in front of the library, the question still stands for when it is back.
@@ -122,20 +115,16 @@ struct LibraryRootView: View {
         .keyboardShortcut(for: { creating = true }, enabled: libraryInFront)
         .background {
             if libraryInFront {
-                Button("Quick Note", action: quickNote)
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                    .hidden()
-                    .accessibilityHidden(true)
-                Button("Today's Page", action: openToday)
-                    .keyboardShortcut("t", modifiers: .command)
-                    .hidden()
-                    .accessibilityHidden(true)
-                if #available(iOS 26, *), sizeClass == .regular {
-                    Button(sidebarBeside ? "Hide Sidebar" : "Show Sidebar") { sidebar.toggle() }
-                        .keyboardShortcut("s", modifiers: [.command, .control])
-                        .hidden()
-                        .accessibilityHidden(true)
+                Group {
+                    Button("Quick Note", action: quickNote).keyboardShortcut("n", modifiers: [.command, .shift])
+                    Button("Today's Page", action: openToday).keyboardShortcut("t", modifiers: .command)
+                    if #available(iOS 26, *), sizeClass == .regular {
+                        Button(sidebarBeside ? "Hide Sidebar" : "Show Sidebar") { sidebar.toggle() }
+                            .keyboardShortcut("s", modifiers: [.command, .control])
+                    }
                 }
+                .hidden()
+                .accessibilityHidden(true)
             }
         }
         .onChange(of: open) {
@@ -219,8 +208,7 @@ struct LibraryRootView: View {
             var page: UUID?
             switch action {
             case .today:
-                id = try await store.journalForToday()
-                page = await store.prepareTodayPage(id)
+                (id, page) = try await todayPage()
             case .quickNote:
                 id = try await store.createQuickNote(folder: nil)
             case .continueWriting:
@@ -259,13 +247,18 @@ struct LibraryRootView: View {
         Task {
             defer { openingToday = false }
             do {
-                let id = try await store.journalForToday()
-                let page = await store.prepareTodayPage(id)
+                let (id, page) = try await todayPage()
                 openNotebook(id, pageID: page, zoomSource: scope == .all ? "today-\(id.uuidString)" : nil)
             } catch {
                 quickNoteError = error.localizedDescription
             }
         }
+    }
+
+    /// The daily journal, started first if there isn't one, and today's page in it.
+    private func todayPage() async throws -> (id: UUID, page: UUID?) {
+        let id = try await store.journalForToday()
+        return (id, await store.prepareTodayPage(id))
     }
 
     private func rememberWindow() {
@@ -335,7 +328,7 @@ struct LibraryRootView: View {
         guard let record = store.record(id), record.isLocked, !NotebookLock.shared.isUnlocked(id), NotebookLock.shared.isAvailable else {
             return show(notebook)
         }
-        let title = record.title.isEmpty ? String(localized: "Untitled") : record.title
+        let title = record.title.orUntitled
         Task {
             guard await NotebookLock.shared.unlock(id, title: title), open == nil else { return }
             show(notebook)
@@ -351,10 +344,6 @@ struct LibraryRootView: View {
 }
 
 extension View {
-    func zoomTransition(id: String, in namespace: Namespace.ID) -> some View {
-        navigationTransition(.zoom(sourceID: id, in: namespace))
-    }
-
     /// ⌘N: new notebook, from anywhere in the library. Off while an editor is open, which has its own ⌘N.
     func keyboardShortcut(for newNotebook: @escaping () -> Void, enabled: Bool) -> some View {
         background {
@@ -368,137 +357,3 @@ extension View {
     }
 }
 
-/// Reports the window scene's persistent identifier, which keys the one-editor-per-notebook rule.
-/// What each window has open, kept the moment it changes. iPadOS saves a window's own state only on the way to
-/// the background, so an app stopped straight after would otherwise reopen with what was open before.
-enum WindowMemory {
-    private static let key = "owlluna.windowNotebooks"
-    private static let restoringKey = "owlluna.windowsRestoring"
-
-    private static var all: [String: [String]] {
-        get { UserDefaults.standard.dictionary(forKey: key) as? [String: [String]] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: key) }
-    }
-
-    private static var restoring: [String] {
-        get { UserDefaults.standard.stringArray(forKey: restoringKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: restoringKey) }
-    }
-
-    /// The notebook on show, the one beside it, then the tabs in their order when there are several.
-    static func remember(_ notebook: UUID?, beside: UUID?, tabs: [UUID] = [], in scene: String) {
-        all[scene] = [notebook?.uuidString ?? "", notebook == nil ? "" : beside?.uuidString ?? ""] + tabs.map(\.uuidString)
-    }
-
-    /// Nil when the window has nothing kept here yet; a notebook of nil when it had none open.
-    static func remembered(in scene: String) -> (notebook: UUID?, beside: UUID?, tabs: [UUID])? {
-        all[scene].map { kept in
-            (UUID(uuidString: kept.first ?? ""), UUID(uuidString: kept.dropFirst().first ?? ""), kept.dropFirst(2).compactMap(UUID.init(uuidString:)))
-        }
-    }
-
-    /// Whether a window would reopen a notebook: what is kept here, or `fallback`, the scene's own note of it, when nothing is kept yet.
-    static func reopens(in scene: String, fallback: String = "") -> Bool {
-        if let kept = remembered(in: scene) { return kept.notebook != nil }
-        return UUID(uuidString: fallback) != nil
-    }
-
-    /// Marks a window while it reopens what it had: a mark still there at the next launch means the reopening crashed.
-    static func setRestoring(_ isRestoring: Bool, in scene: String) {
-        restoring = restoring.filter { $0 != scene } + (isRestoring ? [scene] : [])
-    }
-
-    /// True once for a window whose last reopening crashed, which lets go of what it had open.
-    static func restoreCrashed(in scene: String) -> Bool {
-        guard restoring.contains(scene) else { return false }
-        setRestoring(false, in: scene)
-        remember(nil, beside: nil, in: scene)
-        return true
-    }
-
-    /// Lets go of windows iPadOS no longer keeps.
-    static func keep(only scenes: Set<String>) {
-        let kept = all.filter { scenes.contains($0.key) }
-        if kept.count != all.count { all = kept }
-        let marked = restoring.filter(scenes.contains)
-        if marked.count != restoring.count { restoring = marked }
-    }
-}
-
-struct SceneReader: UIViewRepresentable {
-    let onChange: (String?) -> Void
-
-    func makeUIView(context: Context) -> SceneReaderView {
-        let view = SceneReaderView()
-        view.onChange = onChange
-        return view
-    }
-
-    func updateUIView(_ view: SceneReaderView, context: Context) {}
-
-    final class SceneReaderView: UIView {
-        var onChange: ((String?) -> Void)?
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            onChange?(window?.windowScene?.session.persistentIdentifier)
-        }
-    }
-}
-
-extension Notification.Name {
-    /// Asks the editor showing a notebook (object: its ID) to go to a page (userInfo "page": the page ID).
-    static let owlLunaShowPage = Notification.Name("OwlLunaShowPage")
-}
-
-/// Shows and hides the sidebar the way the system's button does: over the shelves in portrait, beside them in landscape.
-@MainActor
-final class SidebarControl {
-    weak var anchor: UIView?
-
-    func toggle() {
-        var responder: UIResponder? = anchor
-        while let current = responder, !(current is UISplitViewController) { responder = current.next }
-        guard let split = responder as? UISplitViewController, !split.isCollapsed else { return }
-        if split.displayMode == .secondaryOnly { split.show(.primary) } else { split.hide(.primary) }
-    }
-}
-
-private struct SidebarAnchor: UIViewRepresentable {
-    let control: SidebarControl
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.isUserInteractionEnabled = false
-        control.anchor = view
-        return view
-    }
-
-    func updateUIView(_ view: UIView, context: Context) { control.anchor = view }
-}
-
-/// On iPadOS 26 and later the system's sidebar button is a glass bubble; this puts a plate in its place.
-private struct BoardSidebarToggle: ViewModifier {
-    let shows: Bool
-    let title: LocalizedStringKey
-    let placement: ToolbarItemPlacement
-    let action: () -> Void
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content
-                .toolbar(removing: .sidebarToggle)
-                .toolbar {
-                    if shows {
-                        ToolbarItem(placement: placement) {
-                            Button(action: action) { Label(title, systemImage: "sidebar.leading") }
-                                .buttonStyle(.plateIcon)
-                                .accessibilityIdentifier("ToggleSidebar")
-                        }
-                        .boardBackground()
-                    }
-                }
-        } else {
-            content
-        }
-    }
-}

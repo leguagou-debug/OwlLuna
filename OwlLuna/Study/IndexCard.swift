@@ -52,9 +52,7 @@ struct CardFace: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(isAnswer ? "Answer" : "Question")
-                    .font(.footnote.weight(.bold).smallCaps())
-                    .tracking(0.8)
-                    .foregroundStyle(Color.labelInk)
+                    .eyebrowStyle(Color.labelInk)
                 Spacer(minLength: Space.x3)
                 if let source {
                     Text(source)

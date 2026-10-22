@@ -16,9 +16,7 @@ enum DocumentScan {
         guard image.size.width > 0, image.size.height > 0 else { throw ImportError.unreadable }
         let scale = min(1, 2400 / max(image.size.width * image.scale, image.size.height * image.scale))
         let target = CGSize(width: (image.size.width * image.scale * scale).rounded(), height: (image.size.height * image.scale * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: 1, opaque: true)
         let jpeg = UIGraphicsImageRenderer(size: target, format: format).jpegData(withCompressionQuality: 0.82) { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
@@ -49,8 +47,7 @@ enum DocumentScan {
     static func samples() -> [UIImage] {
         [("QUARTERLY REPORT", ["Revenue grew in the north.", "Costs held steady."]), ("MEETING AGENDA", ["Budget review", "Hiring plan"])].map { title, lines in
             let size = CGSize(width: 1240, height: 1754)
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
+            let format = UIGraphicsImageRendererFormat(scale: 1)
             return UIGraphicsImageRenderer(size: size, format: format).image { context in
                 UIColor(white: 0.97, alpha: 1).setFill()
                 context.fill(CGRect(origin: .zero, size: size))

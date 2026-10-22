@@ -190,9 +190,7 @@ extension EditorSession {
         var page = document.newPage(after: index, template: template)
         page.paperColor = color
         if let size { page.size = size.points }
-        let position = min(max(index + 1, 0), document.pages.count)
-        document.insertPages([page], at: position)
-        go(to: position)
+        insert([page], at: index + 1)
     }
 
     /// Inserts a page on the user's own paper after `index` and makes it current. A picture takes the width of `size`.
@@ -200,9 +198,7 @@ extension EditorSession {
         guard !document.isReadOnly else { return }
         let kept = try await document.keepCopy(of: paper)
         let page = kept.page(size: paper.newPageSize(width: size?.points.width ?? document.newPage(after: index).size.width))
-        let position = min(max(index + 1, 0), document.pages.count)
-        document.insertPages([page], at: position)
-        go(to: position)
+        insert([page], at: index + 1)
     }
 
     func setPaper(_ paper: CustomPaper, forPage pageID: UUID) async throws {
@@ -236,6 +232,11 @@ struct PaperGallery: View {
 
     private var tileWidth: CGFloat { compact ? 64 : 80 }
 
+    /// The grid the miniatures are laid in, the user's own paper's as well.
+    fileprivate static func columns(tileWidth: CGFloat) -> [GridItem] {
+        [GridItem(.adaptive(minimum: tileWidth + Space.x3), spacing: Space.x3, alignment: .top)]
+    }
+
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
@@ -264,8 +265,7 @@ struct PaperGallery: View {
             ForEach(families) { family in
                 VStack(alignment: .leading, spacing: Space.x3) {
                     header(family)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: tileWidth + Space.x3), spacing: Space.x3, alignment: .top)],
-                              alignment: .leading, spacing: Space.x5) {
+                    LazyVGrid(columns: Self.columns(tileWidth: tileWidth), alignment: .leading, spacing: Space.x5) {
                         ForEach(templates(in: family)) { tile($0).id($0) }
                     }
                 }
@@ -402,16 +402,13 @@ private struct OwnPaperSection: View {
                 guard let item else { return }
                 Task { await add(item) }
             }
-            .notice("Rename Paper", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            .notice("Rename Paper", isPresented: Binding(isPresent: $renaming)) {
                 TextField("Name", text: $newName)
             } actions: {
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { if let renaming { rename(renaming, to: newName) } }
             }
-            .notice("Something went wrong", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                    message: Text(failure ?? "")) {
-                Button("OK", role: .cancel) {}
-            }
+            .notice("Something went wrong", message: $failure)
     }
 
     @ViewBuilder
@@ -420,8 +417,7 @@ private struct OwnPaperSection: View {
         case .grid:
             VStack(alignment: .leading, spacing: Space.x3) {
                 header
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: tileWidth + Space.x3), spacing: Space.x3, alignment: .top)],
-                          alignment: .leading, spacing: Space.x5) {
+                LazyVGrid(columns: PaperGallery.columns(tileWidth: tileWidth), alignment: .leading, spacing: Space.x5) {
                     tile { addButton } name: { addName }
                     ForEach(papers) { paper in tile { button(paper) } name: { name(paper) }.id(paper.id) }
                 }
@@ -705,24 +701,25 @@ enum PaperPreviewCache {
     static func cached(_ key: String) -> UIImage? { images.value(key) { nil }?.image }
 
     static func image(of paper: CustomPaper, width: CGFloat = 120, scale: CGFloat) async -> UIImage {
-        let key = key(paper: paper, width: width, scale: scale)
-        if let hit = cached(key) { return hit }
-        let image = await Task.detached(priority: .userInitiated) {
+        await rendered(key(paper: paper, width: width, scale: scale)) {
             PageRenderer.image(of: paper.preview, ink: PKDrawing(), assets: paper.url.deletingLastPathComponent(), width: width, scale: scale)
-        }.value
-        return images.value(key) { PageThumbnailer.SharedUIImage(image: image) }?.image ?? image
+        }
     }
 
     static func image(template: PaperTemplate, color: PaperColor, size: CGSize, width: CGFloat = 120, scale: CGFloat, board: Bool = false) async -> UIImage {
-        let key = key(template: template, color: color, size: size, width: width, scale: scale, board: board)
-        if let hit = cached(key) { return hit }
-        let image = await Task.detached(priority: .userInitiated) {
+        await rendered(key(template: template, color: color, size: size, width: width, scale: scale, board: board)) {
             // A whiteboard's miniature is a small piece of it, so its rules show at a size that can be told apart.
             let page = board ? Whiteboard.piece(of: .board(template: template, color: color),
                                                 in: CGRect(origin: Whiteboard.center, size: CGSize(width: 320, height: 320 * size.height / max(size.width, 1))))
                              : NotebookPage(background: .template(template), paperColor: color, size: size)
             return PageRenderer.image(of: page, ink: PKDrawing(), assets: FileManager.default.temporaryDirectory, width: width, scale: scale)
-        }.value
+        }
+    }
+
+    /// The image kept under `key`, drawn off the main thread by `render` the first time.
+    private static func rendered(_ key: String, render: @escaping @Sendable () -> UIImage) async -> UIImage {
+        if let hit = cached(key) { return hit }
+        let image = await Task.detached(priority: .userInitiated) { render() }.value
         return images.value(key) { PageThumbnailer.SharedUIImage(image: image) }?.image ?? image
     }
 }

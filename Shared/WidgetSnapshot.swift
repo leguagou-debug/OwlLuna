@@ -20,11 +20,12 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
 
     static let appGroup = appGroup(in: .main)
     static let coverFile = "widget-cover.png"
+    private static let snapshotFile = "widget.json"
 
     /// The App Group named in Config/Signing.xcconfig, which the build writes into Info.plist as `OwlLunaAppGroup`.
     static func appGroup(in bundle: Bundle) -> String? {
         guard let group = bundle.object(forInfoDictionaryKey: "OwlLunaAppGroup") as? String, !group.isEmpty, !group.contains("$(") else {
-            Logger(subsystem: "com.owais.OwlLuna", category: "widgets").fault("OwlLunaAppGroup is missing from \(bundle.bundleIdentifier ?? "this bundle", privacy: .public)'s Info.plist, so the app and its widgets share nothing")
+            Logger(category: "widgets").fault("OwlLunaAppGroup is missing from \(bundle.bundleIdentifier ?? "this bundle", privacy: .public)'s Info.plist, so the app and its widgets share nothing")
             return nil
         }
         return group
@@ -35,13 +36,13 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     }
 
     static func read(from directory: URL? = WidgetSnapshot.directory) -> WidgetSnapshot? {
-        guard let directory, let data = try? Data(contentsOf: directory.appending(path: "widget.json")) else { return nil }
+        guard let directory, let data = try? Data(contentsOf: directory.appending(path: snapshotFile)) else { return nil }
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
     }
 
     func write(to directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: directory.appending(path: "widget.json"), options: .atomic)
+        try JSONEncoder().encode(self).write(to: directory.appending(path: Self.snapshotFile), options: .atomic)
     }
 
     static func dayKey(for date: Date, calendar: Calendar = .current) -> String {

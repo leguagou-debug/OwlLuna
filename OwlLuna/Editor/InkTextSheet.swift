@@ -61,7 +61,7 @@ struct InkTextSheet: View {
                             } label: {
                                 Label("Replace Handwriting", systemImage: "character.textbox")
                             }
-                            .prominentButton()
+                            .buttonStyle(.owlLuna(.primary))
                             .accessibilityIdentifier("inktext.replace")
                         }
                         .disabled(isTranslating || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -83,10 +83,7 @@ struct InkTextSheet: View {
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
                 if phase == .ready, !languages.isEmpty {
                     ToolbarItem(placement: .primaryAction) { translateMenu }
                         .boardBackground()
@@ -111,10 +108,7 @@ struct InkTextSheet: View {
                 await finishTranslation(.failure(error))
             }
         }
-        .notice("Couldn't Translate", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                message: Text(failure ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("Couldn't Translate", message: $failure)
     }
 
     private var translateMenu: some View {

@@ -34,11 +34,7 @@ struct Transcript: Codable, Sendable, Equatable {
     /// What a shared transcript file holds: the lines Copy Transcript gives, each after when it was said if that is known.
     var fileText: String {
         guard untimed != true else { return text }
-        return lines.map { "[\(Self.clock($0.start))] \($0.text)" }.joined(separator: "\n")
-    }
-
-    static func clock(_ seconds: TimeInterval) -> String {
-        Duration.seconds(Int(seconds.rounded(.down))).formatted(.time(pattern: seconds >= 3600 ? .hourMinuteSecond : .minuteSecond))
+        return lines.map { "[\(RecordingStop.clock($0.start))] \($0.text)" }.joined(separator: "\n")
     }
 
     /// A new line begins after the end of a sentence, after a pause of a second, or after sixteen words.

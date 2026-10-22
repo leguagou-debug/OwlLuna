@@ -34,7 +34,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
     private var checksEverything = true
     private var changed: Set<UUID> = []
     private var pending: Task<Void, Never>?
-    private let log = Logger(subsystem: "com.owais.OwlLuna", category: "spotlight")
+    private let log = Logger(category: "spotlight")
 
     /// UI-test libraries never reach Spotlight.
     init(container: ModelContainer, isLive: Bool = !LaunchOptions.usesTestStorage) {
@@ -44,7 +44,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
         if self.isLive { CSSearchableIndex.default().indexDelegate = self }
     }
 
-    static var isEnabled: Bool { UserDefaults.standard.object(forKey: SettingsKey.spotlight) as? Bool ?? true }
+    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: SettingsKey.spotlight, default: true) }
 
     /// The words in a notebook were read again.
     func noteTextChanged(_ id: UUID) {
@@ -65,7 +65,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
 
     static func entries(_ records: [NotebookRecord]) -> [SpotlightEntry] {
         records.filter { !$0.isTrashed && !$0.isLocked }.map {
-            SpotlightEntry(id: $0.id, title: $0.title.isEmpty ? String(localized: "Untitled") : $0.title, pageCount: $0.pageCount,
+            SpotlightEntry(id: $0.id, title: $0.title.orUntitled, pageCount: $0.pageCount,
                            modifiedAt: $0.modifiedAt, coverKey: "\($0.coverStyleRaw)-\($0.clothRaw)-\($0.inksRaw)-\($0.coverSeed)-\($0.firstPageThumbKey ?? "")")
         }
     }
@@ -174,8 +174,7 @@ final class SpotlightIndexer: NSObject, CSSearchableIndexDelegate {
             let context = ModelContext(container)
             var result: [UUID: String] = [:]
             for id in ids {
-                let rows = try? context.fetch(FetchDescriptor<NotebookSearchText>(predicate: #Predicate { $0.notebookID == id }))
-                if let text = rows?.first?.text { result[id] = String(text.prefix(textLimit)) }
+                if let text = LibraryIndex.searchRow(for: id, in: context)?.text { result[id] = String(text.prefix(textLimit)) }
             }
             return result
         }.value

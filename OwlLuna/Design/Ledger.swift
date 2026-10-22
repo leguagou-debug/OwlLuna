@@ -49,12 +49,7 @@ struct Ledger<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if !header.isEmpty {
                 header
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.textSecondary)
-                    .padding(.horizontal, Space.x3)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.well)
+                    .sectionBand()
                     .accessibilityAddTraits(.isHeader)
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -63,7 +58,7 @@ struct Ledger<Content: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(flush ? EdgeInsets() : LedgerMetrics.inset)
                     .frame(minHeight: 44)
-                    .overlay(alignment: .top) { if index > 0 || !header.isEmpty { LedgerRule() } }
+                    .overlay(alignment: .top) { if index > 0 || !header.isEmpty { HairlineRule() } }
             }
         }
         .clipShape(RoundedRectangle.plate)
@@ -71,9 +66,22 @@ struct Ledger<Content: View>: View {
     }
 }
 
-private struct LedgerRule: View {
+/// A Hairline ruled between rows, in a ledger or a menu.
+struct HairlineRule: View {
     var body: some View {
         Rectangle().fill(Color.hairline).frame(height: 1).allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// The band over a named run of rows in a ledger or a menu: small semibold words on a well.
+    func sectionBand() -> some View {
+        font(.caption.weight(.semibold))
+            .foregroundStyle(Color.textSecondary)
+            .padding(.horizontal, Space.x3)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.well)
     }
 }
 

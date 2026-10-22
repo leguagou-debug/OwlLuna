@@ -28,10 +28,6 @@ struct PresenterPanel: View {
 
     private var document: NotebookDocument { session.document }
 
-    private var current: NotebookPage? {
-        document.pages.indices.contains(session.currentPage) ? document.pages[session.currentPage] : nil
-    }
-
     private var next: NotebookPage? {
         document.pages.indices.contains(session.currentPage + 1) ? document.pages[session.currentPage + 1] : nil
     }
@@ -74,7 +70,7 @@ struct PresenterPanel: View {
             let elapsed = max(0, Int(context.date.timeIntervalSince(since)))
             (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.x1))
                                                  : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Space.x3))) {
-                Text(Duration.seconds(elapsed).formatted(.time(pattern: elapsed >= 3600 ? .hourMinuteSecond : .minuteSecond)))
+                Text(RecordingStop.clock(TimeInterval(elapsed)))
                     .font(.title2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Color.ink)
                     .fixedSize()
@@ -108,7 +104,7 @@ struct PresenterPanel: View {
 
     @ViewBuilder
     private var notes: some View {
-        let text = current?.notes ?? ""
+        let text = session.shownPage?.notes ?? ""
         if text.isEmpty {
             Text("No notes for this page.")
                 .font(.subheadline)
@@ -182,10 +178,7 @@ struct PresenterNotesSheet: View {
                 .barGround(.surface)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                    }
-                    .boardBackground()
+                    CancelToolbarItem { dismiss() }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
                             document.setNotes(text, forPage: pageID)

@@ -152,12 +152,6 @@ enum OwlLunaArt {
     static let owlCenter = CGPoint(x: 480, y: 580)
     /// The owl is laid out around `owlCenter` and drawn this much larger, so the glasses still read at 40 px.
     static let owlScale: CGFloat = 1.1
-    static let headCenter = owl(CGPoint(x: 480, y: 395))
-    static let eyeCenterLeft = owl(CGPoint(x: 414, y: 388))
-    static let eyeCenterRight = owl(CGPoint(x: 546, y: 388))
-    static let eyeRadius: CGFloat = 58 * owlScale
-    /// Where the right wing's tip grips the shaft.
-    static let pencilPivot = owl(CGPoint(x: 621, y: 694))
     /// Radians, clockwise on screen; the eraser leans to the right.
     static let pencilAngle: CGFloat = 28 * .pi / 180
     static let starSparkle = CGPoint(x: 772, y: 262)
@@ -167,8 +161,6 @@ enum OwlLunaArt {
         CGAffineTransform(translationX: owlCenter.x, y: owlCenter.y).scaledBy(x: owlScale, y: owlScale)
             .translatedBy(x: -owlCenter.x, y: -owlCenter.y)
     }
-
-    private static func owl(_ point: CGPoint) -> CGPoint { point.applying(owlFrame) }
 
     // MARK: Parts
 

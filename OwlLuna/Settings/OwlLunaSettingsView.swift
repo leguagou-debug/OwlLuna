@@ -51,36 +51,26 @@ struct OwlLunaSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.x8) {
-                    appearanceSection
-                    inputSection
-                    pencilSection
-                    penTraySection
-                    paperSection
-                    if UIApplication.shared.supportsAlternateIcons {
-                        SettingsSection("App Icon") { AppIconPicker().settingsRow() }
-                    }
-                    recordingsSection
-                    journalSection
-                    historySection
-                    trashSection
-                    searchSection
-                    syncSection
-                    backupSection
-                    aboutSection
+            VStack(alignment: .leading, spacing: Space.x8) {
+                appearanceSection
+                inputSection
+                pencilSection
+                penTraySection
+                paperSection
+                if UIApplication.shared.supportsAlternateIcons {
+                    SettingsSection("App Icon") { AppIconPicker().settingsRow() }
                 }
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, Space.x5)
-                .padding(.top, Space.x4)
-                .padding(.bottom, Space.x10)
+                recordingsSection
+                journalSection
+                historySection
+                trashSection
+                searchSection
+                syncSection
+                backupSection
+                aboutSection
             }
+            .settingsPage("Settings")
             .toggleStyle(.owlLuna)
-            .foregroundStyle(Color.ink)
-            .background(Color.paper)
-            .navigationTitle("Settings")
-            .barGround(.paper)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -100,10 +90,7 @@ struct OwlLunaSettingsView: View {
         .fileImporter(isPresented: $choosingBackup, allowedContentTypes: [.owlLunaBackup, .legacyBackup, .appleArchive]) { result in
             if case .success(let url) = result { restore(url) }
         }
-        .notice("Backup", isPresented: Binding(get: { backupMessage != nil }, set: { if !$0 { backupMessage = nil } }),
-                message: Text(backupMessage ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("Backup", message: $backupMessage)
     }
 
     private var appearanceSection: some View {
@@ -235,10 +222,7 @@ struct OwlLunaSettingsView: View {
                 SettingsActionRow(title: "Stop Using Daily Journal", systemImage: "calendar.badge.minus") { store.setDailyJournal(nil) }
             }
         }
-        .notice("Calendar", isPresented: Binding(get: { agendaMessage != nil }, set: { if !$0 { agendaMessage = nil } }),
-                message: Text(agendaMessage ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("Calendar", message: $agendaMessage)
     }
 
     private var historySection: some View {
@@ -273,13 +257,9 @@ struct OwlLunaSettingsView: View {
                     .accessibilityIdentifier("settings.sync.toggle")
                     .settingsRow()
                 if case .unavailable(let reason) = sync.availability {
-                    Text(reason).font(.subheadline).foregroundStyle(Color.textSecondary)
-                        .accessibilityIdentifier("settings.sync.unavailable")
-                        .settingsRow()
+                    Text(reason).syncStatusRow("settings.sync.unavailable")
                 } else if sync.question == .accountChanged {
-                    Text(SyncQuestion.accountChangedMessage).font(.subheadline).foregroundStyle(Color.textSecondary)
-                        .accessibilityIdentifier("settings.sync.account")
-                        .settingsRow()
+                    Text(SyncQuestion.accountChangedMessage).syncStatusRow("settings.sync.account")
                     SettingsActionRow(title: "Sync with This Account", systemImage: "arrow.triangle.2.circlepath") {
                         Task { await sync.answer(true) }
                     }
@@ -314,14 +294,10 @@ struct OwlLunaSettingsView: View {
                         }
                     }
                     if let error = sync.lastError {
-                        Text(error).font(.subheadline).foregroundStyle(Color.tomato)
-                            .accessibilityIdentifier("settings.sync.error")
-                            .settingsRow()
+                        Text(error).syncStatusRow("settings.sync.error", color: .tomato)
                     }
                     if let problem = sync.uploads.problem {
-                        Text(problem.message).font(.subheadline).foregroundStyle(Color.tomato)
-                            .accessibilityIdentifier("settings.sync.uploads")
-                            .settingsRow()
+                        Text(problem.message).syncStatusRow("settings.sync.uploads", color: .tomato)
                     }
                     ForEach(sync.lastReport?.failed ?? [], id: \.id) { failure in
                         SyncFailureRow(failure: failure, title: store.record(failure.id)?.title)
@@ -495,38 +471,45 @@ struct AcknowledgementsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.x8) {
-                ForEach(entries) { entry in
-                    SettingsSection(title: Text(verbatim: entry.name)) {
-                        Text(entry.use).foregroundStyle(Color.textSecondary).settingsRow()
-                        DisclosureGroup("SIL Open Font License 1.1") {
-                            Text(entry.license)
-                                .font(.footnote.monospaced())
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, Space.x2)
-                        }
-                        .settingsRow()
+        VStack(alignment: .leading, spacing: Space.x8) {
+            ForEach(entries) { entry in
+                SettingsSection(title: Text(verbatim: entry.name)) {
+                    Text(entry.use).foregroundStyle(Color.textSecondary).settingsRow()
+                    DisclosureGroup("SIL Open Font License 1.1") {
+                        Text(entry.license)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, Space.x2)
                     }
+                    .settingsRow()
                 }
             }
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, Space.x5)
-            .padding(.top, Space.x4)
-            .padding(.bottom, Space.x10)
+        }
+        .settingsPage("Acknowledgements")
+    }
+}
+
+private extension View {
+    /// A page of Settings: one column no wider than a page, scrolled on paper under a bar the paper's colour.
+    func settingsPage(_ title: LocalizedStringKey) -> some View {
+        ScrollView {
+            self.frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Space.x5)
+                .padding(.top, Space.x4)
+                .padding(.bottom, Space.x10)
         }
         .foregroundStyle(Color.ink)
         .background(Color.paper)
-        .navigationTitle("Acknowledgements")
+        .navigationTitle(title)
         .barGround(.paper)
     }
 }
 
 @MainActor private extension Text {
-    func syncStatusRow(_ identifier: String) -> some View {
-        font(.subheadline).foregroundStyle(Color.textSecondary).accessibilityIdentifier(identifier).settingsRow()
+    func syncStatusRow(_ identifier: String, color: Color = .textSecondary) -> some View {
+        font(.subheadline).foregroundStyle(color).accessibilityIdentifier(identifier).settingsRow()
     }
 }
 
@@ -535,17 +518,9 @@ struct SyncFailureRow: View {
     let failure: SyncFailure
     let title: String?
 
-    private let tile = RoundedRectangle.plate
-
     var body: some View {
         HStack(spacing: Space.x3) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.tomato)
-                .frame(width: 30, height: 30)
-                .background(Color.well, in: tile)
-                .overlay { tile.strokeBorder(Color.hairline) }
-                .accessibilityHidden(true)
+            Image(systemName: "exclamationmark.triangle").rowTile(tint: .tomato)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(title ?? String(localized: "A notebook from iCloud")) didn't sync")
                 Text(failure.reason.message).font(.subheadline).foregroundStyle(Color.textSecondary)

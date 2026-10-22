@@ -36,9 +36,7 @@ enum StickerCutout {
         let upright = try flattened(photo, longSide: longSide)
         let size = CGSize(width: upright.width, height: upright.height)
         let edge = (max(size.width, size.height) * 0.03).rounded()
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = false
+        let format = UIGraphicsImageRendererFormat(scale: 1)
         let canvas = CGSize(width: size.width + edge * 2, height: size.height + edge * 2)
         return UIGraphicsImageRenderer(size: canvas, format: format).pngData { _ in
             UIColor.white.setFill()
@@ -76,9 +74,7 @@ enum StickerCutout {
         guard pixels.width > 0, pixels.height > 0 else { throw Failure.unreadable }
         let scale = min(1, longSide / max(pixels.width, pixels.height))
         let target = CGSize(width: (pixels.width * scale).rounded(), height: (pixels.height * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: 1, opaque: true)
         let image = UIGraphicsImageRenderer(size: target, format: format).image { _ in photo.draw(in: CGRect(origin: .zero, size: target)) }
         guard let cg = image.cgImage else { throw Failure.unreadable }
         return cg

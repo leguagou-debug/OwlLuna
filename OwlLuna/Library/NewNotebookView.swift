@@ -37,9 +37,9 @@ struct NewNotebookView: View {
         _cloth = State(initialValue: .seeded(by: id))
         _seed = State(initialValue: CoverSpec.seed(from: id))
         _inkPair = State(initialValue: Int(id.uuid.3) % RisoInk.pairs.count)
-        _template = State(initialValue: defaults.string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled)
-        _paperColor = State(initialValue: defaults.string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white)
-        _pageSize = State(initialValue: defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter)
+        _template = State(initialValue: defaults.defaultTemplate)
+        _paperColor = State(initialValue: defaults.defaultPaperColor)
+        _pageSize = State(initialValue: defaults.defaultPageSize)
     }
 
     private static let coverWidth: CGFloat = 120
@@ -87,10 +87,7 @@ struct NewNotebookView: View {
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") { Task { await create() } }
                         .buttonStyle(.owlLuna(.primary, inBar: true))
@@ -99,10 +96,7 @@ struct NewNotebookView: View {
                 }
                 .boardBackground()
             }
-            .notice("Something went wrong", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }),
-                    message: Text(errorMessage ?? "")) {
-                Button("OK", role: .cancel) {}
-            }
+            .notice("Something went wrong", message: $errorMessage)
             .task {
                 if let id = UserDefaults.standard.string(forKey: SettingsKey.defaultPaper) {
                     let root = store.root
@@ -165,23 +159,7 @@ struct NewNotebookView: View {
             StarterRow(notebookID: id, selection: starter, pick: apply)
 
             label("Cover")
-            OwlLunaSegmentedPicker("Cover", selection: $style, options: CoverStyle.allCases) { Text($0.displayName) }
-
-            switch style {
-            case .cloth, .firstPage:
-                label(style == .cloth ? "Cloth" : "Spine")
-                SwatchRow(items: ClothColor.allCases, selection: $cloth, label: \.displayName) { cloth in
-                    Circle().fill(cloth.color)
-                }
-            case .print:
-                label("Inks")
-                SwatchRow(items: Array(RisoInk.pairs.indices), selection: $inkPair,
-                          label: { "\(RisoInk.pairs[$0].0.displayName) and \(RisoInk.pairs[$0].1.displayName)" }) { index in
-                    Circle().fill(LinearGradient(stops: [.init(color: Color(hex: RisoInk.pairs[index].0.hex), location: 0.5),
-                                                        .init(color: Color(hex: RisoInk.pairs[index].1.hex), location: 0.5)],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-            }
+            CoverStyleOptions(style: $style, cloth: $cloth, inkPair: $inkPair)
 
             label("Paper")
             PaperGallery(template: $template, color: paperColor, pageSize: pageSize.points,
@@ -236,7 +214,7 @@ struct NewNotebookView: View {
             paper = nil
             paperColor = starter.paperColor
             if spec.style == .print {
-                inkPair = RisoInk.pairs.firstIndex { $0.0 == spec.inks.0 && $0.1 == spec.inks.1 } ?? inkPair
+                inkPair = RisoInk.pairIndex(of: spec.inks) ?? inkPair
             } else {
                 cloth = spec.cloth
             }
@@ -248,7 +226,7 @@ struct NewNotebookView: View {
         let next = CoverShuffle.next(spec, using: &generator)
         cloth = next.cloth
         seed = next.seed
-        inkPair = RisoInk.pairs.firstIndex { $0.0 == next.inks.0 && $0.1 == next.inks.1 } ?? inkPair
+        inkPair = RisoInk.pairIndex(of: next.inks) ?? inkPair
     }
 
     private func create() async {
@@ -427,6 +405,34 @@ private struct StarterCard: View {
     }
 }
 
+/// The cover style picker with its cloth or ink swatches, shared by New Notebook and Change Cover.
+struct CoverStyleOptions: View {
+    @Binding var style: CoverStyle
+    @Binding var cloth: ClothColor
+    @Binding var inkPair: Int
+
+    var body: some View {
+        OwlLunaSegmentedPicker("Cover", selection: $style, options: CoverStyle.allCases) { Text($0.displayName) }
+        switch style {
+        case .cloth, .firstPage:
+            header(style == .cloth ? "Cloth" : "Spine")
+            SwatchRow(items: ClothColor.allCases, selection: $cloth, label: \.displayName) { Circle().fill($0.color) }
+        case .print:
+            header("Inks")
+            SwatchRow(items: Array(RisoInk.pairs.indices), selection: $inkPair,
+                      label: { "\(RisoInk.pairs[$0].0.displayName) and \(RisoInk.pairs[$0].1.displayName)" }) { index in
+                Circle().fill(LinearGradient(stops: [.init(color: Color(hex: RisoInk.pairs[index].0.hex), location: 0.5),
+                                                    .init(color: Color(hex: RisoInk.pairs[index].1.hex), location: 0.5)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        }
+    }
+
+    private func header(_ text: LocalizedStringKey) -> some View {
+        Text(text).metaStyle(.footnote).accessibilityAddTraits(.isHeader)
+    }
+}
+
 struct SwatchRow<Item: Hashable, Swatch: View>: View {
     let items: [Item]
     @Binding var selection: Item
@@ -451,35 +457,3 @@ struct SwatchRow<Item: Hashable, Swatch: View>: View {
     }
 }
 
-/// Rows that wrap to the width on offer, so swatches never run off a narrow sheet.
-struct FlowLayout: Layout {
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let frames = arrange(subviews, width: proposal.width ?? .infinity)
-        return CGSize(width: frames.map(\.maxX).max() ?? 0, height: frames.map(\.maxY).max() ?? 0)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, frame) in zip(subviews, arrange(subviews, width: bounds.width)) {
-            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
-        }
-    }
-
-    private func arrange(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
-        var frames: [CGRect] = []
-        var origin = CGPoint.zero
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if origin.x > 0, origin.x + size.width > width {
-                origin = CGPoint(x: 0, y: origin.y + rowHeight + spacing)
-                rowHeight = 0
-            }
-            frames.append(CGRect(origin: origin, size: size))
-            origin.x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return frames
-    }
-}

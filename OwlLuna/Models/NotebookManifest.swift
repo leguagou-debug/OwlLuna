@@ -73,18 +73,22 @@ struct NotebookPage: Sendable, Hashable, Identifiable {
         case .image(let file): "i:\(file)"
         case .unknown(let raw): "u:" + ((try? raw.serialized(pretty: false)).map { String(decoding: $0, as: UTF8.self) } ?? "")
         }
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         let dayKey = day.map { "|d:\($0)" } ?? ""
         let itemsKey = extra["items"].flatMap { try? $0.serialized(pretty: false) }.map { "|i:" + String(decoding: $0, as: UTF8.self) } ?? ""
         // Builds before text styles drew these boxes plainly and cached that under the same key.
         let styled = extra["items"]?.arrayValue?.contains { item in
             item["kind"]?.stringValue == "text" && ["face", "italic", "underline", "list", "highlight"].contains { item[$0] != nil }
         } == true
-        for byte in "\(backgroundKey)|\(paperColorRaw)|\(Int(size.width))x\(Int(size.height))\(dayKey)\(itemsKey)\(styled ? "|styled" : "")".utf8 {
-            hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3
-        }
+        let hash = fnv1a("\(backgroundKey)|\(paperColorRaw)|\(Int(size.width))x\(Int(size.height))\(dayKey)\(itemsKey)\(styled ? "|styled" : "")")
         return String(hash, radix: 16).prefix(8).description
     }
+}
+
+/// The 64-bit FNV-1a hash of `text`'s UTF-8 bytes.
+func fnv1a(_ text: String) -> UInt64 {
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3 }
+    return hash
 }
 
 extension NotebookPage {
@@ -162,6 +166,11 @@ struct RecordingEntry: Sendable, Hashable, Identifiable {
     var undecoded: [String: UndecodedField] = [:]
 }
 
+extension String {
+    /// A notebook's title as shown: "Untitled" while it has none.
+    var orUntitled: String { isEmpty ? String(localized: "Untitled") : self }
+}
+
 extension NotebookManifest {
     /// Recordings being made, or cut off before Stop, so their audio is named. Older builds keep them as an unknown key.
     var unfinishedRecordings: [RecordingEntry] {
@@ -209,13 +218,11 @@ extension LibraryState {
     /// When each of those was last changed here. Sync settles them one by one and apart from the pages, so a lock is
     /// only ever taken off by a later unlock. Older builds keep the stamps as an unknown key.
     func changedAt(_ filing: Filing) -> Date? {
-        extra["changedAt"]?[filing.rawValue]?.stringValue.flatMap(ManifestCodec.parseDate)
+        extra.changedAt(filing.rawValue)
     }
 
     mutating func setChangedAt(_ date: Date?, for filing: Filing) {
-        var stamps = extra["changedAt"]?.objectValue ?? [:]
-        stamps[filing.rawValue] = date.map(ManifestCodec.encodeDate)
-        extra["changedAt"] = stamps.isEmpty ? nil : .object(stamps)
+        extra.setChangedAt(date, for: filing.rawValue)
     }
 
     func files(_ filing: Filing, like other: LibraryState) -> Bool {

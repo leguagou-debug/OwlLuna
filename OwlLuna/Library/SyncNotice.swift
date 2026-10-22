@@ -60,14 +60,7 @@ private struct SyncNoticeCard: View {
         let news = sync.news
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Group(subviews: rows(news)) { rows in
-                        ForEach(rows) { row in
-                            if row.id != rows.first?.id { Rectangle().fill(Color.hairline).frame(height: 1) }
-                            row
-                        }
-                    }
-                }
+                RuledRows(alignment: .leading) { rows(news) }
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: 420)
@@ -163,17 +156,10 @@ private struct SyncNoticeRow<Action: View>: View {
     let message: Text
     @ViewBuilder var action: Action
 
-    private let tile = RoundedRectangle.plate
-
     var body: some View {
         HStack(spacing: Space.x3) {
             Image(systemName: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(trouble ? Color.tomato : Color.accentColor)
-                .frame(width: 30, height: 30)
-                .background(Color.well, in: tile)
-                .overlay { tile.strokeBorder(Color.hairline) }
-                .accessibilityHidden(true)
+                .rowTile(tint: trouble ? .tomato : .accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 title.font(.subheadline.weight(.semibold))
                 message.font(.footnote).foregroundStyle(Color.textSecondary)

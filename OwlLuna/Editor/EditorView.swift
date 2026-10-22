@@ -1,535 +1,8 @@
 import SwiftUI
+import Combine
 import PhotosUI
 import PencilKit
 import UniformTypeIdentifiers
-
-/// What the chrome needs from the page canvas, whatever its implementation.
-@MainActor
-protocol EditorCanvasControlling: AnyObject {
-    func scrollToPage(_ index: Int, animated: Bool)
-    func toolTrayDidChange()
-    func setModalShowing(_ showing: Bool)
-    func setDrawingPolicy(_ policy: PKCanvasViewDrawingPolicy)
-    func fit(_ fit: PageFit)
-    func setPresenting(_ presenting: Bool)
-    func present(page index: Int)
-    func setLaserColor(_ color: LaserColor)
-    func visibleCenter(ofPage index: Int) -> CGPoint?
-    func select(_ selection: ItemSelection?)
-    func editText()
-    func beginCrop()
-    func endCrop(keeping: Bool)
-    func resetCrop()
-    func linksDidChange()
-    func showReplay(_ timeline: ReplayTimeline?, at time: TimeInterval)
-    func paneBecameActive()
-    func setSelectingInk(_ selecting: Bool)
-    func catchInk(inside outline: [CGPoint])
-    func duplicateInkSelection()
-    func deleteInkSelection()
-    func selectedInk() -> [PKDrawing]
-    func selectedInkByPage() -> [(pageID: UUID, ink: PKDrawing)]
-    func replaceInkSelection(with text: String) -> ItemSelection?
-    func tapesDidChange()
-    func setFinding(_ finding: Bool)
-    func showFind(_ matches: [FindMatch], current: FindMatch?)
-    func setZoomWindow(_ open: Bool)
-    func setSelectingText(_ selecting: Bool)
-    func selectAllText()
-    func highlightSelectedText(_ color: HighlightColor)
-}
-
-struct ItemSelection: Equatable {
-    let pageID: UUID
-    let itemID: UUID
-}
-
-enum PageFit { case width, page }
-
-/// Focus hides the chrome and leaves the tool tray; presenting hides both and turns the Pencil into a laser pointer;
-/// replaying plays a recording while the ink written during it appears as it was written; selecting picks ink out
-/// across pages to move, copy or delete; finding looks for words and marks them on the pages; selecting text picks
-/// out a PDF page's own words to copy or highlight.
-enum EditorMode: Equatable { case writing, focus, presenting, replaying, selecting, finding, selectingText }
-
-@MainActor
-@Observable
-final class EditorSession {
-    let document: NotebookDocument
-    let recorder: NotebookRecorder
-    let finder: NotebookFinder
-    var currentPage: Int
-    /// Whether the tools are out. The tray itself also waits on the mode, see `showsToolTray`.
-    var showsTools = true
-    var canUndo = false
-    var canRedo = false
-    /// While a box is typed in, only a change of its style can be undone or redone from the bar.
-    var undoesStyle = false
-    var redoesStyle = false
-    /// The picture, sticker, text box or link being arranged. The canvas owns it; it's mirrored here for the chrome.
-    var selection: ItemSelection?
-    var isEditingText = false
-    /// What is kept of the selected picture while it is being cropped. The canvas owns it; it's mirrored here for the chrome.
-    var crop: CGRect?
-    /// The whiteboard that is open on its own, if one is. The canvas owns it; it's mirrored here for the chrome.
-    var openBoard: UUID?
-    /// The page being written on is Chalkboard, where ink is light: the tray's pens show it so.
-    var inkIsLight = false
-    /// The page being written on is light paper shown dark, where ink is light too.
-    var paperIsNight = false
-    /// How far the zoom window stands above the foot of the editor's safe area, for the tray to stand on it.
-    var zoomPanelLift: CGFloat = 0
-    /// Where the ink dish is out, in the page view's points: at the Pencil's tip when it was squeezed. Nil while it is put away.
-    var dish: CGPoint?
-    /// The words selected on a PDF page, while its text is being selected. The canvas owns the selection.
-    var selectedText: String?
-    /// The page a link was followed from, while the page it opened is still showing.
-    private(set) var linkReturn: UUID?
-    private(set) var mode = EditorMode.writing
-    /// How many strokes the lasso across pages has caught.
-    var inkSelectionCount = 0
-    /// The study tape that is lifted for now. It isn't saved: every strip is back in place when the notebook is opened again.
-    private(set) var liftedTapes: Set<UUID> = []
-    /// The recording being replayed with its ink, and what was said in it if it has been transcribed.
-    private(set) var replay: ReplayTimeline?
-    private(set) var replayLines: [Transcript.Line] = []
-    /// Where the position slider is held while it is dragged: the page follows it, not the sound, until it is let go.
-    private(set) var scrubbing: TimeInterval?
-    /// The zoom window: a magnified strip at the foot of the editor for writing small and neat.
-    private(set) var isZoomWindowOpen = false
-    @ObservationIgnored private var replayPage: UUID?
-    var laserColor = LaserColor.red {
-        didSet { canvas?.setLaserColor(laserColor) }
-    }
-    var drawingInput: DrawingInput {
-        didSet {
-            UserDefaults.standard.set(drawingInput.rawValue, forKey: SettingsKey.drawingInput)
-            canvas?.setDrawingPolicy(drawingInput.policy)
-            if drawingInput != .pencilOnly { document.dismissNotices(.onlyPencilDraws) }
-        }
-    }
-    @ObservationIgnored weak var canvas: EditorCanvasControlling?
-    /// The titles of the notebooks this one links to. Nil until they've been looked up.
-    @ObservationIgnored var notebookTitles: [UUID: String]? {
-        didSet { if notebookTitles != oldValue { canvas?.linksDidChange() } }
-    }
-    /// Called when a touch lands on the pages, so a window showing two notebooks knows which one is being worked on.
-    @ObservationIgnored var onTouchDown: (() -> Void)?
-    /// Whether this is the pane being worked in: a double-tap of the Pencil reaches both panes of a window.
-    @ObservationIgnored var isActivePane: () -> Bool = { true }
-    @ObservationIgnored var openURL: (URL) -> Void = { UIApplication.shared.open($0) }
-    /// Opens another notebook, at a page if the link names one; the last value is the page the link sits on.
-    @ObservationIgnored var openNotebook: ((UUID, UUID?, UUID) -> Void)?
-    /// The last page that isn't a whiteboard, for leaving a whiteboard by.
-    @ObservationIgnored private var lastPage: UUID?
-
-    init(document: NotebookDocument, initialPageID: UUID? = nil) {
-        self.document = document
-        recorder = NotebookRecorder(document: document)
-        finder = NotebookFinder(document: document)
-        let saved = document.manifest.library.currentPage
-        currentPage = max(0, min(initialPageID.flatMap(document.index(of:)) ?? saved, document.pages.count - 1))
-        drawingInput = UserDefaults.standard.string(forKey: SettingsKey.drawingInput).flatMap(DrawingInput.init(rawValue:)) ?? .initial
-        finder.startPage = { [weak self] in self?.currentPage ?? 0 }
-        finder.onChange = { [weak self] in
-            guard let self else { return }
-            self.canvas?.showFind(self.finder.matches, current: self.finder.current)
-        }
-        notePage(currentPage)
-    }
-
-    func pageDidChange(_ index: Int) {
-        guard index != currentPage else { return }
-        currentPage = index
-        linkReturn = nil
-        document.noteCurrentPage(index)
-        notePage(index)
-    }
-
-    private func notePage(_ index: Int) {
-        guard document.pages.indices.contains(index), !document.pages[index].isBoard else { return }
-        lastPage = document.pages[index].id
-    }
-
-    /// Where leaving the open whiteboard goes: the page it was opened from, or the nearest page before or after it.
-    var pageBehindBoard: Int? {
-        guard let board = openBoard.flatMap(document.index(of:)) else { return nil }
-        let pages = document.pages
-        if let index = lastPage.flatMap(document.index(of:)), !pages[index].isBoard { return index }
-        return pages[..<board].lastIndex { !$0.isBoard } ?? pages[board...].firstIndex { !$0.isBoard }
-    }
-
-    func leaveBoard() {
-        guard let index = pageBehindBoard else { return }
-        go(to: index)
-    }
-
-    func go(to index: Int, animated: Bool = true) {
-        guard document.pages.indices.contains(index) else { return }
-        canvas?.scrollToPage(index, animated: animated)
-        pageDidChange(index)
-    }
-
-    func enter(_ newMode: EditorMode) {
-        guard newMode != mode, newMode != .replaying || replay != nil else { return }
-        guard newMode != .selecting || !document.isReadOnly else { return }
-        guard newMode != .selectingText || document.hasPDFPages else { return }
-        if mode == .replaying { stopReplay() }
-        if mode == .selecting { canvas?.setSelectingInk(false) }
-        if mode == .selectingText { canvas?.setSelectingText(false) }
-        if mode == .finding {
-            finder.clear()
-            canvas?.setFinding(false)
-        }
-        if newMode != .writing, newMode != .focus { setZoomWindow(false) }
-        mode = newMode
-        canvas?.setPresenting(newMode == .presenting)
-        if newMode == .selecting { canvas?.setSelectingInk(true) }
-        if newMode == .finding { canvas?.setFinding(true) }
-        if newMode == .selectingText { canvas?.setSelectingText(true) }
-    }
-
-    /// Circle and hold: starts selecting with the ink inside `outline`, given in the page stack's points, already caught.
-    func selectInk(inside outline: [CGPoint]) {
-        guard mode == .writing || mode == .focus else { return }
-        enter(.selecting)
-        if mode == .selecting { canvas?.catchInk(inside: outline) }
-    }
-
-    // MARK: Zoom window
-
-    func setZoomWindow(_ open: Bool) {
-        guard open != isZoomWindowOpen, !open || (!document.isReadOnly && (mode == .writing || mode == .focus)) else { return }
-        isZoomWindowOpen = open
-        canvas?.setZoomWindow(open)
-        AccessibilityNotification.Announcement(open ? String(localized: "Zoom window open. Write in the strip at the bottom.")
-                                                    : String(localized: "Zoom window closed")).post()
-    }
-
-    /// The canvas closed it itself: its page was deleted, or its close button was pressed.
-    func zoomWindowDidClose() {
-        guard isZoomWindowOpen else { return }
-        isZoomWindowOpen = false
-        AccessibilityNotification.Announcement(String(localized: "Zoom window closed")).post()
-    }
-
-    // MARK: Replaying a recording
-
-    /// Plays a recording from its start with the page as it was: ink written later in the recording is faint until
-    /// the sound reaches it. Reads the pages written on during the recording, or every page for an older recording.
-    func beginReplay(_ recording: RecordingEntry, at time: TimeInterval = 0) async -> Bool {
-        guard mode != .presenting, mode != .replaying, !recorder.isRecording else { return false }
-        let ids = recording.inkedPages?.filter { document.index(of: $0) != nil } ?? document.pages.map(\.id)
-        var drawings: [UUID: PKDrawing] = [:]
-        for id in ids { drawings[id] = await document.ink(id) }
-        guard mode != .presenting, mode != .replaying, await recorder.beginReplay(recording) else { return false }
-        guard mode != .presenting, mode != .replaying else {
-            recorder.stopPlayback()
-            return false
-        }
-        replay = ReplayTimeline(recording: recording, drawings: drawings)
-        replayLines = recorder.transcript(for: recording)?.lines ?? []
-        replayPage = nil
-        recorder.onPlaybackTime = { [weak self] time in
-            guard let self, self.scrubbing == nil else { return }
-            self.showReplay(at: time)
-        }
-        enter(.replaying)
-        showReplay(at: 0)
-        if time > 0 { recorder.seek(to: time) }
-        return true
-    }
-
-    /// Shows the ink as it was at `time`, and turns to the page being written on when that changes.
-    func showReplay(at time: TimeInterval) {
-        guard let replay else { return }
-        canvas?.showReplay(replay, at: time)
-        guard let page = replay.page(at: time), page != replayPage, let index = document.index(of: page) else { return }
-        replayPage = page
-        if index != currentPage { go(to: index) }
-    }
-
-    /// The position slider moved under a finger. The sound plays on; `seekReplay` takes it there once the slider is let go.
-    func scrubReplay(to time: TimeInterval) {
-        guard replay != nil else { return }
-        scrubbing = time
-        showReplay(at: time)
-    }
-
-    func seekReplay(to time: TimeInterval) {
-        guard replay != nil else { return }
-        scrubbing = nil
-        recorder.seek(to: time)
-    }
-
-    private func stopReplay() {
-        recorder.onPlaybackTime = nil
-        recorder.stopPlayback()
-        scrubbing = nil
-        replay = nil
-        replayLines = []
-        canvas?.showReplay(nil, at: 0)
-    }
-
-    /// A page forward or back. While presenting, each page is shown whole.
-    func step(_ delta: Int) {
-        let index = min(max(currentPage + delta, 0), document.pages.count - 1)
-        guard index != currentPage else { return }
-        if mode == .presenting {
-            canvas?.present(page: index)
-        } else {
-            go(to: index)
-        }
-    }
-
-    // MARK: Links
-
-    func addLink(to target: UUID) { addLink(PageLink(target: target)) }
-
-    func addLink(_ link: PageLink) {
-        let title = LinkTitles(pages: document.pages, notebooks: notebookTitles).title(for: link)
-        addItem(.link(link), size: PageLinkArt.size(for: title), actionName: String(localized: "Add Link"))
-    }
-
-    /// Opens what a link points at. For a page of this notebook it remembers where it was followed from.
-    func follow(_ link: PageLink, from origin: UUID) {
-        switch link.destination {
-        case .page(let target):
-            guard let index = document.index(of: target) else {
-                AccessibilityNotification.Announcement(String(localized: "The page this link opened was deleted")).post()
-                return
-            }
-            canvas?.select(nil)
-            show(index)
-            linkReturn = document.index(of: origin) == index ? nil : origin
-        case .web(let url):
-            canvas?.select(nil)
-            openURL(url)
-        case .notebook(let notebook, let page, _):
-            canvas?.select(nil)
-            openNotebook?(notebook, page, origin)
-        }
-    }
-
-    func goBack() {
-        guard let index = linkReturn.flatMap(document.index(of:)) else { return dismissLinkReturn() }
-        show(index)
-    }
-
-    func dismissLinkReturn() { linkReturn = nil }
-
-    private func show(_ index: Int) {
-        if mode == .presenting {
-            canvas?.present(page: index)
-        } else {
-            go(to: index)
-        }
-    }
-
-    func setLinkLabel(_ label: String) {
-        guard let selection else { return }
-        document.updateItems(onPage: selection.pageID, actionName: String(localized: "Rename Link")) { items in
-            guard let index = items.firstIndex(where: { $0.id == selection.itemID }), var link = items[index].link else { return }
-            link.label = label.trimmingCharacters(in: .whitespacesAndNewlines)
-            items[index].content = .link(link)
-        }
-    }
-
-    // MARK: Study tape
-
-    func addTape() {
-        let last = UserDefaults.standard.string(forKey: SettingsKey.tapeColor).flatMap(TapeColor.init(rawValue:)) ?? .mustard
-        addItem(.tape(last), size: TapeArt.defaultSize, actionName: String(localized: "Add Study Tape"))
-    }
-
-    func toggleTape(_ id: UUID) {
-        if liftedTapes.remove(id) == nil { liftedTapes.insert(id) }
-        canvas?.tapesDidChange()
-        AccessibilityNotification.Announcement(liftedTapes.contains(id) ? String(localized: "Tape lifted") : String(localized: "Tape put back")).post()
-    }
-
-    func coverAllTapes() {
-        guard !liftedTapes.isEmpty else { return }
-        liftedTapes = []
-        canvas?.tapesDidChange()
-    }
-
-    func setTapeColor(_ color: TapeColor) {
-        guard let selection else { return }
-        UserDefaults.standard.set(color.rawValue, forKey: SettingsKey.tapeColor)
-        document.updateItems(onPage: selection.pageID, actionName: String(localized: "Tape Colour")) { items in
-            guard let index = items.firstIndex(where: { $0.id == selection.itemID }), items[index].tape != nil else { return }
-            items[index].content = .tape(color)
-        }
-    }
-
-    // MARK: Today's events
-
-    /// Prints the day's events on the current page as a text box, which can then be moved, restyled or deleted.
-    func addAgenda(_ events: [AgendaEvent], on day: Date = .now) {
-        guard !document.isReadOnly, document.pages.indices.contains(currentPage) else { return }
-        let page = document.pages[currentPage]
-        var box = TextBox(string: Agenda.text(for: events, heading: page.day == nil ? day.formatted(.dateTime.weekday(.wide).day().month(.wide)) : nil))
-        box.fontSize = 13
-        let width = min(max(box.naturalWidth(limit: page.sheetSize.width * 0.6), 150), page.sheetSize.width * 0.6)
-        addItem(.text(box), size: CGSize(width: width, height: box.height(width: width)), actionName: String(localized: "Add Today's Events"))
-    }
-
-    // MARK: Text boxes
-
-    static let addTextAction = String(localized: "Add Text Box")
-
-    /// Places an empty text box and starts typing in it.
-    func addText() {
-        guard !document.isReadOnly, document.pages.indices.contains(currentPage) else { return }
-        let box = TextBox(string: "")
-        let width = min(280, (document.pages[currentPage].sheetSize.width * 0.6).rounded())
-        addItem(.text(box), size: CGSize(width: width, height: box.height(width: width)), actionName: Self.addTextAction)
-        canvas?.editText()
-    }
-
-    func updateText(_ change: (inout TextBox) -> Void) {
-        guard let selection else { return }
-        document.updateItems(onPage: selection.pageID, actionName: String(localized: "Text Style")) { items in
-            guard let index = items.firstIndex(where: { $0.id == selection.itemID }), var box = items[index].text else { return }
-            let before = box
-            change(&box)
-            guard box != before else { return }
-            items[index].content = .text(box)
-            items[index] = items[index].fittedToText()
-            items[index].raw["agenda"] = nil
-        }
-    }
-
-    var selectedItem: PageItem? {
-        guard let selection, let page = document.pages.first(where: { $0.id == selection.pageID }) else { return nil }
-        return page.items.first { $0.id == selection.itemID }
-    }
-
-    // MARK: Pictures and stickers
-
-    /// Places a new item and selects it: where it was dropped, or in the middle of what's showing of the current page.
-    func addItem(_ content: PageItem.Content, size: CGSize, onPage index: Int? = nil, at point: CGPoint? = nil,
-                 actionName: String = String(localized: "Add to Page"), source: String? = nil) {
-        let index = index ?? currentPage
-        guard !document.isReadOnly, document.pages.indices.contains(index) else { return }
-        let page = document.pages[index]
-        // A whiteboard is opened first, so the new thing lands in the part of it that is looked at.
-        if page.isBoard { go(to: index, animated: false) }
-        var centre = point ?? canvas?.visibleCenter(ofPage: index) ?? CGPoint(x: page.size.width / 2, y: page.size.height / 2)
-        // Never exactly on top of the last one placed.
-        let taken = page.items.map(\.center)
-        while taken.contains(where: { abs($0.x - centre.x) < 6 && abs($0.y - centre.y) < 6 }), centre.y + 28 < page.size.height {
-            centre = CGPoint(x: min(centre.x + 28, page.size.width), y: centre.y + 28)
-        }
-        var item = PageItem(content: content, center: centre, size: size)
-        item.source = source
-        document.updateItems(onPage: page.id, actionName: actionName) { $0.append(item) }
-        canvas?.select(ItemSelection(pageID: page.id, itemID: item.id))
-    }
-
-    /// Stores a picture in the notebook and places it on a page, sized to sit comfortably on it.
-    func addPicture(_ data: Data, onPage index: Int? = nil, at point: CGPoint? = nil) async throws {
-        guard let image = UIImage(data: data) else { throw ImportError.unreadable }
-        try await addPicture(image, onPage: index, at: point)
-    }
-
-    func addPicture(_ image: UIImage, onPage index: Int? = nil, at point: CGPoint? = nil) async throws {
-        let picture = try await Task.detached(priority: .userInitiated) { try PhotoImport.picture(image) }.value
-        let file = try await document.package.writeAsset(picture.data, ext: picture.ext)
-        let index = index ?? currentPage
-        guard document.pages.indices.contains(index) else { return }
-        let page = document.pages[index].sheetSize
-        let fit = min(page.width * 0.55 / picture.size.width, page.height * 0.4 / picture.size.height)
-        addItem(.image(file: file), size: CGSize(width: (picture.size.width * fit).rounded(), height: (picture.size.height * fit).rounded()),
-                onPage: index, at: point)
-    }
-
-    /// Places one of the user's own stickers. The notebook keeps its own copy, and one copy serves every placement.
-    func addSticker(_ sticker: CustomSticker) async throws {
-        guard document.pages.indices.contains(currentPage) else { return }
-        let placed = document.pages.lazy.filter(\.hasItems).flatMap(\.items).first { $0.source == sticker.id && $0.assetFile != nil }
-        var file = placed?.assetFile, shape = placed?.cropped(to: nil).size
-        if let name = file, !FileManager.default.fileExists(atPath: document.package.assetURL(name).path(percentEncoded: false)) { file = nil }
-        if file == nil {
-            let url = sticker.url
-            let picture = try await Task.detached(priority: .userInitiated) {
-                guard let image = UIImage(contentsOfFile: url.path(percentEncoded: false)) else { throw ImportError.unreadable }
-                return try PhotoImport.picture(image)
-            }.value
-            file = try await document.package.writeAsset(picture.data, ext: picture.ext)
-            shape = picture.size
-        }
-        guard let file, let shape, document.pages.indices.contains(currentPage) else { return }
-        let page = document.pages[currentPage].sheetSize
-        let fit = min(150, page.width * 0.4) / max(shape.width, shape.height, 1)
-        addItem(.image(file: file), size: CGSize(width: (shape.width * fit).rounded(), height: (shape.height * fit).rounded()), source: sticker.id)
-    }
-
-    func deleteSelection() {
-        guard let selection else { return }
-        canvas?.select(nil)
-        document.updateItems(onPage: selection.pageID, actionName: String(localized: "Delete")) { $0.removeAll { $0.id == selection.itemID } }
-    }
-
-    func duplicateSelection() {
-        guard let selection, let page = document.pages.first(where: { $0.id == selection.pageID }),
-              var copy = page.items.first(where: { $0.id == selection.itemID }) else { return }
-        copy.id = UUID()
-        copy.raw["agenda"] = nil
-        copy.center = CGPoint(x: min(copy.center.x + 24, page.size.width), y: min(copy.center.y + 24, page.size.height))
-        document.updateItems(onPage: selection.pageID, actionName: String(localized: "Duplicate")) { $0.append(copy) }
-        canvas?.select(ItemSelection(pageID: selection.pageID, itemID: copy.id))
-    }
-
-    /// One step forward or back in the page's stack of pictures and stickers.
-    func moveSelection(forward: Bool) {
-        guard let selection else { return }
-        document.updateItems(onPage: selection.pageID, actionName: forward ? String(localized: "Bring Forward") : String(localized: "Send Backward")) { items in
-            guard let index = items.firstIndex(where: { $0.id == selection.itemID }) else { return }
-            let target = index + (forward ? 1 : -1)
-            if items.indices.contains(target) { items.swapAt(index, target) }
-        }
-    }
-
-    /// The tool tray is at the foot of the editor while the page can be written on and nothing is being typed.
-    var showsToolTray: Bool {
-        showsTools && (mode == .writing || mode == .focus) && !document.isReadOnly && !isEditingText
-    }
-
-    func toggleTools() {
-        showsTools.toggle()
-        canvas?.toolTrayDidChange()
-    }
-
-    func refreshUndoState() {
-        canUndo = document.undoManager.canUndo
-        canRedo = document.undoManager.canRedo
-        undoesStyle = canUndo && document.undoManager.undoActionName == String(localized: "Text Style")
-        redoesStyle = canRedo && document.undoManager.redoActionName == String(localized: "Text Style")
-    }
-
-    /// Inserts after `index` (or at the end) and makes the new page current.
-    func addPage(after index: Int? = nil) {
-        guard !document.isReadOnly else { return }
-        let position = (index ?? document.pages.count - 1) + 1
-        document.insertPages([document.newPage(after: index)], at: position)
-        go(to: position)
-    }
-
-    func duplicatePage(at index: Int) async {
-        if let position = await document.duplicatePage(at: index) { go(to: position) }
-    }
-
-    /// Inserts a whiteboard after `index` (or at the end) and opens it. It takes the colour of the page before it.
-    func addBoard(after index: Int? = nil) {
-        guard !document.isReadOnly else { return }
-        let position = (index ?? document.pages.count - 1) + 1
-        let paper = document.newPage(after: index)
-        document.insertPages([.board(template: .dotted, color: paper.paperColor)], at: position, actionName: String(localized: "Add Whiteboard"))
-        go(to: position)
-    }
-}
 
 struct EditorView: View {
     let document: NotebookDocument
@@ -578,7 +51,7 @@ private struct RecordButton: View {
                     Image(systemName: "stop.fill")
                         .symbolEffect(.breathe, options: .repeating, isActive: !reduceMotion)
                     if !isCompact {
-                        Text(Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond)))
+                        Text(PlaybackScrubber.clock(recorder.elapsed))
                             .monospacedDigit()
                             .contentTransition(reduceMotion ? .opacity : .numericText(value: Double(seconds)))
                             .animation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion), value: seconds)
@@ -730,7 +203,7 @@ fileprivate struct EditorContent: View {
     private var sidePanels: some View {
         if showsPresenterPanel {
             PresenterPanel(session: session, since: presentingSince, side: side) {
-                if let page = currentPage { editingNotes = NotesTarget(id: page.id) }
+                if let page = session.shownPage { editingNotes = NotesTarget(id: page.id) }
             }
             .frame(width: 300)
             .transition(.move(edge: side.edge))
@@ -929,7 +402,7 @@ fileprivate struct EditorContent: View {
         .notice("Delete page \(session.currentPage + 1)?", isPresented: $confirmingDelete, message: Text("You can undo this.")) {
             Button("Cancel", role: .cancel) {}
             Button("Delete Page", role: .destructive) {
-                if document.pages.indices.contains(session.currentPage) { document.removePages([document.pages[session.currentPage].id]) }
+                if let page = session.shownPage { document.removePages([page.id]) }
             }
         }
         .notice("Go to Page", isPresented: $goToPage, message: Text("1 to \(document.pages.count)")) {
@@ -938,7 +411,7 @@ fileprivate struct EditorContent: View {
             Button("Cancel", role: .cancel) {}
             Button("Go") { if let number = Int(goToText) { session.go(to: number - 1) } }
         }
-        .notice("Name Bookmark", isPresented: Binding(get: { namingBookmark != nil }, set: { if !$0 { namingBookmark = nil } })) {
+        .notice("Name Bookmark", isPresented: Binding(isPresent: $namingBookmark)) {
             TextField("Name", text: $bookmarkName)
         } actions: {
             Button("Cancel", role: .cancel) {}
@@ -971,9 +444,9 @@ fileprivate struct EditorContent: View {
         .onChange(of: window?.active) { if pane != .single, window?.active == document.id { session.canvas?.paneBecameActive() } }
         .onChange(of: session.mode, initial: true) { if pane != .secondary { window?.hidesChrome = session.mode != .writing } }
         .onChange(of: store.indexVersion) { refreshNotebookTitles() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in session.refreshUndoState() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in session.refreshUndoState() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in session.refreshUndoState() }
+        .onReceive(Publishers.Merge3(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup),
+                                     NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange),
+                                     NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange))) { _ in session.refreshUndoState() }
         .onDisappear {
             session.recorder.shutdown()
             disconnectSession()
@@ -1032,17 +505,8 @@ fileprivate struct EditorContent: View {
             presenterPanel = nil
         }
         withAnimation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion)) { session.enter(mode) }
-        switch mode {
-        case .writing: announce(String(localized: "Back to writing"))
-        case .focus: announce(String(localized: "Focus mode. The toolbar is hidden."))
-        case .presenting: announce(String(localized: "Presenting. Drag on the page to point."))
-        case .replaying: announce(String(localized: "Replaying. Ink appears as it was written; tap ink to jump to that moment."))
-        case .selecting: announce(String(localized: "Selecting ink. Draw round ink on any page, then drag it."))
-        case .finding:
-            findText = ""
-            announce(String(localized: "Find in notebook. Type what to look for."))
-        case .selectingText: announce(String(localized: "Selecting text. Drag across the words of a PDF page."))
-        }
+        if mode == .finding { findText = "" }
+        announce(mode.announcement)
     }
 
     fileprivate func announce(_ message: String) {
@@ -1168,11 +632,11 @@ fileprivate struct EditorContent: View {
                 Button { tagging = .notebook } label: { Label("Tags…", systemImage: "tag") }
             }
             OwlLunaMenu {
-                let here = currentPage == nil ? nil : session.currentPage
+                let here = session.shownPage == nil ? nil : session.currentPage
                 Button { export = ExportJob(document: document, choosing: true, current: here) } label: {
                     Label("Notebook as a PDF…", systemImage: "doc.richtext")
                 }
-                if currentPage != nil {
+                if session.shownPage != nil {
                     Button { export = ExportJob(document: document, choosing: true, current: here, thisPage: true) } label: {
                         Label("This Page as a PDF…", systemImage: "doc")
                     }
@@ -1180,7 +644,7 @@ fileprivate struct EditorContent: View {
                 Button { export = ExportJob(document: document, format: .images, choosing: true, current: here) } label: {
                     Label("Every Page as an Image…", systemImage: "photo.on.rectangle")
                 }
-                if let page = currentPage {
+                if let page = session.shownPage {
                     Button { export = ExportJob(document: document, format: .images, pages: [page]) } label: { Label("This Page as an Image…", systemImage: "photo") }
                     Button { export = ExportJob(document: document, format: .timelapse, pages: [page]) } label: {
                         Label("This Page as a Time-lapse Video…", systemImage: "film")
@@ -1230,19 +694,13 @@ fileprivate struct EditorContent: View {
             dismiss()
             Task {
                 try? await Task.sleep(for: .milliseconds(350))
-                if await session.beginReplay(recording, at: time) {
-                    announce(String(localized: "Replaying. Ink appears as it was written; tap ink to jump to that moment."))
-                }
+                if await session.beginReplay(recording, at: time) { announce(EditorMode.replaying.announcement) }
             }
         }
     }
 
-    fileprivate var currentPage: NotebookPage? {
-        document.pages.indices.contains(session.currentPage) ? document.pages[session.currentPage] : nil
-    }
-
     private func toggleBookmark() {
-        guard let page = currentPage, !document.isReadOnly else { return }
+        guard let page = session.shownPage, !document.isReadOnly else { return }
         document.setBookmark(page.bookmark == nil ? "" : nil, forPage: page.id)
         announce(page.bookmark == nil ? String(localized: "Page bookmarked") : String(localized: "Bookmark removed"))
     }
@@ -1259,7 +717,7 @@ fileprivate struct EditorContent: View {
 
     /// A slim ribbon beside the page number: mustard once the page is bookmarked.
     private var bookmarkRibbon: some View {
-        let page = currentPage, marked = page?.bookmark != nil
+        let page = session.shownPage, marked = page?.bookmark != nil
         return Button(action: toggleBookmark) {
             Image(systemName: marked ? "bookmark.fill" : "bookmark")
                 .font(.footnote.weight(.semibold))
@@ -1792,7 +1250,7 @@ fileprivate struct EditorContent: View {
 
     private var moreMenu: some View {
         OwlLunaMenu {
-            let current = document.pages.indices.contains(session.currentPage) ? document.pages[session.currentPage] : nil
+            let current = session.shownPage
             if isNarrow {
                 if !session.recorder.isRecording {
                     Button { session.recorder.startRecording() } label: { Label("Record Audio", systemImage: "mic") }
@@ -1879,28 +1337,20 @@ fileprivate struct EditorContent: View {
             let file = try await document.package.importAsset(from: url, ext: "pdf")
             let assetURL = document.package.assetURL(file)
             let pages = try await Task.detached(priority: .userInitiated) { try PDFImport.pages(at: assetURL, file: file) }.value
-            let position = min(position, document.pages.count)
-            document.insertPages(pages, at: position, actionName: String(localized: "Insert PDF"))
-            session.go(to: position)
+            session.insert(pages, at: position, actionName: String(localized: "Insert PDF"))
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func insertPhoto(_ item: PhotosPickerItem, at position: Int) async {
-        defer { photoItem = nil }
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { throw ImportError.unreadable }
+        await loadPhoto(item) { data in
             let (jpeg, size) = try await Task.detached(priority: .userInitiated) { try PhotoImport.normalize(data) }.value
             let file = try await document.package.writeAsset(jpeg, ext: "jpg")
             let width = PageSize.letter.points.width
             let page = NotebookPage(background: .image(file: file), paperColor: .white,
                                     size: CGSize(width: width, height: (width * size.height / size.width).rounded()))
-            let position = min(position, document.pages.count)
-            document.insertPages([page], at: position, actionName: String(localized: "Insert Photo"))
-            session.go(to: position)
-        } catch {
-            errorMessage = error.localizedDescription
+            session.insert([page], at: position, actionName: String(localized: "Insert Photo"))
         }
     }
 }
@@ -1950,9 +1400,7 @@ extension EditorContent {
         document.perform {
             do {
                 let pages = try await DocumentScan.pages(from: images, in: document.package)
-                let position = min(position, document.pages.count)
-                document.insertPages(pages, at: position, actionName: String(localized: "Scan Documents"))
-                session.go(to: position)
+                session.insert(pages, at: position, actionName: String(localized: "Scan Documents"))
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -2005,11 +1453,18 @@ extension EditorContent {
 
     /// Places a picture on the current page as something that can be moved, rather than as a new page.
     fileprivate func addPicture(_ item: PhotosPickerItem) async {
+        await loadPhoto(item) { data in
+            try await session.addPicture(data)
+            announce(String(localized: "Picture added to the page"))
+        }
+    }
+
+    /// Reads the picked photo and hands it to `use`; what goes wrong is shown, and the picker is cleared either way.
+    fileprivate func loadPhoto(_ item: PhotosPickerItem, then use: (Data) async throws -> Void) async {
         defer { photoItem = nil }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { throw ImportError.unreadable }
-            try await session.addPicture(data)
-            announce(String(localized: "Picture added to the page"))
+            try await use(data)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2029,271 +1484,3 @@ private extension View {
     }
 }
 
-enum PhotoImport {
-    /// A picture for placing on a page: at most `longSide` px on the long side, PNG when it has transparency.
-    static func picture(_ image: UIImage, longSide: CGFloat = 1600) throws -> (data: Data, size: CGSize, ext: String) {
-        guard image.size.width > 0, image.size.height > 0 else { throw ImportError.unreadable }
-        let scale = min(1, longSide / max(image.size.width * image.scale, image.size.height * image.scale))
-        let target = CGSize(width: (image.size.width * image.scale * scale).rounded(), height: (image.size.height * image.scale * scale).rounded())
-        let alpha = image.cgImage?.alphaInfo ?? .none
-        let transparent = ![.none, .noneSkipFirst, .noneSkipLast].contains(alpha)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = !transparent
-        let renderer = UIGraphicsImageRenderer(size: target, format: format)
-        let encoded = transparent ? renderer.pngData { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-                                  : renderer.jpegData(withCompressionQuality: 0.88) { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-        return (encoded, target, transparent ? "png" : "jpg")
-    }
-
-    /// Downscales to at most 2,400 px on the long side and re-encodes as JPEG, off the main thread.
-    static func normalize(_ data: Data) throws -> (Data, CGSize) {
-        guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { throw ImportError.unreadable }
-        let scale = min(1, 2400 / max(image.size.width, image.size.height))
-        let target = CGSize(width: (image.size.width * scale).rounded(), height: (image.size.height * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let normalized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-        guard let jpeg = normalized.jpegData(compressionQuality: 0.88) else { throw ImportError.unreadable }
-        return (jpeg, target)
-    }
-}
-
-struct RibbonShape: Shape {
-    static let notch: CGFloat = 0.28
-
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.addLines([CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.maxY),
-                           CGPoint(x: rect.midX, y: rect.maxY - rect.width * Self.notch), CGPoint(x: rect.minX, y: rect.maxY)])
-            path.closeSubpath()
-        }
-    }
-}
-
-struct NoticeBanner: View {
-    /// A button beside the message that does what it says and puts the notice away.
-    struct Action {
-        let title: LocalizedStringKey
-        let perform: () -> Void
-    }
-
-    let notice: DocumentNotice
-    var action: Action?
-    let dismiss: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let dismissable = notice.kind != .saveFailed
-        let stacked = action != nil && dynamicTypeSize.isAccessibilitySize
-        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.x2)) : AnyLayout(HStackLayout(spacing: Space.x3))
-        layout {
-            HStack(spacing: Space.x3) {
-                Image(systemName: notice.kind == .saveFailed ? "exclamationmark.icloud" : notice.kind == .newerVersion ? "icloud.and.arrow.down"
-                                  : notice.kind == .keptCopy ? "doc.on.doc" : "info.circle")
-                    .foregroundStyle(notice.kind == .saveFailed ? Color.tomato : Color.accentColor)
-                Text(notice.message).font(.subheadline).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .accessibilityElement(children: .combine)
-            if action != nil || dismissable {
-                HStack(spacing: Space.x1) {
-                    if let action {
-                        Button(action.title) {
-                            action.perform()
-                            dismiss()
-                        }
-                        .buttonStyle(.owlLuna(.primary, compact: true))
-                    }
-                    if dismissable {
-                        Button(action: dismiss) { Label("Dismiss", systemImage: "xmark").imageScale(.medium) }
-                            .buttonStyle(.barIcon)
-                    }
-                }
-            }
-        }
-        .padding(.leading, Space.x4)
-        .padding(.trailing, dismissable ? Space.x1 : Space.x4)
-        .padding(.vertical, dismissable && !stacked ? Space.x1 : Space.x3)
-        .frame(maxWidth: 520, alignment: .leading)
-        .board(in: RoundedRectangle.bar)
-        .padding(.horizontal, Space.x4)
-        .accessibilityElement(children: action == nil ? .combine : .contain)
-        .accessibilityAddTraits(action == nil ? .isStaticText : [])
-    }
-}
-
-struct RecordingList: View {
-    let recorder: NotebookRecorder
-    /// Replays a recording with its ink, from a moment in it.
-    var replay: ((RecordingEntry, TimeInterval) -> Void)?
-    @State private var path: [UUID] = []
-    @State private var renaming: RecordingEntry?
-    @State private var name = ""
-    @State private var sharing: SharedFiles?
-    @Environment(\.panelClose) private var panelClose
-
-    private struct SharedFiles: Identifiable {
-        let id = UUID()
-        let urls: [URL]
-    }
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            Ledger {
-              Section {
-                ForEach(Array(recorder.recordings.enumerated()), id: \.element.id) { index, recording in
-                    RecordingRow(recorder: recorder, recording: recording, number: index + 1, replay: replay,
-                                 openTranscript: { path.append(recording.id) },
-                                 rename: {
-                                     name = recording.title ?? ""
-                                     renaming = recording
-                                 },
-                                 share: { share($0, of: recording) })
-                    .ledgerSwipe {
-                        if !recorder.isReadOnly {
-                            Button(role: .destructive) { recorder.delete(recording) } label: { Label("Delete", systemImage: "trash") }
-                        }
-                    }
-                }
-              } footer: {
-                if replay != nil, !recorder.recordings.isEmpty {
-                    Text("The pencil replays a recording with your ink: what you wrote appears as it was written, and tapping ink jumps to that moment. The speech bubble opens what was said.")
-                        .foregroundStyle(Color.textSecondary)
-                }
-              }
-            }
-            .background(Color.surface)
-            .overlay {
-                if recorder.recordings.isEmpty {
-                    ScrollView {
-                        EmptyPlate("No Recordings", systemImage: "waveform",
-                                   message: Text("Tap the microphone to record a lecture or meeting alongside your notes."))
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .background(Color.surface)
-                }
-            }
-            .navigationTitle("Recordings")
-            .barGround(.surface)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(panelClose == nil ? .automatic : .hidden, for: .navigationBar)
-            .navigationDestination(for: UUID.self) { id in
-                TranscriptView(recorder: recorder, recordingID: id, replay: replay)
-            }
-        }
-        .notice("Rename Recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
-                message: Text("Leave it empty to name it after when it was recorded.")) {
-            TextField("Name", text: $name)
-                .accessibilityIdentifier("recording.rename.field")
-        } actions: {
-            Button("Cancel", role: .cancel) {}
-            Button("Save") { if let renaming { recorder.rename(renaming, to: name) } }
-        }
-        .sheet(item: $sharing) { files in
-            ShareSheet(items: files.urls)
-                .presentationCornerRadius(Radius.sheet)
-                .onDisappear { ExportFolder.discard(files.urls) }
-        }
-    }
-
-    private func share(_ part: NotebookRecorder.Part, of recording: RecordingEntry) {
-        Task {
-            do {
-                if let urls = try await recorder.files(sharing: part, of: recording) { sharing = SharedFiles(urls: urls) }
-            } catch {
-                recorder.errorMessage = error.localizedDescription
-            }
-        }
-    }
-}
-
-/// A recording in the list: play it, read what was said, replay it with its ink, or name, share and delete it.
-/// While it plays, its position and the speed are under it.
-private struct RecordingRow: View {
-    let recorder: NotebookRecorder
-    let recording: RecordingEntry
-    let number: Int
-    var replay: ((RecordingEntry, TimeInterval) -> Void)?
-    let openTranscript: () -> Void
-    let rename: () -> Void
-    let share: (NotebookRecorder.Part) -> Void
-
-    var body: some View {
-        let playing = recorder.playingID == recording.id
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Space.x3) {
-                Button { recorder.togglePlayback(recording) } label: {
-                    Label(playing ? "Stop" : "Play", systemImage: playing ? "stop.circle.fill" : "play.circle.fill")
-                }
-                .buttonStyle(.barIcon)
-                .disabled(recorder.isRecording)
-                .accessibilityIdentifier("recording.play.\(number)")
-                HStack(spacing: Space.x3) {
-                    VStack(alignment: .leading, spacing: Space.x1) {
-                        Text(recording.name).font(.body.weight(.medium)).foregroundStyle(Color.ink)
-                        if recording.title != nil {
-                            Text(recording.startedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Color.textSecondary)
-                        }
-                    }
-                    Spacer()
-                    Text(Duration.seconds(recording.duration).formatted(.time(pattern: .minuteSecond)))
-                        .font(.callout.monospacedDigit()).foregroundStyle(Color.textSecondary)
-                }
-                .frame(minHeight: 44)
-                .accessibilityElement(children: .combine)
-                HStack(spacing: 0) {
-                    Button(action: openTranscript) {
-                        Label("Transcript", systemImage: "quote.bubble").symbolVariant(recording.transcriptFile == nil ? .none : .fill)
-                    }
-                    .accessibilityValue(Text(recorder.transcribing[recording.id] != nil ? "Transcribing" : recording.transcriptFile == nil ? "Not transcribed" : "Transcribed"))
-                    .accessibilityIdentifier("recording.transcript.\(number)")
-                    if let replay {
-                        Button { replay(recording, 0) } label: { Label("Replay with Ink", systemImage: "pencil.and.scribble") }
-                            .disabled(recorder.isRecording)
-                            .accessibilityHint(Text("Plays the recording while the ink written during it appears"))
-                            .accessibilityIdentifier("recording.replay.\(number)")
-                    }
-                    options
-                }
-                .buttonStyle(.barIcon)
-            }
-            if playing {
-                HStack(spacing: Space.x2) {
-                    Text(PlaybackScrubber.clock(recorder.currentTime))
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(Color.ink)
-                        .accessibilityHidden(true)
-                    PlaybackScrubber(time: recorder.currentTime, duration: recording.duration) { recorder.seek(to: $0) }
-                        .accessibilityIdentifier("recording.position.\(number)")
-                    PlaybackSpeedMenu(recorder: recorder)
-                        .accessibilityIdentifier("recording.speed.\(number)")
-                }
-                .padding(.leading, 44 + Space.x3)
-                .padding(.bottom, Space.x2)
-            }
-        }
-    }
-
-    private var options: some View {
-        OwlLunaMenu(Text(recording.name)) {
-            Button(action: rename) { Label("Rename…", systemImage: "pencil") }
-                .disabled(recorder.isReadOnly)
-                .accessibilityIdentifier("recording.rename")
-            Button { share(.audio) } label: { Label("Share Audio…", systemImage: "square.and.arrow.up") }
-                .accessibilityIdentifier("recording.share.audio")
-            if recording.transcriptFile != nil {
-                Button { share(.transcript) } label: { Label("Share Transcript…", systemImage: "doc.text") }
-                    .accessibilityIdentifier("recording.share.transcript")
-            }
-            if !recorder.isReadOnly {
-                MenuBreak()
-                Button(role: .destructive) { recorder.delete(recording) } label: { Label("Delete", systemImage: "trash") }
-                    .accessibilityIdentifier("recording.delete")
-            }
-        } label: {
-            Label("Recording Options", systemImage: "ellipsis")
-        }
-        .accessibilityIdentifier("recording.options.\(number)")
-    }
-}

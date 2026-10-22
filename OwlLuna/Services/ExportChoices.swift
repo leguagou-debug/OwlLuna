@@ -52,7 +52,7 @@ struct ExportChoices: View {
                     .buttonStyle(.owlLuna)
                 Spacer(minLength: 0)
                 Button(startTitle) { job.start() }
-                    .prominentButton()
+                    .buttonStyle(.owlLuna(.primary))
                     .accessibilityIdentifier("export.start")
             }
             .padding(.horizontal, Space.x5)

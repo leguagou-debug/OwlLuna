@@ -1,80 +1,6 @@
 import SwiftUI
 import SwiftData
 
-enum LibraryScope: Hashable {
-    case all, favorites, trash
-    case folder(UUID)
-    /// Everything carrying one tag.
-    case tag(String)
-    /// A saved filter, by its ID.
-    case smart(UUID)
-}
-
-enum LibrarySortOrder: String, CaseIterable, Identifiable {
-    case opened, modified, created, title
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .opened: String(localized: "Last Opened")
-        case .modified: String(localized: "Date Modified")
-        case .created: String(localized: "Date Created")
-        case .title: String(localized: "Title")
-        }
-    }
-
-    /// Turned round, a sort puts the oldest first, or Z.
-    func summary(reversed: Bool = false) -> String {
-        switch (self, reversed) {
-        case (.opened, false): String(localized: "last opened first")
-        case (.opened, true): String(localized: "least recently opened first")
-        case (.modified, false): String(localized: "recently edited first")
-        case (.modified, true): String(localized: "least recently edited first")
-        case (.created, false): String(localized: "newest first")
-        case (.created, true): String(localized: "oldest first")
-        case (.title, false): String(localized: "A to Z")
-        case (.title, true): String(localized: "Z to A")
-        }
-    }
-
-    func directionName(reversed: Bool) -> String {
-        switch (self, reversed) {
-        case (.title, false): String(localized: "A to Z")
-        case (.title, true): String(localized: "Z to A")
-        case (_, false): String(localized: "Newest First")
-        case (_, true): String(localized: "Oldest First")
-        }
-    }
-}
-
-/// The notebooks as covers on shelves, or as rows in columns.
-enum LibraryLayout: String, CaseIterable, Identifiable {
-    case shelf, list
-    var id: String { rawValue }
-
-    var displayName: String { self == .shelf ? String(localized: "Shelf") : String(localized: "List") }
-    var symbol: String { self == .shelf ? "square.grid.2x2" : "list.bullet" }
-}
-
-enum LibraryGrouping: String, CaseIterable, Identifiable {
-    case recency, folder
-    var id: String { rawValue }
-    var displayName: String { self == .recency ? String(localized: "Recency") : String(localized: "Folder") }
-}
-
-struct SpineChip: View {
-    let cloth: ClothColor
-    var body: some View {
-        RoundedRectangle(cornerRadius: 1.5)
-            .fill(cloth.color)
-            .frame(width: 7, height: 20)
-            .overlay(alignment: .leading) { Rectangle().fill(.black.opacity(0.2)).frame(width: 2) }
-            .clipShape(RoundedRectangle(cornerRadius: 1.5))
-            .overlay { RoundedRectangle(cornerRadius: 1.5).strokeBorder(RowInk(resting: .hairline), lineWidth: 1) }
-            .accessibilityHidden(true)
-    }
-}
-
 struct LibrarySidebar: View {
     @Binding var scope: LibraryScope?
     @Binding var showingSettings: Bool
@@ -141,11 +67,7 @@ struct LibrarySidebar: View {
                 }
                 .onMove { store.moveFolders(rows.map(\.folder), from: $0, to: $1) }
                 Button { folderName = ""; creatingInside = nil; creatingFolder = true } label: {
-                    if dynamicTypeSize.isAccessibilitySize {
-                        Text("New Folder")
-                    } else {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                    }
+                    addLabel("New Folder", systemImage: "folder.badge.plus")
                 }
                 .background(CellFocusRing(shown: true))
             } header: {
@@ -161,11 +83,7 @@ struct LibrarySidebar: View {
                     }
                     if !tags.isEmpty {
                         Button { shelfDraft = SmartShelfDraft(tags: tags.map(\.name)) } label: {
-                            if dynamicTypeSize.isAccessibilitySize {
-                                Text("New Smart Shelf")
-                            } else {
-                                Label("New Smart Shelf", systemImage: "plus.rectangle.on.rectangle")
-                            }
+                            addLabel("New Smart Shelf", systemImage: "plus.rectangle.on.rectangle")
                         }
                         .accessibilityIdentifier("sidebar.newSmartShelf")
                         .background(CellFocusRing(shown: true))
@@ -212,13 +130,13 @@ struct LibrarySidebar: View {
                 }
             }
         }
-        .notice("Rename Folder", isPresented: Binding(get: { editingFolder != nil }, set: { if !$0 { editingFolder = nil } })) {
+        .notice("Rename Folder", isPresented: Binding(isPresent: $editingFolder)) {
             TextField("Name", text: $folderName)
         } actions: {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let editingFolder { store.renameFolder(editingFolder, to: folderName) } }
         }
-        .notice("Rename Tag", isPresented: Binding(get: { renamingTag != nil }, set: { if !$0 { renamingTag = nil } }),
+        .notice("Rename Tag", isPresented: Binding(isPresent: $renamingTag),
                 message: Text("Every notebook and page carrying it takes the new name.")) {
             TextField("Name", text: $tagName)
         } actions: {
@@ -228,7 +146,7 @@ struct LibrarySidebar: View {
             }
         }
         .notice(Text(removingTag.map { String(localized: "Remove “\($0)” from every notebook and page?") } ?? ""),
-                isPresented: Binding(get: { removingTag != nil }, set: { if !$0 { removingTag = nil } }), message: Text("This can't be undone.")) {
+                isPresented: Binding(isPresent: $removingTag), message: Text("This can't be undone.")) {
             Button("Cancel", role: .cancel) {}
             Button("Remove Tag", role: .destructive) {
                 guard let tag = removingTag else { return }
@@ -291,14 +209,30 @@ struct LibrarySidebar: View {
                 }
             }
             Spacer()
-            if let count, count > 0, !dynamicTypeSize.isAccessibilitySize {
-                Text(count, format: .number).font(.subheadline.monospacedDigit())
-            }
+            countLabel(count)
         }
         .foregroundStyle(RowInk(resting: .ink))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(count.map { $0 > 0 ? "\(title), \($0)" : title } ?? title)
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// A row's count, left off when there's none and at the accessibility sizes.
+    @ViewBuilder
+    private func countLabel(_ count: Int?) -> some View {
+        if let count, count > 0, !dynamicTypeSize.isAccessibilitySize {
+            Text(count, format: .number).font(.subheadline.monospacedDigit())
+        }
+    }
+
+    /// The words of a button that adds a shelf, with its symbol unless the text is at an accessibility size.
+    @ViewBuilder
+    private func addLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Text(title)
+        } else {
+            Label(title, systemImage: systemImage)
+        }
     }
 
     /// A folder inside another is indented under it; one that holds folders has a chevron that folds them away.
@@ -308,9 +242,7 @@ struct LibrarySidebar: View {
             SpineChip(cloth: folder.cloth)
             Text(folder.name).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             Spacer()
-            if count > 0, !dynamicTypeSize.isAccessibilitySize {
-                Text(count, format: .number).font(.subheadline.monospacedDigit())
-            }
+            countLabel(count)
             if row.hasChildren {
                 Button { withAnimation(Motion.adaptive(Motion.standard, reduceMotion: reduceMotion)) { toggle(folder) } } label: {
                     Image(systemName: "chevron.down")
@@ -399,8 +331,7 @@ private struct RowCloth: View {
             .overlay {
                 if contrast != .increased {
                     shape.fill(ImagePaint(image: ClothWeave.tile, scale: 1))
-                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0), .black.opacity(0.20)],
-                                                      startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                    shape.strokeBorder(ClothWeave.bevel, lineWidth: 1)
                 }
             }
     }
@@ -465,5 +396,18 @@ private struct SidebarHeader<Buttons: View>: ViewModifier {
                     ToolbarItem(placement: .topBarTrailing) { buttons.buttonStyle(.plateIcon) }
                 }
         }
+    }
+}
+
+struct SpineChip: View {
+    let cloth: ClothColor
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(cloth.color)
+            .frame(width: 7, height: 20)
+            .overlay(alignment: .leading) { Rectangle().fill(.black.opacity(0.2)).frame(width: 2) }
+            .clipShape(RoundedRectangle(cornerRadius: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 1.5).strokeBorder(RowInk(resting: .hairline), lineWidth: 1) }
+            .accessibilityHidden(true)
     }
 }

@@ -49,10 +49,6 @@ struct FolderTree: Sendable {
         return false
     }
 
-    var isEmpty: Bool { nodes.isEmpty }
-
-    func contains(_ id: UUID) -> Bool { nodes[id] != nil }
-
     func parent(of id: UUID) -> UUID? { parents[id] }
 
     func children(of id: UUID?) -> [UUID] { children[id] ?? [] }

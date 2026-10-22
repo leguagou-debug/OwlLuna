@@ -14,7 +14,7 @@ struct Resurfaced: Hashable, Sendable {
     /// A date counts when adding the interval lands on today, so 29 February comes back on 28 February.
     static func candidate(today: Date, calendar: Calendar, journal: (id: UUID, pages: [NotebookPage])?,
                           notebooks: [(id: UUID, createdAt: Date, isTrashed: Bool)]) -> Resurfaced? {
-        let gregorian = DailyJournal.gregorian(calendar)
+        let gregorian = ActivityFile.gregorian(calendar.timeZone)
         let todayKey = DailyJournal.dayKey(for: today, calendar: calendar)
         func lands(_ date: Date, after component: Calendar.Component, _ value: Int) -> Bool {
             gregorian.date(byAdding: component, value: value, to: date).map { DailyJournal.dayKey(for: $0, calendar: calendar) } == todayKey

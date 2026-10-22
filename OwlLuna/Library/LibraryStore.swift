@@ -30,7 +30,7 @@ final class LibraryStore {
     private(set) var searchVersion = 0
     /// The saved filters in `smart-shelves.json`, in the order they were made.
     private(set) var smartShelves: [SmartShelf] = []
-    @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "library")
+    @ObservationIgnored private let log = Logger(category: "library")
     @ObservationIgnored private var changesInFlight: [UUID: [UUID: @Sendable (inout NotebookManifest) -> Void]] = [:]
     @ObservationIgnored private var manifestWrites: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var lastRefile: [UUID: UUID] = [:]
@@ -104,7 +104,7 @@ final class LibraryStore {
     nonisolated(nonsending) static func assemble(_ id: UUID, in root: StorageRoot,
                                                  _ build: (NotebookPackage) async throws -> NotebookManifest) async throws -> NotebookManifest {
         let fileManager = FileManager.default
-        let staging = StorageRoot(url: root.arriving.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory))
+        let staging = StorageRoot(url: root.staging(id))
         defer { try? fileManager.removeItem(at: staging.url) }
         try fileManager.createDirectory(at: staging.library, withIntermediateDirectories: true)
         let package = NotebookPackage(root: staging, id: id)
@@ -117,9 +117,9 @@ final class LibraryStore {
 
     /// A notebook with the default paper from Settings, dated rather than named, created without the sheet.
     func createQuickNote(folder: FolderRecord?) async throws -> UUID {
-        let template = defaults.string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled
-        let color = defaults.string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white
-        let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let template = defaults.defaultTemplate
+        let color = defaults.defaultPaperColor
+        let size = defaults.defaultPageSize
         let paper = defaults.string(forKey: SettingsKey.defaultPaper).flatMap { PaperShelf.paper($0, in: root) }
         let id = UUID()
         return try await createNotebook(id: id, title: String(localized: "Note \(Date.now.formatted(date: .abbreviated, time: .shortened))"),
@@ -130,7 +130,7 @@ final class LibraryStore {
     /// A notebook that opens on a whiteboard, created without the sheet.
     func createWhiteboard(folder: FolderRecord?) async throws -> UUID {
         let starter = NotebookStarter.whiteboard, id = UUID()
-        let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let size = defaults.defaultPageSize
         return try await createNotebook(id: id, title: starter.notebookTitle, cover: starter.spec(for: id),
                                         defaults: PageDefaults(template: starter.template, paperColor: starter.paperColor, pageSize: size),
                                         folder: folder, startsWithBoard: true)
@@ -138,36 +138,34 @@ final class LibraryStore {
 
     @discardableResult
     func importPDF(from url: URL, folder: FolderRecord?) async throws -> UUID {
-        let folderID = folder?.id
-        let id = UUID()
-        let manifest = try await assemble(id) { package in
+        try await importPages(folder: folder) { package in
             let file = try await package.importAsset(from: url, ext: "pdf")
             let assetURL = package.assetURL(file)
             let pages = try await Task.detached(priority: .userInitiated) { try PDFImport.pages(at: assetURL, file: file) }.value
-            var cover = CoverSpec.defaultCloth(for: id)
-            cover.style = .firstPage
-            var manifest = NotebookManifest(id: id, title: url.deletingPathExtension().lastPathComponent, cover: cover,
-                                            defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages)
-            manifest.library.folderID = folderID
-            try await package.create(manifest)
-            return manifest
+            return (url.deletingPathExtension().lastPathComponent, pages)
         }
-        index(manifest)
-        indexHandwriting(package: NotebookPackage(root: root, id: id), pages: manifest.pages)
-        return id
     }
 
     /// A new notebook whose pages are sheets scanned with the camera.
     @discardableResult
     func importScan(_ images: [UIImage], folder: FolderRecord?) async throws -> UUID {
+        try await importPages(folder: folder) { package in
+            let pages = try await DocumentScan.pages(from: images, in: package)
+            return (String(localized: "Scan \(Date.now.formatted(date: .abbreviated, time: .shortened))"), pages)
+        }
+    }
+
+    /// A notebook of the pages `bring` puts in its package, on blank paper with the first on the cover, read for search once it is in.
+    private func importPages(folder: FolderRecord?,
+                             _ bring: @MainActor (NotebookPackage) async throws -> (title: String, pages: [NotebookPage])) async throws -> UUID {
         let folderID = folder?.id
         let id = UUID()
         let manifest = try await assemble(id) { package in
-            let pages = try await DocumentScan.pages(from: images, in: package)
+            let brought = try await bring(package)
             var cover = CoverSpec.defaultCloth(for: id)
             cover.style = .firstPage
-            var manifest = NotebookManifest(id: id, title: String(localized: "Scan \(Date.now.formatted(date: .abbreviated, time: .shortened))"), cover: cover,
-                                            defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: pages)
+            var manifest = NotebookManifest(id: id, title: brought.title, cover: cover,
+                                            defaults: PageDefaults(template: .blank, paperColor: .white, pageSize: .letter), pages: brought.pages)
             manifest.library.folderID = folderID
             try await package.create(manifest)
             return manifest
@@ -221,10 +219,7 @@ final class LibraryStore {
 
     func setCover(_ cover: CoverSpec, for record: NotebookRecord) {
         guard !record.isReadOnly else { return }
-        record.coverStyleRaw = cover.styleRaw
-        record.clothRaw = cover.clothRaw
-        record.inksRaw = cover.inksRaw.joined(separator: ",")
-        record.coverSeed = Int(cover.seed)
+        record.cover = cover
         saveIndex()
         if let document = DocumentRegistry.shared.document(for: record.id) {
             document.updateCover(cover)
@@ -281,10 +276,8 @@ final class LibraryStore {
         var moved: [URL] = []
         var deleted: [UUID] = []
         for record in records where record.isTrashed && registry.document(for: record.id) == nil && !registry.isOpening(record.id) {
-            let tombstone = root.deleting.appending(path: "\(record.id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
             do {
-                try FileManager.default.createDirectory(at: root.deleting, withIntermediateDirectories: true)
-                try FileManager.default.moveItem(at: root.package(record.id), to: tombstone)
+                let tombstone = try root.moveToDeleting(record.id)
                 moved.append(tombstone)
                 deleted.append(record.id)
                 if let row = LibraryIndex.searchRow(for: record.id, in: context) { context.delete(row) }
@@ -328,17 +321,7 @@ final class LibraryStore {
 
     /// Clears away packages untouched since `cutoff` that a quit left with neither a manifest nor ink, which nothing lists or opens.
     nonisolated static func sweepUnfinished(root: StorageRoot, untouchedSince cutoff: Date) {
-        let fileManager = FileManager.default
-        for id in root.packageIDs() where isUnfinished(root.package(id), untouchedSince: cutoff) {
-            let tombstone = root.deleting.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
-            do {
-                try fileManager.createDirectory(at: root.deleting, withIntermediateDirectories: true)
-                try fileManager.moveItem(at: root.package(id), to: tombstone)
-            } catch {
-                continue
-            }
-            try? fileManager.removeItem(at: tombstone)
-        }
+        for id in root.packageIDs() where isUnfinished(root.package(id), untouchedSince: cutoff) { try? root.removePackage(id) }
     }
 
     /// Anything that may be a manifest (damaged, previous or still downloading), or ink to rebuild one from, keeps a package.
@@ -413,9 +396,7 @@ final class LibraryStore {
                 let written = try await package.updateLibraryState(change)
                 if lastRefile[id] == token, record(id) != nil { index(written) }
             } catch {
-                lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
-                log.error("filing update failed for \(id): \(error.localizedDescription)")
-                if let manifest = try? await package.readManifest().manifest { index(manifest) }
+                await writeFailed(error, "filing", package: package)
             }
             registry.didChange(id)
             if lastRefile[id] == token { lastRefile[id] = nil }
@@ -442,9 +423,7 @@ final class LibraryStore {
             do {
                 written = try await package.updateManifest(change)
             } catch {
-                lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
-                log.error("manifest update failed for \(id): \(error.localizedDescription)")
-                if let manifest = try? await package.readManifest().manifest { index(manifest) }
+                await writeFailed(error, "manifest", package: package)
             }
             registry.didChange(id)
             changesInFlight[id]?[token] = nil
@@ -459,6 +438,13 @@ final class LibraryStore {
         return write
     }
 
+    /// A write to a closed notebook failed: it is reported, and the index goes back to what the file holds.
+    private func writeFailed(_ error: any Error, _ what: String, package: NotebookPackage) async {
+        lastError = String(localized: "A change couldn't be saved: \(error.localizedDescription)")
+        log.error("\(what, privacy: .public) update failed for \(package.id): \(error.localizedDescription)")
+        if let manifest = try? await package.readManifest().manifest { index(manifest) }
+    }
+
     func reapplyChangesInFlight(to document: NotebookDocument) {
         guard let changes = changesInFlight[document.id] else { return }
         for change in changes.values { document.applyLibraryChange(change) }
@@ -471,7 +457,7 @@ final class LibraryStore {
     }
 
     private func folderEntries() -> [FolderEntry] {
-        allFolders().map { FolderEntry(id: $0.id, name: $0.name, clothRaw: $0.clothRaw, createdAt: $0.createdAt, sortIndex: $0.sortIndex, parentID: $0.parentID) }
+        allFolders().map(\.entry)
     }
 
     func folderTree() -> FolderTree { FolderTree(folders: allFolders()) }
@@ -593,13 +579,18 @@ final class LibraryStore {
 
     /// Runs `work` in turn with the folder writes, so neither reads the file while the other is changing it.
     func holdingFolders<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value) async throws -> Value {
-        let previous = folderWrite
+        try await chain(work, on: &folderWrite).value.get()
+    }
+
+    /// Runs `work` once the writes chained on `queue` are done, and chains the next write after it.
+    private func chain<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value, on queue: inout Task<Void, Never>?) -> Task<Result<Value, any Error>, Never> {
+        let previous = queue
         let turn = Task.detached(priority: .utility) { () -> Result<Value, any Error> in
             await previous?.value
             return Result { try work() }
         }
-        folderWrite = Task { _ = await turn.value }
-        return try await turn.value.get()
+        queue = Task { _ = await turn.value }
+        return turn
     }
 
     // MARK: Smart shelves
@@ -634,13 +625,7 @@ final class LibraryStore {
 
     /// Runs `work` in turn with the smart shelf writes, so neither reads the file while the other is changing it.
     func holdingShelves<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value) async throws -> Value {
-        let previous = smartShelfWrite
-        let turn = Task.detached(priority: .utility) { () -> Result<Value, any Error> in
-            await previous?.value
-            return Result { try work() }
-        }
-        smartShelfWrite = Task { _ = await turn.value }
-        return try await turn.value.get()
+        try await chain(work, on: &smartShelfWrite).value.get()
     }
 
     /// A tag was renamed or removed across the library: searches are redone now, and a tag shelf lists its pages
@@ -722,7 +707,7 @@ final class LibraryStore {
 
     @discardableResult
     func createDailyJournal(id: UUID = UUID(), now: Date = .now, calendar: Calendar = .current) async throws -> UUID {
-        let size = defaults.string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter
+        let size = defaults.defaultPageSize
         let paper = PageDefaults(template: NotebookStarter.journal.template, paperColor: NotebookStarter.journal.paperColor, pageSize: size)
         var page = paper.newPage()
         page.day = DailyJournal.dayKey(for: now, calendar: calendar)
@@ -878,24 +863,26 @@ extension LibraryStore {
         // A change still waiting to be written goes in first, or the index would take the file from before it.
         await finishWritingNotebooks()
         let named = report.map { Set($0.pulled + $0.stateReceived + $0.conflictCopies) } ?? []
-        await LibraryIndex.refresh(root: root, context: context, rescanning: named)
+        await readAgain(rescanning: named)
+        await settleJournal()
+    }
+
+    /// Brings the index and the smart shelves up to date with the library on disk, and has what shows them look again.
+    private func readAgain(rescanning: Set<UUID> = []) async {
+        await LibraryIndex.refresh(root: root, context: context, rescanning: rescanning)
         await loadSmartShelves()
         searchVersion &+= 1
         indexVersion &+= 1
-        await settleJournal()
     }
 
     /// Adds a backup's notebooks, folders and stickers to the library, then brings the index up to date.
     func restoreBackup(from url: URL) async throws -> LibraryBackup.Summary {
         await finishWritingShelves()
-        let root = root, keepsHistory = defaults.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true, indexed = folderEntries()
+        let root = root, keepsHistory = defaults.bool(forKey: SettingsKey.keepsWritingHistory, default: true), indexed = folderEntries()
         let summary = try await Task.detached(priority: .userInitiated) {
             try await LibraryBackup.restore(from: url, into: root, keepsHistory: keepsHistory, indexed: indexed)
         }.value
-        await LibraryIndex.refresh(root: root, context: context)
-        await loadSmartShelves()
-        searchVersion &+= 1
-        indexVersion &+= 1
+        await readAgain()
         // The library keeps the journal it has, or else takes the backup's, and only that one stays marked.
         if let journal = dailyJournal?.id ?? summary.journal.flatMap({ record($0) == nil ? nil : $0 }) { setDailyJournal(journal) }
         await settleJournal()

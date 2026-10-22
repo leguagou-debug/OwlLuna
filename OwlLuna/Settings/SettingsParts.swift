@@ -24,17 +24,10 @@ struct SettingsSection<Content: View>: View {
                 .displayFont(22, relativeTo: .title3)
                 .foregroundStyle(Color.ink)
                 .accessibilityAddTraits(.isHeader)
-            VStack(spacing: 0) {
-                Group(subviews: content) { rows in
-                    ForEach(rows) { row in
-                        if row.id != rows.first?.id { Rectangle().fill(Color.hairline).frame(height: 1) }
-                        row
-                    }
-                }
-            }
-            .background(Color.surface)
-            .clipShape(shape)
-            .overlay { shape.strokeBorder(Color.hairline).allowsHitTesting(false) }
+            RuledRows { content }
+                .background(Color.surface)
+                .clipShape(shape)
+                .overlay { shape.strokeBorder(Color.hairline).allowsHitTesting(false) }
             if let note {
                 Text(note)
                     .font(.footnote)
@@ -46,12 +39,39 @@ struct SettingsSection<Content: View>: View {
     }
 }
 
+/// Rows one under another with a Hairline between each.
+struct RuledRows<Content: View>: View {
+    var alignment: HorizontalAlignment = .center
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 0) {
+            Group(subviews: content) { rows in
+                ForEach(rows) { row in
+                    if row.id != rows.first?.id { Rectangle().fill(Color.hairline).frame(height: 1) }
+                    row
+                }
+            }
+        }
+    }
+}
+
 extension View {
     /// The inset and least height every row of a Settings card shares.
     func settingsRow() -> some View {
         padding(.horizontal, Space.x4)
             .padding(.vertical, Space.x2)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+    }
+
+    /// A row's mark on a small square well, in `tint`.
+    func rowTile(tint: Color) -> some View {
+        font(.subheadline.weight(.semibold))
+            .foregroundStyle(tint)
+            .frame(width: 30, height: 30)
+            .background(Color.well, in: RoundedRectangle.plate)
+            .overlay { RoundedRectangle.plate.strokeBorder(Color.hairline) }
+            .accessibilityHidden(true)
     }
 }
 
@@ -186,17 +206,9 @@ struct SettingsRowButtonStyle: ButtonStyle {
         let tint: Color
         let isEnabled: Bool
 
-        private let tile = RoundedRectangle.plate
-
         func makeBody(configuration: Configuration) -> some View {
             HStack(spacing: Space.x3) {
-                configuration.icon
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isEnabled ? tint : Color.textSecondary)
-                    .frame(width: 30, height: 30)
-                    .background(Color.well, in: tile)
-                    .overlay { tile.strokeBorder(Color.hairline) }
-                    .accessibilityHidden(true)
+                configuration.icon.rowTile(tint: isEnabled ? tint : Color.textSecondary)
                 configuration.title
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)

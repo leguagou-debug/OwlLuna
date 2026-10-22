@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum Emphasis: CaseIterable, Identifiable {
+private enum Emphasis: String, CaseIterable, Identifiable {
     case bold, italic, underline
 
     var id: Self { self }
@@ -10,14 +10,6 @@ private enum Emphasis: CaseIterable, Identifiable {
         case .bold: "Bold"
         case .italic: "Italic"
         case .underline: "Underline"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .bold: "bold"
-        case .italic: "italic"
-        case .underline: "underline"
         }
     }
 
@@ -34,14 +26,6 @@ private enum Emphasis: CaseIterable, Identifiable {
         case .bold: \.isBold
         case .italic: \.isItalic
         case .underline: \.isUnderlined
-        }
-    }
-
-    var identifier: String {
-        switch self {
-        case .bold: "bold"
-        case .italic: "italic"
-        case .underline: "underline"
         }
     }
 }
@@ -61,12 +45,12 @@ struct TextStyleControls: View {
                 ForEach(Emphasis.allCases) { emphasis in
                     let on = box[keyPath: emphasis.path]
                     Button { session.updateText { $0[keyPath: emphasis.path].toggle() } } label: {
-                        Label(emphasis.title, systemImage: emphasis.symbol)
+                        Label(emphasis.title, systemImage: emphasis.rawValue)
                     }
                     .background { if on { RoundedRectangle.thumb.fill(Color.well).padding(.horizontal, 3).padding(.vertical, 5) } }
                     .keyboardShortcut(shortcuts ? KeyboardShortcut(emphasis.key) : nil)
                     .accessibilityAddTraits(on ? .isSelected : [])
-                    .accessibilityIdentifier("editor.arrange.\(emphasis.identifier)")
+                    .accessibilityIdentifier("editor.arrange.\(emphasis.rawValue)")
                 }
             }
             Button { showing = true } label: { Label("Text Style", systemImage: "textformat.size") }
@@ -90,8 +74,6 @@ struct TextStyleControls: View {
 /// colours of the words and of the wash behind them.
 struct TextStylePanel: View {
     let session: EditorSession
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var height: CGFloat?
     @ScaledMetric(relativeTo: .title3) private var sampleSize: CGFloat = 20
@@ -201,33 +183,23 @@ struct TextStylePanel: View {
             ForEach(Emphasis.allCases) { emphasis in
                 let on = box[keyPath: emphasis.path]
                 Button { session.updateText { $0[keyPath: emphasis.path].toggle() } } label: {
-                    Label(emphasis.title, systemImage: emphasis.symbol)
+                    Label(emphasis.title, systemImage: emphasis.rawValue)
                         .labelStyle(.iconOnly)
                         .font(.body.weight(on ? .semibold : .medium))
                         .foregroundStyle(on ? Color.ink : Color.textSecondary)
                         .frame(minWidth: 44, minHeight: 44)
-                        .background { if on { thumb } }
+                        .background { if on { SegmentThumb() } }
                         .contentShape(Rectangle())
                         .contentShape(.hoverEffect, RoundedRectangle.thumb.inset(by: 4))
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
                 .accessibilityAddTraits(on ? .isSelected : [])
-                .accessibilityIdentifier("editor.text.\(emphasis.identifier)")
+                .accessibilityIdentifier("editor.text.\(emphasis.rawValue)")
             }
         }
         .background { Color.clear.well(in: RoundedRectangle.track) }
         .fixedSize()
-    }
-
-    /// What a segment that is on stands on, as the segmented pickers' chosen one does.
-    private var thumb: some View {
-        let shape = RoundedRectangle.thumb
-        return Color.clear
-            .board(in: shape)
-            .overlay { if scheme == .dark { shape.fill(Color.ink.opacity(0.10)) } }
-            .overlay { if contrast == .increased { shape.strokeBorder(Color.inkSecondary, lineWidth: 1) } }
-            .padding(4)
     }
 
     /// A list keeps to the left, so turning one of the others on takes the list away.
@@ -314,7 +286,7 @@ private struct PaletteStrip<Value: Hashable>: View {
                 Button { choose(option) } label: {
                     Color.clear
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .overlay { if option == shown { knob } }
+                        .overlay { if option == shown { StripKnob() } }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -364,12 +336,19 @@ private struct PaletteStrip<Value: Hashable>: View {
         .clipShape(RoundedRectangle.thumb)
         .overlay { RoundedRectangle.thumb.strokeBorder(plateEdge(contrast), lineWidth: 1) }
     }
+}
 
-    private var knob: some View {
-        RoundedRectangle.thumb
-            .fill(Color.board)
-            .overlay { RoundedRectangle.thumb.strokeBorder(Color.ink, lineWidth: 1.5) }
-            .frame(width: 14, height: 28)
-            .shadow(color: .black.opacity(0.22), radius: 1.5, y: 1)
+/// What a segment that is on stands on, as `OwlLunaSegmentedPicker` draws its chosen one.
+struct SegmentThumb: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let shape = RoundedRectangle.thumb
+        Color.clear
+            .board(in: shape)
+            .overlay { if scheme == .dark { shape.fill(Color.ink.opacity(0.10)) } }
+            .overlay { if contrast == .increased { shape.strokeBorder(Color.inkSecondary, lineWidth: 1) } }
+            .padding(4)
     }
 }

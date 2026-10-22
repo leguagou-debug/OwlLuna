@@ -124,9 +124,7 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
 
     func image(width: CGFloat, scale: CGFloat) -> UIImage {
         let size = CGSize(width: width, height: width / aspect)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = false
+        let format = UIGraphicsImageRendererFormat(scale: scale)
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             draw(in: context.cgContext, rect: CGRect(origin: .zero, size: size))
         }
@@ -151,9 +149,6 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
     private static let sky = Tone(0xBCDDF5, 0x2F6DA8)
     private static let mint = Tone(0xBFE3C8, 0x3E8A5C)
     private static let kraft = Tone(0xD9BE94, 0x9A774A)
-    private static let ink = UIColor(hex: 0x1B2230)
-    private static let mustard = UIColor(hex: 0xE8B023)
-    private static let cream = UIColor(hex: 0xF7F1E3)
 
     // MARK: Drawing
 
@@ -186,16 +181,16 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
             let path = CGPath(roundedRect: outer, cornerWidth: 3, cornerHeight: 3, transform: nil)
             shadow(path, in: ctx)
             ctx.addPath(path)
-            ctx.setFillColor(Self.cream.cgColor)
+            ctx.setFillColor(ArtPalette.cream.cgColor)
             ctx.fillPath()
-            ctx.setStrokeColor(Self.ink.withAlphaComponent(0.55).cgColor)
+            ctx.setStrokeColor(ArtPalette.ink.withAlphaComponent(0.55).cgColor)
             ctx.setLineWidth(0.9)
             ctx.stroke(outer.insetBy(dx: 4, dy: 4))
             ctx.setLineWidth(0.45)
             ctx.stroke(outer.insetBy(dx: 6, dy: 6))
         case .bubble: bubble(in: ctx)
         case .banner: banner(in: ctx)
-        case .tapeMustard: tape(Self.mustard.withAlphaComponent(0.82), in: ctx) { self.stripes(in: ctx) }
+        case .tapeMustard: tape(ArtPalette.mustard.withAlphaComponent(0.82), in: ctx) { self.stripes(in: ctx) }
         case .tapeTeal: tape(UIColor(hex: 0x2FA39A, alpha: 0.82), in: ctx) { self.stripes(in: ctx) }
         case .tapePink: tape(UIColor(hex: 0xF07FA8, alpha: 0.82), in: ctx) { self.stripes(in: ctx) }
         case .tapeDots:
@@ -517,7 +512,7 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
         ctx.setFillColor(UIColor(hex: 0xFFFDF8).cgColor)
         ctx.fillPath()
         ctx.addPath(path)
-        ctx.setStrokeColor(Self.ink.withAlphaComponent(0.8).cgColor)
+        ctx.setStrokeColor(ArtPalette.ink.withAlphaComponent(0.8).cgColor)
         ctx.setLineWidth(1.8)
         ctx.strokePath()
     }
@@ -634,12 +629,7 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
         func line(_ size: CGFloat) -> CTLine {
             let system = UIFont.systemFont(ofSize: size, weight: .heavy)
             let font = system.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? system
-            let attributes: [NSAttributedString.Key: Any] = [
-                NSAttributedString.Key(kCTFontAttributeName as String): font as CTFont,
-                NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
-                .kern: kern,
-            ]
-            return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+            return .contextColoured(text, font: font as CTFont, kern: kern)
         }
         var set = line(size)
         if let width {
@@ -691,6 +681,13 @@ enum Sticker: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The printed colours stickers and link tabs share; they stay the same in Dark Mode.
+enum ArtPalette {
+    static let ink = UIColor(hex: 0x1B2230)
+    static let mustard = UIColor(hex: 0xE8B023)
+    static let cream = UIColor(hex: 0xF7F1E3)
+}
+
 private extension CGMutablePath {
     static func line(from start: CGPoint, to end: CGPoint) -> CGMutablePath {
         let path = CGMutablePath()
@@ -700,58 +697,3 @@ private extension CGMutablePath {
     }
 }
 
-/// Draws everything placed on a page, back to front, in a y-down context scaled to `size`. Thread-safe.
-enum PageItemRenderer {
-    /// Without `links`, a link shows its own label or a plain "Page": enough for a thumbnail.
-    /// Draws what lies under the ink, or with `overInk` the study tape that lies over it, leaving out any that is lifted.
-    static func draw(_ items: [PageItem], pageSize: CGSize, assets: URL, in ctx: CGContext, size: CGSize, onDark: Bool = false, links: LinkTitles? = nil,
-                     overInk: Bool = false, lifted: Set<UUID> = []) {
-        guard !items.isEmpty, pageSize.width > 0 else { return }
-        let scale = size.width / pageSize.width
-        for item in items where item.isOverInk == overInk && !lifted.contains(item.id) {
-            ctx.saveGState()
-            ctx.translateBy(x: item.center.x * scale, y: item.center.y * scale)
-            ctx.rotate(by: item.rotation)
-            let rect = CGRect(x: -item.size.width * scale / 2, y: -item.size.height * scale / 2, width: item.size.width * scale, height: item.size.height * scale)
-            switch item.content {
-            case .sticker:
-                item.sticker?.draw(in: ctx, rect: rect)
-            case .image(let file):
-                if let image = image(file, assets: assets, crop: item.crop) {
-                    ctx.translateBy(x: 0, y: rect.maxY + rect.minY)
-                    ctx.scaleBy(x: 1, y: -1)
-                    ctx.interpolationQuality = .high
-                    ctx.draw(PageRenderer.limited(image, for: rect.size), in: rect)
-                }
-            case .text(let box):
-                ctx.scaleBy(x: scale, y: scale)
-                box.draw(in: ctx, rect: CGRect(x: -item.size.width / 2, y: -item.size.height / 2, width: item.size.width, height: item.size.height), onDark: onDark)
-            case .link(let link):
-                let title = links?.title(for: link) ?? (link.target == nil ? LinkTitles().title(for: link) : link.label.isEmpty ? String(localized: "Page") : link.label)
-                PageLinkArt.draw(title: title, kind: link.kind, resolved: links?.resolves(link) ?? true, in: ctx, rect: rect)
-            case .tape(let color):
-                TapeArt.draw(color, in: ctx, rect: rect)
-            case .unknown:
-                break
-            }
-            ctx.restoreGState()
-        }
-    }
-
-    /// The picture, or just its `crop` at the file's own pixels, so an export carries nothing that was cropped away.
-    /// Reading its words passes `cached: false`, so it doesn't push what the editor shows out of the cache.
-    static func image(_ file: String, assets: URL, crop: CGRect? = nil, cached: Bool = true) -> CGImage? {
-        let path = assets.appending(path: file).path(percentEncoded: false)
-        let whole = cached ? PageRenderer.images.value(path) { UIImage(contentsOfFile: path)?.cgImage.map(SharedImage.init) }?.image
-            : UIImage(contentsOfFile: path)?.cgImage
-        guard let whole, let crop else { return whole }
-        return whole.cropping(to: pixels(of: crop, width: whole.width, height: whole.height))
-    }
-
-    /// A crop in whole pixels of a picture `width` by `height`, at least one each way.
-    static func pixels(of crop: CGRect, width: Int, height: Int) -> CGRect {
-        let w = CGFloat(width), h = CGFloat(height)
-        let x = min((crop.minX * w).rounded(), w - 1), y = min((crop.minY * h).rounded(), h - 1)
-        return CGRect(x: x, y: y, width: max(min((crop.maxX * w).rounded(), w) - x, 1), height: max(min((crop.maxY * h).rounded(), h) - y, 1))
-    }
-}

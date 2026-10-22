@@ -36,7 +36,7 @@ struct LibraryHeader: View {
 
     private var eyebrow: some View {
         TimelineView(.periodic(from: .now, by: 900)) { context in
-            Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+            Text(context.date.formatted(.dayName))
                 .metaStyle(.footnote)
                 .onChange(of: Calendar.current.startOfDay(for: context.date)) { activity.refresh(now: context.date) }
         }
@@ -147,7 +147,7 @@ struct WeekSummaryRow: View {
         if activity.isEnabled, activity.hasHistory {
             Button { showingCalendar = true } label: {
                 VStack(alignment: .leading, spacing: Space.x1) {
-                    Text("This week").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
+                    Text("This week").eyebrowStyle(Color.accentColor)
                     Text(activity.week.headline).font(.headline).foregroundStyle(Color.ink)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

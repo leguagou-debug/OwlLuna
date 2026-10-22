@@ -25,13 +25,11 @@ extension FolderEntry {
 
     /// When each of those was last changed. Older builds keep the stamps as an unknown key; an entry from before them has none.
     func changedAt(_ field: Field) -> Date? {
-        extra["changedAt"]?[field.rawValue]?.stringValue.flatMap(ManifestCodec.parseDate)
+        extra.changedAt(field.rawValue)
     }
 
     mutating func setChangedAt(_ date: Date?, for field: Field) {
-        var stamps = extra["changedAt"]?.objectValue ?? [:]
-        stamps[field.rawValue] = date.map(ManifestCodec.encodeDate)
-        extra["changedAt"] = stamps.isEmpty ? nil : .object(stamps)
+        extra.setChangedAt(date, for: field.rawValue)
     }
 
     func holds(_ field: Field, like other: FolderEntry) -> Bool {
@@ -114,9 +112,10 @@ struct FolderFile: Sendable, Hashable {
 
     /// A damaged file this replaces is set aside as `folders.json.corrupt`, so it's kept and never overwritten.
     func write(_ root: StorageRoot) throws {
-        try FileManager.default.createDirectory(at: root.library, withIntermediateDirectories: true)
-        if let existing = try? Data(contentsOf: root.foldersFile), FolderFile(existing) == nil { try Quarantine.move(root.foldersFile) }
-        try encoded().write(to: root.foldersFile, options: .atomic)
+        try root.writeLibraryFile(root.foldersFile) {
+            if let existing = try? Data(contentsOf: root.foldersFile), FolderFile(existing) == nil { try Quarantine.move(root.foldersFile) }
+            return try encoded()
+        }
     }
 
     /// Takes the changes the app made to its folders between `before` and `after`, stamping each field it changed after
@@ -141,10 +140,6 @@ struct FolderFile: Sendable, Hashable {
         // Kept in sidebar order, as the app numbers it.
         folders = folders.enumerated().sorted { ($0.element.sortIndex, $0.offset) < ($1.element.sortIndex, $1.offset) }.map(\.element)
     }
-
-    mutating func upsert(_ folder: FolderEntry) {
-        if let index = folders.firstIndex(where: { $0.id == folder.id }) { folders[index] = folder } else { folders.append(folder) }
-    }
 }
 
 extension FolderFile {
@@ -154,7 +149,7 @@ extension FolderFile {
         extra = top
         for raw in values {
             guard let object = raw.objectValue,
-                  let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
+                  let id = object["id"]?.uuidValue,
                   let name = object["name"]?.stringValue else {
                 opaque.append(raw)
                 continue
@@ -165,7 +160,7 @@ extension FolderFile {
             let cloth = reader.string("cloth", default: ClothColor.slate.rawValue)
             let createdAt = reader.date("createdAt", default: .now)
             let sortIndex = reader.int("sortIndex", default: folders.count)
-            let parent = reader.take("parent")?.stringValue.flatMap(UUID.init(uuidString:))
+            let parent = reader.take("parent")?.uuidValue
             folders.append(FolderEntry(id: id, name: name, clothRaw: cloth, createdAt: createdAt, sortIndex: sortIndex, parentID: parent,
                                        extra: reader.remaining, undecoded: reader.undecoded))
         }

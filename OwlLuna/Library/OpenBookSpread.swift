@@ -29,7 +29,7 @@ struct OpenBookSpread: View {
 
     private var zoomID: String { "spread-\(record.id.uuidString)" }
     private var pageNumber: Int { record.currentPage + 1 }
-    private var title: String { record.title.isEmpty ? String(localized: "Untitled") : record.title }
+    private var title: String { record.title.orUntitled }
 
     var body: some View {
         let regular = sizeClass == .regular && !dynamicTypeSize.isAccessibilitySize
@@ -164,9 +164,7 @@ struct OpenBookSpread: View {
     private var caption: some View {
         VStack(alignment: .leading, spacing: Space.x1) {
             Text("Continue writing")
-                .font(.footnote.weight(.bold).smallCaps())
-                .tracking(0.8)
-                .foregroundStyle(Color.accentColor)
+                .eyebrowStyle(Color.accentColor)
             Text(title)
                 .displayFont(26, relativeTo: .title2)
                 .foregroundStyle(Color.ink)

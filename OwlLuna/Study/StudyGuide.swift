@@ -121,8 +121,7 @@ enum StudyGuide {
     /// The main points of the text. Long notes are read a piece at a time, and the pieces' points are then boiled down.
     static func summary(of text: String, using model: any StudyModel, limit: Int = 7,
                         progress: @MainActor @Sendable (Double) -> Void = { _ in }) async throws -> [String] {
-        let pieces = chunks(of: text)
-        guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= minimumText, !pieces.isEmpty else { throw StudyGuideError.nothingToRead }
+        let pieces = try chunksToRead(text)
         var points: [String] = []
         for (index, piece) in pieces.enumerated() {
             try Task.checkCancellation()
@@ -143,8 +142,7 @@ enum StudyGuide {
     /// Practice questions with their answers, spread over the whole of the text.
     static func quiz(of text: String, using model: any StudyModel, count: Int = 8,
                      progress: @MainActor @Sendable (Double) -> Void = { _ in }) async throws -> [QuizItem] {
-        var pieces = chunks(of: text)
-        guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= minimumText, !pieces.isEmpty else { throw StudyGuideError.nothingToRead }
+        var pieces = try chunksToRead(text)
         if pieces.count > count {
             let step = Double(pieces.count) / Double(count)
             pieces = (0..<count).map { pieces[Int(Double($0) * step)] }
@@ -164,28 +162,32 @@ enum StudyGuide {
         return Array(items.prefix(count))
     }
 
-    /// A piece the model found too long is read as two halves.
+    /// The text's pieces, or `nothingToRead` when there is too little of it to study from.
+    private static func chunksToRead(_ text: String) throws -> [String] {
+        let pieces = chunks(of: text)
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= minimumText, !pieces.isEmpty else { throw StudyGuideError.nothingToRead }
+        return pieces
+    }
+
     private static func keyPoints(in text: String, atMost limit: Int, using model: any StudyModel) async throws -> [String] {
-        do {
-            return try await model.keyPoints(in: text, atMost: limit)
-        } catch StudyGuideError.tooLong {
-            let halves = chunks(of: text, limit: max(text.count / 2, 200))
-            guard halves.count > 1 else { throw StudyGuideError.tooLong }
-            var points: [String] = []
-            for half in halves { points += try await model.keyPoints(in: half, atMost: max(limit / 2, 2)) }
-            return points
-        }
+        try await read(text, asking: limit, perHalf: max(limit / 2, 2)) { try await model.keyPoints(in: $0, atMost: $1) }
     }
 
     private static func questions(about text: String, count: Int, using model: any StudyModel) async throws -> [QuizItem] {
+        try await read(text, asking: count, perHalf: max(count / 2, 1)) { try await model.questions(about: $0, count: $1) }
+    }
+
+    /// A piece the model found too long is read as two halves.
+    private static func read<Item>(_ text: String, asking whole: Int, perHalf half: Int,
+                                   _ ask: (String, Int) async throws -> [Item]) async throws -> [Item] {
         do {
-            return try await model.questions(about: text, count: count)
+            return try await ask(text, whole)
         } catch StudyGuideError.tooLong {
             let halves = chunks(of: text, limit: max(text.count / 2, 200))
             guard halves.count > 1 else { throw StudyGuideError.tooLong }
-            var items: [QuizItem] = []
-            for half in halves { items += try await model.questions(about: half, count: max(count / 2, 1)) }
-            return items
+            var results: [Item] = []
+            for piece in halves { results += try await ask(piece, half) }
+            return results
         }
     }
 

@@ -1,29 +1,29 @@
 # Contributing to OwlLuna
 
-Thanks for helping make a great free notes app. Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Thanks for helping. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Workflow
 
-1. Open an issue first for anything larger than a small fix, so we can agree on the approach.
-2. Fork the repo and create a branch from `main`.
-3. Keep pull requests focused on one change.
-4. Make sure the app builds without warnings and the tests pass (⌘U).
-5. Include iPad screenshots or a short screen recording for UI changes, in portrait and landscape, light and dark.
+1. For anything bigger than a small fix, open an issue first so we can agree on the approach.
+2. Fork the repo and branch from `main`.
+3. Keep each pull request to one change.
+4. The app should build without warnings and the tests should pass (⌘U).
+5. For UI changes, add iPad screenshots or a short recording in portrait and landscape, light and dark.
 
 ## Code style
 
-- Swift + SwiftUI, with UIKit only where PencilKit needs it (`Canvas/`).
-- Match the surrounding code: small types, descriptive names, and minimal comments. Code should explain itself; use a short comment only when the *why* isn't obvious.
-- New source files are picked up automatically. The project uses folder-synchronized groups, so just add the file to the right folder.
-- Put page-geometry logic in `NotebookLayout` / `PageRemapper` and cover it with unit tests.
-- Don't add third-party dependencies without discussing it in an issue first. The app deliberately relies only on Apple frameworks.
+- Swift and SwiftUI, with UIKit where PencilKit needs it (`Canvas/`).
+- Match the code around you: small types, clear names, few comments. Add a short comment only when the reason isn't obvious.
+- The project uses folder-synchronised groups, so a new file only needs to go in the right folder.
+- Page geometry lives in `PageStackLayout`; cover changes to it with unit tests.
+- No third-party dependencies without an issue first. The app uses Apple frameworks only.
 
 ## Privacy
 
-OwlLuna collects no data. Please don't add analytics, tracking, ads, or network calls that send user content anywhere.
+OwlLuna collects no data. Don't add analytics, tracking, ads, or network calls that send user content anywhere.
 
 ## Reporting bugs
 
-Use the bug report form in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues/new/choose). Include your iPad model, iPadOS version, the app's version and build, steps to reproduce, and what you expected versus what happened. For drawing bugs, say whether you were using Apple Pencil or a finger.
+Use the bug report form in [GitHub Issues](https://github.com/owaisazmal/OwlLuna/issues/new/choose). Include your iPad model, iPadOS version, the app's version and build, the steps, and what you expected. For drawing bugs, say whether you used Apple Pencil or a finger.
 
-Issues are public. Report a security problem, or a privacy question about your own notes, privately instead: see [SECURITY.md](SECURITY.md).
+Issues are public. Report security problems, or privacy questions about your own notes, privately: see [SECURITY.md](SECURITY.md).

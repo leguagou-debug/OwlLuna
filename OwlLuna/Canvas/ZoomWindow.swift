@@ -168,12 +168,11 @@ final class ZoomTargetView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        outline.frame = bounds
-        outline.path = CGPath(roundedRect: bounds.insetBy(dx: -1, dy: -1), cornerWidth: 3, cornerHeight: 3, transform: nil)
-        band.frame = CGRect(x: bounds.width * ZoomWindow.advanceZone, y: 0, width: bounds.width * (1 - ZoomWindow.advanceZone), height: bounds.height)
-        CATransaction.commit()
+        CATransaction.withoutActions {
+            outline.frame = bounds
+            outline.path = CGPath(roundedRect: bounds.insetBy(dx: -1, dy: -1), cornerWidth: 3, cornerHeight: 3, transform: nil)
+            band.frame = CGRect(x: bounds.width * ZoomWindow.advanceZone, y: 0, width: bounds.width * (1 - ZoomWindow.advanceZone), height: bounds.height)
+        }
         // Above the outline, or below it when the outline is at the top of the page.
         let above = frame.minY >= Self.tabSize.height
         tab.frame = CGRect(x: 0, y: above ? -Self.tabSize.height : bounds.height, width: Self.tabSize.width, height: Self.tabSize.height)
@@ -199,7 +198,7 @@ final class ZoomTargetView: UIView {
 final class ZoomWindowPanel: UIView {
     static let minimumBarHeight: CGFloat = 48
 
-    enum Action: Int, CaseIterable {
+    enum Action: CaseIterable {
         case back, forward, newLine, here, closer, further, close
 
         var symbol: String {

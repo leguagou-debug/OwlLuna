@@ -39,6 +39,11 @@ enum JSONValue: Sendable, Hashable {
         return nil
     }
 
+    /// A string written as `ManifestCodec.encodeDate` writes one.
+    var dateValue: Date? { stringValue.flatMap(ManifestCodec.parseDate) }
+
+    var uuidValue: UUID? { stringValue.flatMap(UUID.init(uuidString:)) }
+
     subscript(key: String) -> JSONValue? {
         objectValue?[key]
     }
@@ -84,5 +89,18 @@ extension JSONValue {
         let encoder = JSONEncoder()
         encoder.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys]
         return try encoder.encode(self)
+    }
+}
+
+extension [String: JSONValue] {
+    /// When `key` was last changed, from the stamps kept under "changedAt", which older builds keep as an unknown key.
+    func changedAt(_ key: String) -> Date? {
+        self["changedAt"]?[key]?.dateValue
+    }
+
+    mutating func setChangedAt(_ date: Date?, for key: String) {
+        var stamps = self["changedAt"]?.objectValue ?? [:]
+        stamps[key] = date.map(ManifestCodec.encodeDate)
+        self["changedAt"] = stamps.isEmpty ? nil : .object(stamps)
     }
 }

@@ -51,10 +51,7 @@ struct StickerDrawer: View {
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
             }
         }
         .presentationDetents([.medium, .large])
@@ -65,15 +62,12 @@ struct StickerDrawer: View {
             Task { await cutOut(item) }
         }
         .task { await reload() }
-        .notice("No Subject Found", isPresented: Binding(get: { uncut != nil }, set: { if !$0 { uncut = nil } }),
+        .notice("No Subject Found", isPresented: Binding(isPresent: $uncut),
                 message: Text("OwlLuna couldn't find a clear subject to lift out of this photo. You can use the whole photo as a sticker instead.")) {
             Button("Cancel", role: .cancel) {}
             Button("Use Whole Photo") { if let uncut { keepWhole(uncut) } }
         }
-        .notice("Something went wrong", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                message: Text(failure ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("Something went wrong", message: $failure)
     }
 
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: 96), spacing: Space.x3)] }
@@ -139,13 +133,13 @@ struct StickerDrawer: View {
         .accessibilityIdentifier("sticker.new")
     }
 
-    private func ownTile(_ sticker: CustomSticker, number: Int) -> some View {
+    /// A sticker on its paper tile. Picking it closes the drawer.
+    private func tile<Art: View>(picking pick: @escaping () -> Void, @ViewBuilder art: () -> Art) -> some View {
         Button {
-            onPickOwn(sticker)
+            pick()
             dismiss()
         } label: {
-            OwnStickerImage(sticker: sticker)
-                .frame(maxWidth: 64, maxHeight: 56)
+            art()
                 .frame(maxWidth: .infinity, minHeight: 80)
                 .background(Color.paper, in: RoundedRectangle.plate)
                 .overlay { RoundedRectangle.plate.strokeBorder(Color.hairline) }
@@ -153,6 +147,12 @@ struct StickerDrawer: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(.lift)
+    }
+
+    private func ownTile(_ sticker: CustomSticker, number: Int) -> some View {
+        tile(picking: { onPickOwn(sticker) }) {
+            OwnStickerImage(sticker: sticker).frame(maxWidth: 64, maxHeight: 56)
+        }
         .heldMenu(Text("Sticker")) {
             Button(role: .destructive) { remove(sticker) } label: { Label("Delete Sticker", systemImage: "trash") }
         }
@@ -168,21 +168,12 @@ struct StickerDrawer: View {
     }
 
     private func tile(_ sticker: Sticker) -> some View {
-        Button {
-            onPick(sticker)
-            dismiss()
-        } label: {
+        tile(picking: { onPick(sticker) }) {
             Image(uiImage: sticker.image(width: 160, scale: displayScale))
                 .resizable()
                 .aspectRatio(sticker.aspect, contentMode: .fit)
                 .frame(maxWidth: sticker.aspect > 1.2 ? 84 : 56, maxHeight: 56)
-                .frame(maxWidth: .infinity, minHeight: 80)
-                .background(Color.paper, in: RoundedRectangle.plate)
-                .overlay { RoundedRectangle.plate.strokeBorder(Color.hairline) }
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.lift)
         .accessibilityLabel(Text(sticker.displayName))
         .accessibilityHint(Text("Adds this sticker to the page"))
         .accessibilityIdentifier("sticker.\(sticker.rawValue)")

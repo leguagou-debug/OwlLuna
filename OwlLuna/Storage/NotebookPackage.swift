@@ -59,7 +59,9 @@ actor NotebookPackage {
         self.root = root
     }
 
-    nonisolated var manifestURL: URL { url.appending(path: "manifest.json") }
+    static let manifestFile = "manifest.json"
+
+    nonisolated var manifestURL: URL { url.appending(path: Self.manifestFile) }
     nonisolated var previousManifestURL: URL { url.appending(path: "manifest.prev.json") }
     nonisolated var inkDirectory: URL { url.appending(path: "ink", directoryHint: .isDirectory) }
     nonisolated var assetsDirectory: URL { url.appending(path: "assets", directoryHint: .isDirectory) }
@@ -115,7 +117,7 @@ actor NotebookPackage {
                 load.needsSave = true
             }
             load.quarantined = quarantined
-            recoverOrphans(into: &load, manifestDate: modificationDate(of: source) ?? .distantPast)
+            recoverOrphans(into: &load, manifestDate: source.contentModificationDate ?? .distantPast)
         } else if !quarantined.isEmpty || !inkFiles().isEmpty {
             load = ManifestLoad(manifest: rebuiltManifest(), warnings: ["the manifest was missing or unreadable; rebuilt from ink files"])
             load.quarantined = quarantined
@@ -130,14 +132,12 @@ actor NotebookPackage {
     private func recoverOrphans(into load: inout ManifestLoad, manifestDate: Date) {
         var known = Set(load.manifest.pages.map(\.id))
         for opaque in load.manifest.opaquePages {
-            if let id = opaque.raw["id"]?.stringValue.flatMap(UUID.init(uuidString:)) { known.insert(id) }
+            if let id = opaque.raw["id"]?.uuidValue { known.insert(id) }
         }
-        let files = (try? FileManager.default.contentsOfDirectory(at: inkDirectory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        let orphans = files.compactMap { file -> (UUID, Date)? in
-            guard file.pathExtension == "pkdrawing",
-                  let pageID = UUID(uuidString: file.deletingPathExtension().lastPathComponent),
+        let orphans = inkFiles().compactMap { file -> (UUID, Date)? in
+            guard let pageID = UUID(uuidString: file.deletingPathExtension().lastPathComponent),
                   !known.contains(pageID),
-                  let date = modificationDate(of: file), date > manifestDate else { return nil }
+                  let date = file.contentModificationDate, date > manifestDate else { return nil }
             return (pageID, date)
         }.sorted { $0.1 < $1.1 }
         guard !orphans.isEmpty else { return }
@@ -160,7 +160,7 @@ actor NotebookPackage {
     private func rebuiltManifest() -> NotebookManifest {
         let pages = inkFiles()
             .compactMap { file -> (UUID, Date)? in
-                UUID(uuidString: file.deletingPathExtension().lastPathComponent).map { ($0, modificationDate(of: file) ?? .distantPast) }
+                UUID(uuidString: file.deletingPathExtension().lastPathComponent).map { ($0, file.contentModificationDate ?? .distantPast) }
             }
             .sorted { $0.1 < $1.1 }
             .map { pageID, _ -> NotebookPage in
@@ -203,7 +203,12 @@ actor NotebookPackage {
 
     /// What each picture placed on a page showed when it was read, by `PageItem.readingKey`.
     func readPictureText(_ pageID: UUID) -> [String: [String]] {
-        (try? Data(contentsOf: pictureTextURL(pageID))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        Self.pictureText(at: pictureTextURL(pageID))
+    }
+
+    /// The same, read from the file off the actor.
+    static func pictureText(at url: URL) -> [String: [String]] {
+        (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
     }
 
     // MARK: Write
@@ -241,12 +246,14 @@ actor NotebookPackage {
         guard !manifest.isNewerThanSupported else { throw PackageError.readOnly }
         try makeDirectories()
         let data = try ManifestCodec.encode(manifest)
-        let fileManager = FileManager.default
-        if fileManager.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
-            try? fileManager.removeItem(at: previousManifestURL)
-            try? fileManager.copyItem(at: manifestURL, to: previousManifestURL)
-        }
+        if FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) { backUpManifest() }
         try data.write(to: manifestURL, options: .atomic)
+    }
+
+    /// Keeps the manifest as it is in `manifest.prev.json`, which a damaged one is read from instead.
+    private func backUpManifest() {
+        try? FileManager.default.removeItem(at: previousManifestURL)
+        try? FileManager.default.copyItem(at: manifestURL, to: previousManifestURL)
     }
 
     /// Read-modify-write of the manifest for library changes to a notebook that isn't open.
@@ -269,8 +276,7 @@ actor NotebookPackage {
         change(&state)
         object["library"] = ManifestCodec.encodeLibrary(state)
         let written = try JSONValue.object(object).serialized()
-        try? FileManager.default.removeItem(at: previousManifestURL)
-        try? FileManager.default.copyItem(at: manifestURL, to: previousManifestURL)
+        backUpManifest()
         try written.write(to: manifestURL, options: .atomic)
         return try ManifestCodec.decode(written, fallbackID: id).manifest
     }
@@ -339,10 +345,6 @@ actor NotebookPackage {
         try? FileManager.default.removeItem(at: transcriptTextURL(recordingID))
     }
 
-    func removeAsset(_ file: String) {
-        try? FileManager.default.removeItem(at: assetURL(file))
-    }
-
     // MARK: Recordings
 
     /// The entry timed from its finished audio, or nil and the file removed when nothing playable was written, unless `keepingUnreadable` and something was.
@@ -402,7 +404,7 @@ actor NotebookPackage {
         }
         guard manifest.extra[Self.rebuiltKey] == nil, !hasQuarantinedManifest() else { return }
 
-        let manifestDate = modificationDate(of: manifestURL) ?? .distantPast
+        let manifestDate = manifestURL.contentModificationDate ?? .distantPast
         var keep = Set(manifest.pages.map(\.id.uuidString))
         for opaque in manifest.opaquePages { if let id = opaque.raw["id"]?.stringValue { keep.insert(id.uppercased()) } }
         for recording in manifest.recordings where recording.transcriptFile != nil { keep.insert(recording.id.uuidString) }
@@ -411,7 +413,7 @@ actor NotebookPackage {
                 guard !file.lastPathComponent.contains(".corrupt") else { continue }
                 let pageID = String(file.deletingPathExtension().lastPathComponent.prefix(36)).uppercased()
                 guard UUID(uuidString: pageID) != nil, !keep.contains(pageID),
-                      (modificationDate(of: file) ?? .distantFuture) <= manifestDate else { continue }
+                      (file.contentModificationDate ?? .distantFuture) <= manifestDate else { continue }
                 try? fileManager.removeItem(at: file)
             }
         }
@@ -419,7 +421,7 @@ actor NotebookPackage {
         for file in (try? fileManager.contentsOfDirectory(at: assetsDirectory, includingPropertiesForKeys: nil)) ?? [] {
             let name = file.lastPathComponent
             guard !referenced.contains(name), !referenced.contains("assets/\(name)"),
-                  (modificationDate(of: file) ?? .distantFuture) <= manifestDate else { continue }
+                  (file.contentModificationDate ?? .distantFuture) <= manifestDate else { continue }
             try? fileManager.removeItem(at: file)
         }
     }
@@ -461,14 +463,15 @@ actor NotebookPackage {
     }
 
     static func hash(_ data: Data) -> String {
-        SHA256.hash(data: data).prefix(16).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private nonisolated func modificationDate(of file: URL) -> Date? {
-        (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        SHA256.hash(data: data).prefix(16).hex
     }
 
     private nonisolated func creationDate(of file: URL) -> Date {
         (try? file.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .now
     }
+}
+
+extension Sequence<UInt8> {
+    /// The bytes in lowercase hex, two digits each.
+    var hex: String { map { String(format: "%02x", $0) }.joined() }
 }

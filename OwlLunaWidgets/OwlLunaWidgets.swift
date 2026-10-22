@@ -80,50 +80,42 @@ struct OwlLunaProvider: TimelineProvider {
 
 struct ContinueWritingWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "ContinueWriting", provider: OwlLunaProvider()) { entry in
-            ContinueWritingView(entry: entry)
-                .containerBackground(Color.widgetPaper, for: .widget)
-        }
-        .configurationDisplayName("Continue Writing")
-        .description("The notebook you last wrote in, open at your page.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        snapshotWidget(kind: "ContinueWriting", name: "Continue Writing", description: "The notebook you last wrote in, open at your page.",
+                       families: [.systemSmall, .systemMedium]) { ContinueWritingView(entry: $0) }
     }
 }
 
 struct WritingWeekWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "WritingWeek", provider: OwlLunaProvider()) { entry in
-            WritingWeekView(entry: entry)
-                .containerBackground(Color.widgetPaper, for: .widget)
-        }
-        .configurationDisplayName("This Week")
-        .description("The days you wrote this week, from your writing history.")
-        .supportedFamilies([.systemSmall, .accessoryRectangular])
+        snapshotWidget(kind: "WritingWeek", name: "This Week", description: "The days you wrote this week, from your writing history.",
+                       families: [.systemSmall, .accessoryRectangular]) { WritingWeekView(entry: $0) }
     }
 }
 
 struct TodayPageWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "TodayPage", provider: OwlLunaProvider()) { entry in
-            TodayPageView(entry: entry)
-                .containerBackground(Color.widgetPaper, for: .widget)
-        }
-        .configurationDisplayName("Today's Page")
-        .description("Opens today's page in your daily journal.")
-        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryInline])
+        snapshotWidget(kind: "TodayPage", name: "Today's Page", description: "Opens today's page in your daily journal.",
+                       families: [.systemSmall, .accessoryCircular, .accessoryInline]) { TodayPageView(entry: $0) }
     }
 }
 
 struct QuickNoteWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "QuickNote", provider: OwlLunaProvider()) { _ in
-            QuickNoteView()
-                .containerBackground(Color.widgetPaper, for: .widget)
-        }
-        .configurationDisplayName("Quick Note")
-        .description("Starts a new note in OwlLuna, ready to write.")
-        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryInline])
+        snapshotWidget(kind: "QuickNote", name: "Quick Note", description: "Starts a new note in OwlLuna, ready to write.",
+                       families: [.systemSmall, .accessoryCircular, .accessoryInline]) { _ in QuickNoteView() }
     }
+}
+
+/// A widget drawn from what the app last wrote, on the widgets' paper.
+@MainActor
+private func snapshotWidget<Content: View>(kind: String, name: LocalizedStringKey, description: LocalizedStringKey, families: [WidgetFamily],
+                                           content: @escaping (OwlLunaEntry) -> Content) -> some WidgetConfiguration {
+    StaticConfiguration(kind: kind, provider: OwlLunaProvider()) { entry in
+        content(entry).containerBackground(Color.widgetPaper, for: .widget)
+    }
+    .configurationDisplayName(name)
+    .description(description)
+    .supportedFamilies(families)
 }
 
 // MARK: Views
@@ -142,13 +134,7 @@ struct QuickNoteView: View {
             case .accessoryInline:
                 Label("Quick Note", systemImage: "square.and.pencil")
             default:
-                VStack(alignment: .leading, spacing: 6) {
-                    Image(systemName: "square.and.pencil").font(.title).foregroundStyle(Color.widgetAccent).widgetAccentable()
-                    Spacer(minLength: 0)
-                    Text("Quick Note").font(.system(.headline, design: .serif)).foregroundStyle(Color.widgetInk)
-                    Text("A new note, ready to write.").font(.caption).foregroundStyle(Color.widgetSecondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                PromptTile(title: "Quick Note", caption: "A new note, ready to write.", iconFont: .title)
             }
         }
         .widgetURL(URL(string: "owlluna://quicknote"))
@@ -168,14 +154,8 @@ struct ContinueWritingView: View {
             }
             .widgetURL(URL(string: "owlluna://notebook/\(notebook.id.uuidString)"))
         } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: "square.and.pencil").font(.title2).foregroundStyle(Color.widgetAccent).widgetAccentable()
-                Spacer(minLength: 0)
-                Text("Start a notebook").font(.system(.headline, design: .serif)).foregroundStyle(Color.widgetInk)
-                Text("Tap to write a quick note.").font(.caption).foregroundStyle(Color.widgetSecondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .widgetURL(URL(string: "owlluna://quicknote"))
+            PromptTile(title: "Start a notebook", caption: "Tap to write a quick note.", iconFont: .title2)
+                .widgetURL(URL(string: "owlluna://quicknote"))
         }
     }
 
@@ -286,16 +266,16 @@ struct WidgetCover: View {
     var body: some View {
         Group {
             if redaction.contains(.privacy) {
-                RoundedRectangle(cornerRadius: 3).fill(Color.widgetInk.opacity(0.12)).aspectRatio(3 / 4, contentMode: .fit)
+                RoundedRectangle(cornerRadius: 3).fill(Color.widgetInk.opacity(0.12))
             } else if let image {
-                Image(uiImage: image).resizable().widgetAccentedRenderingMode(.fullColor).aspectRatio(3 / 4, contentMode: .fit)
+                Image(uiImage: image).resizable().widgetAccentedRenderingMode(.fullColor)
             } else {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color(hex: clothHex))
                     .overlay(alignment: .leading) { Rectangle().fill(.black.opacity(0.18)).frame(width: 5) }
-                    .aspectRatio(3 / 4, contentMode: .fit)
             }
         }
+        .aspectRatio(3 / 4, contentMode: .fit)
         .privacySensitive()
         .accessibilityHidden(true)
     }
@@ -324,6 +304,23 @@ struct WeekStrip: View {
     }
 }
 
+/// A pencil over a title and a line under it: what a small widget shows when it asks for something to be written.
+struct PromptTile: View {
+    let title: LocalizedStringKey
+    let caption: LocalizedStringKey
+    let iconFont: Font
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: "square.and.pencil").font(iconFont).foregroundStyle(Color.widgetAccent).widgetAccentable()
+            Spacer(minLength: 0)
+            Text(title).font(.system(.headline, design: .serif)).foregroundStyle(Color.widgetInk)
+            Text(caption).font(.caption).foregroundStyle(Color.widgetSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
 extension View {
     func widgetMeta(_ color: Color = .widgetSecondary) -> some View {
         font(.system(.caption2, weight: .semibold).smallCaps()).tracking(0.5).foregroundStyle(color)
@@ -332,14 +329,12 @@ extension View {
 
 extension Color {
     init(hex: UInt32) {
-        self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+        let rgba = OwlLunaRGBA(hex: hex)
+        self.init(red: rgba.r, green: rgba.g, blue: rgba.b)
     }
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
-        Color(uiColor: UIColor { traits in
-            let hex = traits.userInterfaceStyle == .dark ? dark : light
-            return UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
-        })
+        Color(uiColor: UIColor { traits in UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light) })
     }
 
     static let widgetPaper = adaptive(light: 0xF1EDE4, dark: 0x181613)

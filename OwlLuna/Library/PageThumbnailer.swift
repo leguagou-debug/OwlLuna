@@ -6,7 +6,7 @@ import os
 enum PageThumbnailer {
     static let pixelWidth: CGFloat = 360
     private static let memory = LRUCache<SharedUIImage>(capacity: 120)
-    private static let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "thumbnails")
+    private static let signposter = OSSignposter(category: "thumbnails")
 
     struct SharedUIImage: @unchecked Sendable { let image: UIImage }
 
@@ -16,10 +16,6 @@ enum PageThumbnailer {
     }
 
     static let nightSuffix = "-night"
-
-    static func cached(package: NotebookPackage, page: NotebookPage, night: Bool = false) -> UIImage? {
-        memory.value(package.thumbURL(page.id, key: key(for: page, night: night)).path(percentEncoded: false)) { nil }?.image
-    }
 
     /// Thumbnail of the saved page (its manifest ink hash). For unsaved ink, use `render(page:ink:assets:)`.
     static func thumbnail(package: NotebookPackage, page: NotebookPage, night: Bool = false) async -> UIImage? {
@@ -50,12 +46,11 @@ enum PageThumbnailer {
     }
 
     /// Makes sure the first page's thumbnail exists on disk, for first-page covers.
-    static func ensureFirstPage(root: StorageRoot, notebookID: UUID) async -> URL? {
+    static func ensureFirstPage(root: StorageRoot, notebookID: UUID) async {
         let package = NotebookPackage(root: root, id: notebookID)
-        guard let page = try? await package.readManifest().manifest.pages.first else { return nil }
+        guard let page = try? await package.readManifest().manifest.pages.first else { return }
         let file = package.thumbURL(page.id, key: page.thumbnailKey)
-        if FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) { return file }
+        if FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) { return }
         _ = await thumbnail(package: package, page: page)
-        return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
     }
 }

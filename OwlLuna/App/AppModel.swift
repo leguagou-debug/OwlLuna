@@ -24,7 +24,7 @@ final class AppModel {
     var pendingAction: AppAction?
     @ObservationIgnored private let indexWasRecovered: Bool
     @ObservationIgnored private var started = false
-    @ObservationIgnored private let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "app")
+    @ObservationIgnored private let signposter = OSSignposter(category: "app")
 
     init(root: StorageRoot = LaunchOptions.storageRoot) {
         OwlLunaFonts.register()
@@ -134,17 +134,11 @@ final class AppModel {
     func flushOpenDocuments() {
         let documents = DocumentRegistry.shared.openDocuments.filter(\.hasUnsavedChanges)
         guard !documents.isEmpty || sync.hasWaitingSends else { return }
-        var task = UIBackgroundTaskIdentifier.invalid
-        task = UIApplication.shared.beginBackgroundTask(withName: "Save notebooks") {
-            UIApplication.shared.endBackgroundTask(task)
-            task = .invalid
-        }
-        Task {
+        UIApplication.shared.withBackgroundTime("Save notebooks") { [activity, sync] in
             for document in documents { await document.flush() }
             activity.flush()
             await sync.sendWaiting()
             await sync.syncNow()
-            if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
         }
     }
 }
@@ -191,3 +185,20 @@ enum LaunchOptions {
     static func forgetSavedSettings() {}
     #endif
 }
+
+extension UIApplication {
+    /// Runs `work` with background time asked for it, given back when the work ends or iPadOS calls time.
+    @discardableResult
+    func withBackgroundTime(_ name: String, _ work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        var task = UIBackgroundTaskIdentifier.invalid
+        task = beginBackgroundTask(withName: name) {
+            UIApplication.shared.endBackgroundTask(task)
+            task = .invalid
+        }
+        return Task {
+            await work()
+            if task != .invalid { endBackgroundTask(task) }
+        }
+    }
+}
+

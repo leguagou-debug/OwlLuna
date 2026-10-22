@@ -85,12 +85,8 @@ struct NotebookOutline: View {
 
     private var document: NotebookDocument { session.document }
 
-    private var bookmarks: [(index: Int, page: NotebookPage)] {
-        document.pages.enumerated().filter { $0.element.bookmark != nil }.map { (index: $0.offset, page: $0.element) }
-    }
-
-    private var tagged: [(index: Int, page: NotebookPage)] {
-        document.pages.enumerated().filter { !$0.element.tags.isEmpty }.map { (index: $0.offset, page: $0.element) }
+    private func pages(where include: (NotebookPage) -> Bool) -> [(index: Int, page: NotebookPage)] {
+        document.pages.enumerated().filter { include($0.element) }.map { (index: $0.offset, page: $0.element) }
     }
 
     private var pdfFiles: [String] {
@@ -102,7 +98,7 @@ struct NotebookOutline: View {
     }
 
     var body: some View {
-        let bookmarks = bookmarks, tagged = tagged
+        let bookmarks = pages(where: { $0.bookmark != nil }), tagged = pages(where: { !$0.tags.isEmpty })
         Group {
             if bookmarks.isEmpty, tagged.isEmpty, contents.isEmpty {
                 ScrollView {
@@ -135,7 +131,7 @@ struct NotebookOutline: View {
             guard !pdfFiles.isEmpty else { contents = []; return }
             contents = await Task.detached(priority: .userInitiated) { PDFOutlineReader.entries(pages: pages, assets: assets) }.value
         }
-        .notice("Name Bookmark", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+        .notice("Name Bookmark", isPresented: Binding(isPresent: $renaming)) {
             TextField("Name", text: $name)
         } actions: {
             Button("Cancel", role: .cancel) {}
@@ -158,16 +154,25 @@ struct NotebookOutline: View {
         .accessibilityHint(Text("Opens this page"))
         .ledgerSwipe {
             if !document.isReadOnly {
-                Button(role: .destructive) { document.setBookmark(nil, forPage: page.id) } label: { Label("Remove", systemImage: "bookmark.slash") }
-                Button { name = page.bookmark ?? ""; renaming = page.id } label: { Label("Rename", systemImage: "pencil") }
+                Button(role: .destructive) { removeBookmark(page) } label: { Label("Remove", systemImage: "bookmark.slash") }
+                Button { rename(page) } label: { Label("Rename", systemImage: "pencil") }
             }
         }
         .heldMenu(Text("Bookmark"), when: !document.isReadOnly) {
             if !document.isReadOnly {
-                Button { name = page.bookmark ?? ""; renaming = page.id } label: { Label("Rename…", systemImage: "pencil") }
-                Button(role: .destructive) { document.setBookmark(nil, forPage: page.id) } label: { Label("Remove Bookmark", systemImage: "bookmark.slash") }
+                Button { rename(page) } label: { Label("Rename…", systemImage: "pencil") }
+                Button(role: .destructive) { removeBookmark(page) } label: { Label("Remove Bookmark", systemImage: "bookmark.slash") }
             }
         }
+    }
+
+    private func rename(_ page: NotebookPage) {
+        name = page.bookmark ?? ""
+        renaming = page.id
+    }
+
+    private func removeBookmark(_ page: NotebookPage) {
+        document.setBookmark(nil, forPage: page.id)
     }
 
     @ViewBuilder

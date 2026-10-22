@@ -195,10 +195,7 @@ struct SmartShelfEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .barGround(.surface)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         save(name, chosen, match)

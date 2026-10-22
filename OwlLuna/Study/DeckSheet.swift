@@ -42,7 +42,7 @@ struct DeckSheet: View {
                 .boardBackground()
                 if canChange {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { draft = CardDraft(pageID: currentPageID) } label: { Label("New Flashcard", systemImage: "plus") }
+                        Button { draft = CardDraft(pageID: session.shownPage?.id) } label: { Label("New Flashcard", systemImage: "plus") }
                             .buttonStyle(.plateIcon)
                             .accessibilityIdentifier("deck.new")
                     }
@@ -63,10 +63,6 @@ struct DeckSheet: View {
                 message: Text(failure ?? library.lastError ?? "")) {
             Button("OK", role: .cancel) {}
         }
-    }
-
-    private var currentPageID: UUID? {
-        session.document.pages.indices.contains(session.currentPage) ? session.document.pages[session.currentPage].id : nil
     }
 
     private func study() {
@@ -191,7 +187,7 @@ struct DeckSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if canChange {
                     VStack(spacing: Space.x3) {
-                        Button { draft = CardDraft(pageID: currentPageID) } label: { Label("Write a Card", systemImage: "square.and.pencil").frame(maxWidth: 260) }
+                        Button { draft = CardDraft(pageID: session.shownPage?.id) } label: { Label("Write a Card", systemImage: "square.and.pencil").frame(maxWidth: 260) }
                             .buttonStyle(.owlLuna(.primary))
                             .accessibilityIdentifier("deck.write")
                         if tapes > 0 {
@@ -294,10 +290,7 @@ struct CardComposer: View {
             .barGround(.surface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
                         .buttonStyle(.owlLuna(.primary, inBar: true))
@@ -312,19 +305,14 @@ struct CardComposer: View {
         .task(id: draft.front.imageName) { frontImage = await library.image(draft.front.imageName, in: notebook) }
         .task(id: draft.back.imageName) { backImage = await library.image(draft.back.imageName, in: notebook) }
         .onAppear { if draft.card == nil { focus = draft.front.isEmpty ? .front : .back } }
-        .notice("The card couldn't be saved", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                message: Text(failure ?? "")) {
-            Button("OK", role: .cancel) {}
-        }
+        .notice("The card couldn't be saved", message: $failure)
     }
 
     private func side(_ title: LocalizedStringKey, prompt: LocalizedStringKey, side: Binding<CardDraft.Side>, image: UIImage?, field: Field) -> some View {
         let clipping = side.wrappedValue.newImage ?? (side.wrappedValue.imageName == nil ? nil : image)
         return VStack(alignment: .leading, spacing: Space.x2) {
             Text(title)
-                .font(.footnote.weight(.bold).smallCaps())
-                .tracking(0.8)
-                .foregroundStyle(Color.textSecondary)
+                .eyebrowStyle(Color.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             if let clipping {
                 HStack(alignment: .top, spacing: Space.x2) {

@@ -117,10 +117,21 @@ enum InkLasso {
         var result: [UUID: PKDrawing] = [:]
         for (page, indices) in selection {
             guard let drawing = drawings[page] else { continue }
-            let chosen = Set(indices)
-            result[page] = PKDrawing(strokes: drawing.strokes.enumerated().filter { !chosen.contains($0.offset) }.map(\.element))
+            result[page] = drawing.removingStrokes(at: Set(indices))
         }
         return result
+    }
+}
+
+extension PKDrawing {
+    /// Only the strokes at `indices`, in the order they were drawn.
+    func keepingStrokes(at indices: Set<Int>) -> PKDrawing {
+        PKDrawing(strokes: strokes.enumerated().filter { indices.contains($0.offset) }.map(\.element))
+    }
+
+    /// Every stroke but those at `indices`.
+    func removingStrokes(at indices: Set<Int>) -> PKDrawing {
+        PKDrawing(strokes: strokes.enumerated().filter { !indices.contains($0.offset) }.map(\.element))
     }
 }
 
@@ -171,24 +182,20 @@ final class InkLassoOverlay: UIView {
     private func onScreen(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x * scale, y: point.y * scale) }
 
     private func redraw() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let line = UIBezierPath()
-        for (index, point) in path.enumerated() { index == 0 ? line.move(to: onScreen(point)) : line.addLine(to: onScreen(point)) }
-        lasso.path = path.isEmpty ? nil : line.cgPath
-        lassoUnder.path = lasso.path
-        if let selectionBounds {
-            let rect = CGRect(x: selectionBounds.minX * scale, y: selectionBounds.minY * scale, width: selectionBounds.width * scale, height: selectionBounds.height * scale)
-                .insetBy(dx: -8, dy: -8).offsetBy(dx: drag.width * scale, dy: drag.height * scale)
-            box.path = UIBezierPath(roundedRect: rect, cornerRadius: Radius.plate).cgPath
-        } else {
-            box.path = nil
+        CATransaction.withoutActions {
+            let line = UIBezierPath()
+            for (index, point) in path.enumerated() { index == 0 ? line.move(to: onScreen(point)) : line.addLine(to: onScreen(point)) }
+            lasso.path = path.isEmpty ? nil : line.cgPath
+            lassoUnder.path = lasso.path
+            if let selectionBounds {
+                let rect = selectionBounds.scaled(by: scale).insetBy(dx: -8, dy: -8).offsetBy(dx: drag.width * scale, dy: drag.height * scale)
+                box.path = UIBezierPath(roundedRect: rect, cornerRadius: Radius.plate).cgPath
+            } else {
+                box.path = nil
+            }
+            boxUnder.path = box.path
         }
-        boxUnder.path = box.path
-        CATransaction.commit()
-        for item in lifted {
-            item.view.frame = CGRect(x: item.rect.minX * scale, y: item.rect.minY * scale, width: item.rect.width * scale, height: item.rect.height * scale)
-        }
+        for item in lifted { item.view.frame = item.rect.scaled(by: scale) }
         floating.transform = CGAffineTransform(translationX: drag.width * scale, y: drag.height * scale)
     }
 

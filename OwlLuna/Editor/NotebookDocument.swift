@@ -9,48 +9,6 @@ protocol InkObserver: AnyObject {
     func document(_ document: NotebookDocument, didReplaceInkOf pageID: UUID)
 }
 
-/// Undo registrations whose target is not the document are dropped, so PencilKit's own per-canvas undo
-/// never lands on the shared stack and nothing on the stack points at a canvas that may be recycled.
-final class DocumentUndoManager: UndoManager {
-    private(set) var droppedRegistrations = 0
-
-    override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
-        guard target is NotebookDocument else { droppedRegistrations += 1; return }
-        super.registerUndo(withTarget: target, selector: selector, object: anObject)
-    }
-
-    override func __registerUndoWithTarget(_ target: Any, handler undoHandler: @escaping @MainActor (Any) -> Void) {
-        guard target is NotebookDocument else { droppedRegistrations += 1; return }
-        super.__registerUndoWithTarget(target, handler: undoHandler)
-    }
-
-    override func prepare(withInvocationTarget target: Any) -> Any {
-        guard target is NotebookDocument else {
-            droppedRegistrations += 1
-            discarded.removeAllActions()
-            if discarded.groupingLevel == 0 { discarded.beginUndoGrouping() }
-            return discarded.prepare(withInvocationTarget: target)
-        }
-        return super.prepare(withInvocationTarget: target)
-    }
-
-    private lazy var discarded: UndoManager = {
-        let manager = UndoManager()
-        manager.levelsOfUndo = 1
-        return manager
-    }()
-}
-
-/// Undo steps hold whole-page drawings, so the heavier the pages being edited, the fewer steps are kept.
-enum UndoBudget {
-    static let bytes = 48 << 20
-    static let levels = 20...200
-
-    static func levels(forPageBytes pageBytes: Int) -> Int {
-        min(max(bytes / max(pageBytes, 1), levels.lowerBound), levels.upperBound)
-    }
-}
-
 struct DocumentNotice: Identifiable, Hashable, Sendable {
     enum Kind: Sendable { case quarantined, recovered, readOnly, unreadablePages, saveFailed, newerVersion, keptCopy, recordingStopped, onlyPencilDraws }
     let id = UUID()
@@ -112,7 +70,7 @@ final class NotebookDocument {
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var indexedSignature: IndexSignature
     @ObservationIgnored private var pendingWork: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "document")
+    @ObservationIgnored private let signposter = OSSignposter(category: "document")
 
     /// How many clean, loaded pages are kept in memory before the least recently used are released.
     /// Pages with a live canvas and pages with unsaved ink are never released.
@@ -590,8 +548,7 @@ final class NotebookDocument {
     }
 
     func noteRecordingStopped(_ message: String) {
-        notices.removeAll { $0.kind == .recordingStopped }
-        notices.append(DocumentNotice(kind: .recordingStopped, message: message))
+        note(.recordingStopped, message, replacing: [.recordingStopped])
     }
 
     func removeRecording(_ id: UUID) {
@@ -655,20 +612,29 @@ final class NotebookDocument {
 
     /// A finger dragged on a page and drew nothing, because only the Pencil draws.
     func noteOnlyPencilDraws() {
-        guard !notices.contains(where: { $0.kind == .onlyPencilDraws }) else { return }
-        notices.append(DocumentNotice(kind: .onlyPencilDraws, message: String(localized: "Only Apple Pencil draws right now.")))
+        noteOnce(.onlyPencilDraws, String(localized: "Only Apple Pencil draws right now."))
     }
 
     /// Another device wrote in the notebook since, and so did this one: Keep Both, or closing it, keeps both.
     func noteNewerVersion() {
-        guard !notices.contains(where: { $0.kind == .newerVersion }) else { return }
-        notices.append(DocumentNotice(kind: .newerVersion, message: String(localized: "This notebook was changed on another device too. Keep Both keeps the older version as a conflicted copy, as closing it would.")))
+        noteOnce(.newerVersion, String(localized: "This notebook was changed on another device too. Keep Both keeps the older version as a conflicted copy, as closing it would."))
     }
 
     /// Keep Both kept the other version as a notebook of its own.
     func noteKeptCopy(_ message: String) {
-        notices.removeAll { $0.kind == .newerVersion || $0.kind == .keptCopy }
-        notices.append(DocumentNotice(kind: .keptCopy, message: message))
+        note(.keptCopy, message, replacing: [.newerVersion, .keptCopy])
+    }
+
+    /// Adds a notice of this kind unless one is showing already.
+    private func noteOnce(_ kind: DocumentNotice.Kind, _ message: @autoclosure () -> String) {
+        guard !notices.contains(where: { $0.kind == kind }) else { return }
+        notices.append(DocumentNotice(kind: kind, message: message()))
+    }
+
+    /// Adds a notice in place of any of the `replacing` kinds.
+    private func note(_ kind: DocumentNotice.Kind, _ message: String, replacing kinds: [DocumentNotice.Kind]) {
+        notices.removeAll { kinds.contains($0.kind) }
+        notices.append(DocumentNotice(kind: kind, message: message))
     }
 
     /// Nothing is unsaved, under way or being recorded, so a newer version can take its place.
@@ -808,9 +774,7 @@ final class NotebookDocument {
             failures += 1
             let wait = min(retryBase * (1 << min(failures - 1, 6)), .seconds(60))
             saveState = .failed(error.localizedDescription, retryIn: wait)
-            if !notices.contains(where: { $0.kind == .saveFailed }) {
-                notices.append(DocumentNotice(kind: .saveFailed, message: String(localized: "Couldn't save your latest changes. OwlLuna will keep trying; nothing has been lost.")))
-            }
+            noteOnce(.saveFailed, String(localized: "Couldn't save your latest changes. OwlLuna will keep trying; nothing has been lost."))
             signposter.endInterval("Save", interval)
             pendingSave = Task { [self] in
                 try? await Task.sleep(for: wait)

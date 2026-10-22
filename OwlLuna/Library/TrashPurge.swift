@@ -43,7 +43,7 @@ struct ExpiredTrash: Sendable, Equatable {
         guard let data = try? Data(contentsOf: file(root)), let json = try? JSONValue.parse(data) else { return ExpiredTrash() }
         var expired = ExpiredTrash()
         for (key, value) in json["notebooks"]?.objectValue ?? [:] {
-            if let id = UUID(uuidString: key), let date = value.stringValue.flatMap(ManifestCodec.parseDate) { expired.notebooks[id] = date }
+            if let id = UUID(uuidString: key), let date = value.dateValue { expired.notebooks[id] = date }
         }
         return expired
     }

@@ -151,10 +151,6 @@ final class NotebookRecorder: NSObject {
         AudioSessionOwner.shared.releasePlayback(by: self)
     }
 
-    func toggleRecording() {
-        isRecording ? stopRecording() : startRecording()
-    }
-
     func startRecording() {
         guard !document.isReadOnly else { return }
         let request = UUID()
@@ -239,15 +235,9 @@ final class NotebookRecorder: NSObject {
     /// Letting go of the audio session lets iPadOS suspend an app in the background, so the recording is saved under a background task.
     private func saveStoppedRecording() {
         let document = document
-        var task = UIBackgroundTaskIdentifier.invalid
-        task = UIApplication.shared.beginBackgroundTask(withName: "Save recording") {
-            UIApplication.shared.endBackgroundTask(task)
-            task = .invalid
-        }
-        Task {
+        UIApplication.shared.withBackgroundTime("Save recording") {
             await document.finishPendingWork()
             await document.flush()
-            if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
         }
     }
 
@@ -273,6 +263,7 @@ final class NotebookRecorder: NSObject {
     }
 
     private static var playbackRefused: String { String(localized: "Recordings can't play while another notebook is recording.") }
+    private static var playbackFailed: String { String(localized: "This recording couldn't be played.") }
 
     @discardableResult
     private func start(_ recording: RecordingEntry) async -> Bool {
@@ -304,7 +295,7 @@ final class NotebookRecorder: NSObject {
         } catch {
             if startingPlayback == request { startingPlayback = nil }
             if startingPlayback == nil, player == nil { AudioSessionOwner.shared.releasePlayback(by: self) }
-            errorMessage = String(localized: "This recording couldn't be played.")
+            errorMessage = Self.playbackFailed
             return false
         }
     }
@@ -332,7 +323,7 @@ final class NotebookRecorder: NSObject {
                 do {
                     guard try await AudioSessionOwner.shared.claimPlayback(for: self) else { return errorMessage = Self.playbackRefused }
                 } catch {
-                    return errorMessage = String(localized: "This recording couldn't be played.")
+                    return errorMessage = Self.playbackFailed
                 }
                 guard self.player === player, isPaused else { return }
                 guard lockStop == nil else { return AudioSessionOwner.shared.releasePlayback(by: self) }
@@ -396,11 +387,7 @@ final class NotebookRecorder: NSObject {
         cancelTranscription(recording.id)
         document.removeRecording(recording.id)
         guard recording.transcriptFile != nil else { return }
-        let package = document.package, id = recording.id
-        Task { [weak self] in
-            await package.removeTranscriptText(id)
-            self?.onTranscriptChange?()
-        }
+        removeTranscriptText(of: recording.id)
     }
 
     /// Nothing, or only spaces, takes it back to being named after when it began.
@@ -418,13 +405,9 @@ final class NotebookRecorder: NSObject {
         guard part == .audio || transcript?.isEmpty == false else { return nil }
         let package = document.package, name = RecordingExport.fileStem(of: recording)
         return try await Task.detached(priority: .userInitiated) {
-            let folder = try ExportFolder.make(.export)
-            do {
+            try ExportFolder.make(.export) { folder in
                 if let transcript { return [try RecordingExport.write(transcript, named: name, into: folder)] }
                 return [try RecordingExport.copyAudio(of: recording, from: package, named: name, into: folder)]
-            } catch {
-                try? FileManager.default.removeItem(at: folder)
-                throw error
             }
         }.value
     }
@@ -482,7 +465,12 @@ final class NotebookRecorder: NSObject {
     func removeTranscript(_ recording: RecordingEntry) {
         guard !document.isReadOnly, recording.transcriptFile != nil else { return }
         document.setTranscript(nil, forRecording: recording.id)
-        let package = document.package, id = recording.id
+        removeTranscriptText(of: recording.id)
+    }
+
+    /// Takes a recording's words out of search, then says so.
+    private func removeTranscriptText(of id: UUID) {
+        let package = document.package
         Task { [weak self] in
             await package.removeTranscriptText(id)
             self?.onTranscriptChange?()

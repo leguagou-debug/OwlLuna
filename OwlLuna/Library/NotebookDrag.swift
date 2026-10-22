@@ -9,7 +9,7 @@ enum NotebookDrag {
         let provider = NSItemProvider(), id = record.id
         provider.register(NotebookReference(id: id))
         guard offersPDF(record) else { return provider }
-        provider.suggestedName = record.title.isEmpty ? String(localized: "Untitled") : record.title
+        provider.suggestedName = record.title.orUntitled
         provider.registerFileRepresentation(forTypeIdentifier: UTType.pdf.identifier, fileOptions: [], visibility: .all) { done in
             let progress = Progress(totalUnitCount: 100)
             let work = Task.detached(priority: .userInitiated) {
@@ -27,5 +27,5 @@ enum NotebookDrag {
         return provider
     }
 
-    static func offersPDF(_ record: NotebookRecord) -> Bool { !record.isLocked && !record.isTrashed }
+    private static func offersPDF(_ record: NotebookRecord) -> Bool { !record.isLocked && !record.isTrashed }
 }

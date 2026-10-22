@@ -151,7 +151,7 @@ struct PenRoll: View {
     private func pocket(_ kinds: [PKInkingTool.InkType]) -> some View {
         Rectangle()
             .fill(Color.primaryCloth)
-            .overlay { if contrast != .increased { Rectangle().fill(ImagePaint(image: ClothWeave.tile, scale: 1)) } }
+            .clothWeave(in: Rectangle())
             .overlay { LinearGradient(colors: [.white.opacity(0.08), .black.opacity(0.12)], startPoint: .top, endPoint: .bottom) }
             .overlay {
                 HStack(spacing: 0) {

@@ -37,13 +37,6 @@ enum Motion {
     }
 }
 
-extension UIColor {
-    convenience init(hex: UInt32, alpha: CGFloat = 1) {
-        self.init(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-                  blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
-    }
-}
-
 extension Color {
     init(hex: UInt32) { self.init(uiColor: UIColor(hex: hex)) }
 }
@@ -59,13 +52,6 @@ extension ClothColor {
         case .mustard, .rose, .oat: Color(hex: 0x1B2230)
         default: .white
         }
-    }
-}
-
-extension View {
-    /// The filled cloth button that finishes a task.
-    func prominentButton(compact: Bool = false) -> some View {
-        buttonStyle(.owlLuna(.primary, compact: compact))
     }
 }
 

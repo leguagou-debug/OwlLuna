@@ -10,7 +10,7 @@ actor HandwritingIndexer {
     static let shared = HandwritingIndexer()
 
     private var running: [UUID: (token: UUID, task: Task<Void, Never>)] = [:]
-    private let signposter = OSSignposter(subsystem: "com.owais.OwlLuna", category: "ocr")
+    private let signposter = OSSignposter(category: "ocr")
 
     struct Job: Sendable {
         let package: NotebookPackage
@@ -67,9 +67,7 @@ actor HandwritingIndexer {
     }
 
     private nonisolated static func hash(_ text: String) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3 }
-        return String(hash, radix: 16)
+        String(fnv1a(text), radix: 16)
     }
 
     /// Rendering and Vision run off the actor, so an edit's `cancel(page:)` gets through while they work.

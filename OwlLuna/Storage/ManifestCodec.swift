@@ -90,7 +90,7 @@ enum ManifestCodec {
     // MARK: Pages
 
     static func decodePage(_ raw: JSONValue) -> NotebookPage? {
-        guard let object = raw.objectValue, let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)) else { return nil }
+        guard let object = raw.objectValue, let id = object["id"]?.uuidValue else { return nil }
         var reader = ObjectReader(object)
         _ = reader.take("id")
         _ = reader.take("ink")
@@ -201,7 +201,7 @@ enum ManifestCodec {
 
     static func decodeRecording(_ raw: JSONValue) -> RecordingEntry? {
         guard let object = raw.objectValue,
-              let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
+              let id = object["id"]?.uuidValue,
               let file = object["file"]?.stringValue else { return nil }
         var reader = ObjectReader(object)
         _ = reader.take("id")
@@ -311,16 +311,16 @@ struct ObjectReader {
     }
 
     mutating func uuid(_ key: String, default value: UUID) -> UUID {
-        self.value(key, default: value, encode: { .string($0.uuidString) }) { $0.stringValue.flatMap(UUID.init(uuidString:)) }
+        self.value(key, default: value, encode: { .string($0.uuidString) }) { $0.uuidValue }
     }
 
-    mutating func optionalUUID(_ key: String) -> UUID? { readOptional(key) { $0.stringValue.flatMap(UUID.init(uuidString:)) } }
+    mutating func optionalUUID(_ key: String) -> UUID? { readOptional(key) { $0.uuidValue } }
 
     mutating func date(_ key: String, default value: Date) -> Date {
-        self.value(key, default: value, encode: ManifestCodec.encodeDate) { $0.stringValue.flatMap(ManifestCodec.parseDate) }
+        self.value(key, default: value, encode: ManifestCodec.encodeDate) { $0.dateValue }
     }
 
-    mutating func optionalDate(_ key: String) -> Date? { readOptional(key) { $0.stringValue.flatMap(ManifestCodec.parseDate) } }
+    mutating func optionalDate(_ key: String) -> Date? { readOptional(key) { $0.dateValue } }
 
     mutating func array(_ key: String) -> [JSONValue] {
         self.value(key, default: [], encode: JSONValue.array) { $0.arrayValue }

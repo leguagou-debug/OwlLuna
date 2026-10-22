@@ -32,7 +32,6 @@ struct StudyGuideSheet: View {
     }
 
     private var document: NotebookDocument { session.document }
-    private var currentPage: NotebookPage? { document.pages.indices.contains(session.currentPage) ? document.pages[session.currentPage] : nil }
 
     var body: some View {
         NavigationStack {
@@ -98,7 +97,7 @@ struct StudyGuideSheet: View {
         OwlLunaMenu(Text("Write From")) {
             OwlLunaPicker(selection: $scope) {
                 Text("Whole Notebook").tag(StudyScope.notebook)
-                if let page = currentPage { Text("Page \(session.currentPage + 1)").tag(StudyScope.page(page.id)) }
+                if let page = session.shownPage { Text("Page \(session.currentPage + 1)").tag(StudyScope.page(page.id)) }
                 ForEach(session.recorder.recordings) { recording in
                     if recording.transcriptFile != nil { Text(recording.name).tag(StudyScope.recording(recording.id)) }
                 }
@@ -378,9 +377,7 @@ private struct QuestionCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Question \(number)")
-                    .font(.footnote.weight(.bold).smallCaps())
-                    .tracking(0.8)
-                    .foregroundStyle(Color.labelInk)
+                    .eyebrowStyle(Color.labelInk)
                 Spacer()
                 Button(action: remove) {
                     Image(systemName: "xmark")
@@ -442,8 +439,7 @@ private extension View {
 extension EditorSession {
     /// Types a summary's points onto the current page as a text box, which can then be moved, restyled or deleted.
     func addStudyNotes(_ points: [String]) {
-        guard !document.isReadOnly, document.pages.indices.contains(currentPage), !points.isEmpty else { return }
-        let page = document.pages[currentPage]
+        guard !document.isReadOnly, let page = shownPage, !points.isEmpty else { return }
         var box = TextBox(string: StudyGuide.listed(points))
         box.fontSize = 13
         let width = min(max(box.naturalWidth(limit: page.sheetSize.width * 0.7), 200), page.sheetSize.width * 0.7)

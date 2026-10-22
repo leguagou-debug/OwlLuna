@@ -9,23 +9,18 @@ enum OwlLunaFonts {
     static let bricolage = "BricolageGrotesque-96ptExtraBold"
     static let archivo = "ArchivoRoman-Black"
 
-    private static let registered = OSAllocatedUnfairLock(initialState: false)
-
     /// Registers the bundled display fonts for this process. The Info.plist is generated, so they can't be listed there.
-    static func register() {
-        let shouldRegister = registered.withLock { done -> Bool in
-            defer { done = true }
-            return !done
-        }
-        guard shouldRegister else { return }
+    static func register() { _ = registration }
+
+    private static let registration: Void = {
         let urls = Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil) ?? []
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true) { errors, _ in
             for error in (errors as? [CFError]) ?? [] {
-                Logger(subsystem: "com.owais.OwlLuna", category: "fonts").error("font registration failed: \(error.localizedDescription)")
+                Logger(category: "fonts").error("font registration failed: \(error.localizedDescription)")
             }
             return true
         }
-    }
+    }()
 
     private static let soft = 0x534F_4654 as UInt32
     private static let wonk = 0x574F_4E4B as UInt32
@@ -83,6 +78,11 @@ extension View {
 
     func displayTextFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> some View {
         modifier(DisplayFont(size: size, style: style, heading: false))
+    }
+
+    /// The small-caps label over a card or section: "CONTINUE WRITING", "TODAY".
+    func eyebrowStyle(_ color: Color) -> some View {
+        font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(color)
     }
 
     /// Small-caps metadata with tabular digits: "24 PAGES · EDITED TODAY".

@@ -28,9 +28,7 @@ enum NotebookFind {
         guard page.hasItems else { return [] }
         return page.items.compactMap { item in
             guard let box = item.text, contains(box.string, query) else { return nil }
-            let cosine = abs(cos(item.rotation)), sine = abs(sin(item.rotation))
-            let width = item.size.width * cosine + item.size.height * sine, height = item.size.width * sine + item.size.height * cosine
-            return CGRect(x: item.center.x - width / 2, y: item.center.y - height / 2, width: width, height: height)
+            return item.boundingBox
         }
     }
 

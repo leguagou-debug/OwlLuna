@@ -1,6 +1,11 @@
 import Foundation
 import PencilKit
 
+extension FormatStyle where Self == Date.FormatStyle {
+    /// A day written out in full: "Tuesday, 21 October".
+    static var dayName: Date.FormatStyle { .dateTime.weekday(.wide).day().month(.wide) }
+}
+
 enum DailyJournal {
     /// "yyyy-MM-dd" on the Gregorian calendar, in the calendar's time zone.
     static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
@@ -12,19 +17,13 @@ enum DailyJournal {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3, (1...12).contains(parts[1]), (1...31).contains(parts[2]) else { return nil }
         let components = DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)
-        let gregorian = gregorian(calendar)
+        let gregorian = ActivityFile.gregorian(calendar.timeZone)
         guard let date = gregorian.date(from: components), gregorian.component(.day, from: date) == parts[2] else { return nil }
         return date
     }
 
-    static func gregorian(_ calendar: Calendar) -> Calendar {
-        var gregorian = Calendar(identifier: .gregorian)
-        gregorian.timeZone = calendar.timeZone
-        return gregorian
-    }
-
     static func spokenDay(_ key: String) -> String? {
-        date(fromKey: key)?.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        date(fromKey: key)?.formatted(.dayName)
     }
 
     static func canvasLabel(page number: Int, day: String?) -> String {

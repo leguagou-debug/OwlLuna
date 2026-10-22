@@ -111,7 +111,7 @@ extension NotebookRecord {
         let package = NotebookPackage(root: root, id: id)
         let thumbKey = firstPageThumbKey ?? "none"
         let thumb = firstPageID.map { package.thumbURL($0, key: thumbKey) }
-        return CoverRequest(notebookID: id, spec: spec, title: title.isEmpty ? String(localized: "Untitled") : title,
+        return CoverRequest(notebookID: id, spec: spec, title: title.orUntitled,
                             meta: folder?.name ?? createdAt.formatted(.dateTime.month(.abbreviated).year()), width: width, scale: scale,
                             dark: colorScheme == .dark, highContrast: contrast == .increased, firstPage: thumb,
                             firstPageKey: spec.style == .firstPage ? "\(firstPageID?.uuidString ?? "")-\(thumbKey)" : nil,
@@ -133,7 +133,7 @@ extension NotebookRecord {
     }
 
     var accessibilityDescription: String {
-        var parts = [title.isEmpty ? String(localized: "Untitled") : title, String(localized: "notebook"),
+        var parts = [title.orUntitled, String(localized: "notebook"),
                      pageCountText,
                      String(localized: "edited \(modifiedAt.formatted(.relative(presentation: .named)))")]
         if isFavorite { parts.append(String(localized: "favourite")) }

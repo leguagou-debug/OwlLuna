@@ -16,6 +16,27 @@ enum ExportFolder {
         return folder
     }
 
+    /// Makes a folder for `work` to write into, and removes it again when `work` throws.
+    static func make<T>(_ kind: Kind, filling work: (URL) throws -> T) throws -> T {
+        let folder = try make(kind)
+        do {
+            return try work(folder)
+        } catch {
+            try? FileManager.default.removeItem(at: folder)
+            throw error
+        }
+    }
+
+    static func make<T>(_ kind: Kind, filling work: (URL) async throws -> T) async throws -> T {
+        let folder = try make(kind)
+        do {
+            return try await work(folder)
+        } catch {
+            try? FileManager.default.removeItem(at: folder)
+            throw error
+        }
+    }
+
     /// A share or print of these files has begun: their folder stays until it ends.
     @MainActor static func beginReading(_ files: [URL]) {
         for folder in folders(of: files) { readers[folder, default: 0] += 1 }

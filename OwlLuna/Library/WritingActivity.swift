@@ -44,12 +44,12 @@ final class WritingActivity {
     @ObservationIgnored private var isDirty = false
     @ObservationIgnored private var pendingWrite: Task<Void, Never>?
     @ObservationIgnored private var lastWrite: Task<Void, Never>?
-    @ObservationIgnored private let logger = Logger(subsystem: "com.owais.OwlLuna", category: "activity")
+    @ObservationIgnored private let logger = Logger(category: "activity")
 
     init(root: StorageRoot, defaults: UserDefaults = .standard) {
         self.root = root
         self.defaults = defaults
-        isEnabled = defaults.object(forKey: SettingsKey.keepsWritingHistory) as? Bool ?? true
+        isEnabled = defaults.bool(forKey: SettingsKey.keepsWritingHistory, default: true)
     }
 
     func load() async {
@@ -115,23 +115,8 @@ final class WritingActivity {
         pendingWrite?.cancel()
         pendingWrite = nil
         guard isDirty else { return lastWrite ?? Task {} }
-        var background = UIBackgroundTaskIdentifier.invalid
-        background = UIApplication.shared.beginBackgroundTask(withName: "Save writing history") {
-            UIApplication.shared.endBackgroundTask(background)
-            background = .invalid
-        }
         let written = write()
-        return Task {
-            await written.value
-            if background != .invalid { UIApplication.shared.endBackgroundTask(background) }
-        }
-    }
-
-    func days(in interval: DateInterval) -> [String: DayActivity] {
-        let calendar = Calendar.current
-        let start = ActivityFile.dayKey(for: interval.start, calendar: calendar)
-        let end = ActivityFile.dayKey(for: interval.end, calendar: calendar)
-        return log.days.filter { $0.key >= start && $0.key < end }
+        return UIApplication.shared.withBackgroundTime("Save writing history") { await written.value }
     }
 
     private func scheduleWrite() {

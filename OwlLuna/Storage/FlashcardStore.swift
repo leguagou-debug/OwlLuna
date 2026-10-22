@@ -66,7 +66,7 @@ enum CardFiles {
     /// keeps a file for as long as it says so.
     static func write(_ deck: Deck, to package: URL) throws {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: package.appending(path: "manifest.json").path(percentEncoded: false)) else { throw PackageError.missing }
+        guard fileManager.fileExists(atPath: package.appending(path: NotebookPackage.manifestFile).path(percentEncoded: false)) else { throw PackageError.missing }
         let url = file(in: package)
         if deck.cards.isEmpty, deck.removed.isEmpty {
             if fileManager.fileExists(atPath: url.path(percentEncoded: false)) { try fileManager.removeItem(at: url) }
@@ -84,7 +84,7 @@ enum CardFiles {
         let stale = Date.now.addingTimeInterval(-600)
         for image in (try? fileManager.contentsOfDirectory(at: directory(in: package), includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         where !kept.contains(image.lastPathComponent) {
-            let written = (try? image.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let written = image.contentModificationDate ?? .distantPast
             if written < stale { try? fileManager.removeItem(at: image) }
         }
     }
@@ -110,7 +110,7 @@ enum CardFiles {
 
     static func writeImage(_ png: Data, in package: URL) throws -> String {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: package.appending(path: "manifest.json").path(percentEncoded: false)) else { throw PackageError.missing }
+        guard fileManager.fileExists(atPath: package.appending(path: NotebookPackage.manifestFile).path(percentEncoded: false)) else { throw PackageError.missing }
         let folder = directory(in: package)
         if !fileManager.fileExists(atPath: folder.path(percentEncoded: false)) {
             try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
@@ -159,7 +159,7 @@ final class FlashcardLibrary {
     /// Cards deleted here, kept so a write never takes one back from the file.
     @ObservationIgnored private var removals: [UUID: [UUID: Date]] = [:]
     @ObservationIgnored private let writer = CardWriter()
-    @ObservationIgnored private let log = Logger(subsystem: "com.owais.OwlLuna", category: "flashcards")
+    @ObservationIgnored private let log = Logger(category: "flashcards")
     @ObservationIgnored private let images = LRUCache<PageThumbnailer.SharedUIImage>(capacity: 40)
 
     init(root: StorageRoot) {

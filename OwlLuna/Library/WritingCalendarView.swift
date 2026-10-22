@@ -25,6 +25,7 @@ struct WritingCalendarView: View {
     private var log: ActivityLog { activity.log }
     private var todayKey: String { key(.now) }
     private func key(_ date: Date) -> String { ActivityFile.dayKey(for: date, calendar: calendar) }
+    private func pageCount(on dayKey: String) -> Int { log.days[dayKey]?.pageCount ?? 0 }
 
     var body: some View {
         NavigationStack {
@@ -126,7 +127,7 @@ struct WritingCalendarView: View {
     private func cell(_ date: Date?) -> some View {
         if let date {
             let dayKey = key(date)
-            let pages = log.days[dayKey]?.pageCount ?? 0
+            let pages = pageCount(on: dayKey)
             let isSelected = selected == dayKey
             let label = HStack(alignment: .center, spacing: Space.x2) {
                 numeral(date, isToday: dayKey == todayKey, isFuture: dayKey > todayKey)
@@ -136,7 +137,7 @@ struct WritingCalendarView: View {
             .padding(.horizontal, Space.x2)
             .padding(.top, Space.x2)
             if dayKey > todayKey {
-                label.accessibilityElement(children: .ignore).accessibilityLabel(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                label.accessibilityElement(children: .ignore).accessibilityLabel(date.formatted(.dayName))
             } else {
                 Button { select(dayKey) } label: {
                     label
@@ -175,17 +176,17 @@ struct WritingCalendarView: View {
     /// At accessibility sizes the grid becomes a list of the days with writing.
     private var writtenDays: some View {
         let days = ActivityStats.monthGrid(containing: month, calendar: calendar).compactMap { $0 }
-            .filter { (log.days[key($0)]?.pageCount ?? 0) > 0 }
+            .filter { pageCount(on: key($0)) > 0 }
         return VStack(alignment: .leading, spacing: Space.x3) {
             ForEach(days, id: \.self) { date in
                 let dayKey = key(date)
-                let pages = log.days[dayKey]?.pageCount ?? 0
+                let pages = pageCount(on: dayKey)
                 Button {
                     select(dayKey)
                     detailRequest += 1
                 } label: {
                     VStack(alignment: .leading, spacing: Space.x1) {
-                        Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide))).font(.headline).foregroundStyle(Color.ink)
+                        Text(date.formatted(.dayName)).font(.headline).foregroundStyle(Color.ink)
                         Text(pagesText(pages)).font(.subheadline).foregroundStyle(Color.textSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -211,7 +212,7 @@ struct WritingCalendarView: View {
             let resolved = detail?.key == selected ? detail : nil
             VStack(alignment: .leading, spacing: Space.x5) {
                 VStack(alignment: .leading, spacing: Space.x1) {
-                    Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    Text(date.formatted(.dayName))
                         .displayFont(24, relativeTo: .title2)
                         .foregroundStyle(Color.ink)
                         .accessibilityAddTraits(.isHeader)
@@ -282,7 +283,7 @@ struct WritingCalendarView: View {
     }
 
     private func dayLabel(_ date: Date, pages: Int) -> String {
-        let name = date.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        let name = date.formatted(.dayName)
         return pages == 0 ? String(localized: "\(name), nothing written") : "\(name), \(pagesText(pages))"
     }
 
@@ -325,7 +326,7 @@ struct WritingCalendarView: View {
     /// The last day with writing in the month, or today in the current month.
     private func defaultSelection(in month: Date) -> String? {
         let keys = ActivityStats.monthGrid(containing: month, calendar: calendar).compactMap { $0.map(key) }
-        let written = keys.filter { $0 <= todayKey && (log.days[$0]?.pageCount ?? 0) > 0 }
+        let written = keys.filter { $0 <= todayKey && pageCount(on: $0) > 0 }
         return written.max() ?? (keys.contains(todayKey) ? todayKey : nil)
     }
 

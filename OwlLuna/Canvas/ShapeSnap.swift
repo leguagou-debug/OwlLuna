@@ -98,6 +98,26 @@ enum ShapeRecognizer {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
+    /// The length of the path through the points, one after another.
+    static func length(of points: [CGPoint]) -> CGFloat {
+        var length: CGFloat = 0
+        for (a, b) in zip(points, points.dropFirst()) { length += distance(a, b) }
+        return length
+    }
+
+    /// The middle of the points, and the angle of the line they spread furthest along.
+    static func principalAxis(of points: [CGPoint]) -> (mean: CGPoint, angle: CGFloat) {
+        let count = CGFloat(points.count)
+        let mean = CGPoint(x: points.map(\.x).reduce(0, +) / count, y: points.map(\.y).reduce(0, +) / count)
+        var sxx: CGFloat = 0, syy: CGFloat = 0, sxy: CGFloat = 0
+        for point in points {
+            sxx += (point.x - mean.x) * (point.x - mean.x)
+            syy += (point.y - mean.y) * (point.y - mean.y)
+            sxy += (point.x - mean.x) * (point.y - mean.y)
+        }
+        return (mean, 0.5 * atan2(2 * sxy, sxx - syy))
+    }
+
     private static func resampled(_ points: [CGPoint], limit: Int) -> [CGPoint] {
         guard points.count > limit else { return points }
         let step = Double(points.count - 1) / Double(limit - 1)
@@ -252,14 +272,7 @@ enum ShapeRecognizer {
         }
         let level = measure(points, box)
         let centre = CGPoint(x: box.midX, y: box.midY)
-        var sxx: CGFloat = 0, syy: CGFloat = 0, sxy: CGFloat = 0
-        let mean = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count), y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
-        for point in points {
-            sxx += (point.x - mean.x) * (point.x - mean.x)
-            syy += (point.y - mean.y) * (point.y - mean.y)
-            sxy += (point.x - mean.x) * (point.y - mean.y)
-        }
-        let angle = 0.5 * atan2(2 * sxy, sxx - syy)
+        let (mean, angle) = principalAxis(of: points)
         guard abs(angle) > 8 * .pi / 180, abs(abs(angle) - .pi / 2) > 8 * .pi / 180 else { return (shape(box, centre: centre, rotation: 0), level) }
         let turned = points.map { rotate($0, about: mean, by: -angle) }
         let turnedBox = bounds(of: turned)
@@ -321,7 +334,7 @@ enum ShapeSnap {
     /// How long the pen has to rest at the end of a stroke.
     static let holdDuration: TimeInterval = 0.45
 
-    static var isEnabled: Bool { UserDefaults.standard.object(forKey: SettingsKey.snapsShapes) as? Bool ?? true }
+    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: SettingsKey.snapsShapes, default: true) }
 
     /// The stroke redrawn as the shape it looks like, in the same ink and weight, or nil if it doesn't look like one.
     static func snapped(_ stroke: PKStroke) -> (stroke: PKStroke, shape: SnappedShape)? {
@@ -342,231 +355,3 @@ enum ShapeSnap {
     }
 }
 
-/// How long each touch on the pages rested before it lifted, and which rest the stroke ended with: the Pencil's, or a
-/// finger's when fingers draw and it was alone on the pages, so a resting palm or thumb never counts.
-struct TouchRests {
-    static let slop: CGFloat = 6
-    /// How far apart the touch's clock and the stroke's may read.
-    static let clockSlack: TimeInterval = 0.1
-
-    private struct Touch {
-        let landed: TimeInterval
-        var anchor: CGPoint
-        var restingSince: TimeInterval
-        let isPencil: Bool
-        var counts: Bool
-    }
-
-    private var down: [AnyHashable: Touch] = [:]
-    private var last: (duration: TimeInterval, landed: TimeInterval, endedAt: TimeInterval, isPencil: Bool)?
-
-    /// Every touch has lifted.
-    var isEmpty: Bool { down.isEmpty }
-
-    mutating func began(_ touch: AnyHashable, isPencil: Bool, fingersDraw: Bool, at point: CGPoint, time: TimeInterval) {
-        let alone = down.isEmpty
-        if isPencil {
-            for key in down.keys { down[key]?.counts = false }
-            last = nil
-        } else if fingersDraw {
-            for key in down.keys where down[key]?.isPencil == false { down[key]?.counts = false }
-            if last?.isPencil == false { last = nil }
-        }
-        down[touch] = Touch(landed: time, anchor: point, restingSince: time, isPencil: isPencil, counts: isPencil || (fingersDraw && alone))
-    }
-
-    mutating func moved(_ touch: AnyHashable, to point: CGPoint, time: TimeInterval) {
-        guard let anchor = down[touch]?.anchor, hypot(point.x - anchor.x, point.y - anchor.y) > Self.slop else { return }
-        down[touch]?.anchor = point
-        down[touch]?.restingSince = time
-    }
-
-    mutating func ended(_ touch: AnyHashable, time: TimeInterval) {
-        guard let ended = down.removeValue(forKey: touch), ended.counts else { return }
-        last = (time - ended.restingSince, ended.landed, time, ended.isPencil)
-    }
-
-    mutating func cancelled(_ touch: AnyHashable) {
-        down[touch] = nil
-    }
-
-    /// Forgets the touches that are down, but not the rest waiting to be taken.
-    mutating func lift() { down.removeAll() }
-
-    /// The rest the last stroke ended with, once: if it ended less than `window` before `now`, and its touch was down when `strokeBegan`.
-    mutating func take(at now: TimeInterval, within window: TimeInterval, strokeBegan: TimeInterval? = nil) -> TimeInterval? {
-        defer { last = nil }
-        guard let last, now - last.endedAt < window else { return nil }
-        if let strokeBegan, !(last.landed - Self.clockSlack...last.endedAt + Self.clockSlack).contains(strokeBegan) { return nil }
-        return last.duration
-    }
-}
-
-/// One finger alone on the pages, dragged as far as a stroke would go and lifted.
-struct FingerDrag {
-    /// How far the finger goes, in points on the screen, to be more than a tap.
-    static let reach: CGFloat = 20
-
-    private var start: CGPoint?
-    private var touches = 0
-    private var reached = false
-
-    mutating func began(isPencil: Bool, at point: CGPoint) {
-        touches += 1
-        start = touches == 1 && !isPencil ? point : nil
-    }
-
-    mutating func moved(to point: CGPoint) {
-        guard let start, hypot(point.x - start.x, point.y - start.y) > Self.reach else { return }
-        reached = true
-    }
-
-    mutating func cancelled() { start = nil }
-
-    /// Every touch has lifted: whether they were one finger's drag. It starts afresh.
-    mutating func lifted() -> Bool {
-        defer { self = FingerDrag() }
-        return start != nil && reached
-    }
-}
-
-/// Watches the touches on the pages, without ever recognising: it reports how long the stroke rested before lifting, and a lone finger's drag.
-final class StrokeHoldRecognizer: UIGestureRecognizer {
-    private var rests = TouchRests()
-    private var drag = FingerDrag()
-    /// Called when a touch lands on the pages, before anything is made of it.
-    var onTouchDown: (() -> Void)?
-    /// Called as the Pencil lands on the pages.
-    var onPencilDown: (() -> Void)?
-    /// Called when one finger alone on the pages has dragged and lifted.
-    var onFingerDrag: (() -> Void)?
-    /// Whether a finger draws as well as the Pencil, asked as each touch lands.
-    var fingersDraw: () -> Bool = { false }
-
-    /// The rest at the end of `stroke`, once, if the touch that drew it rested and lifted less than `window` ago.
-    func takeHold(for stroke: PKStroke?, within window: TimeInterval = 2) -> TimeInterval? {
-        let now = ProcessInfo.processInfo.systemUptime
-        return rests.take(at: now, within: window, strokeBegan: stroke.map { now + $0.path.creationDate.timeIntervalSinceNow })
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        onTouchDown?()
-        let fingersDraw = fingersDraw()
-        for touch in touches {
-            let isPencil = touch.type == .pencil
-            if isPencil { onPencilDown?() }
-            drag.began(isPencil: isPencil, at: touch.location(in: nil))
-            rests.began(ObjectIdentifier(touch), isPencil: isPencil, fingersDraw: fingersDraw, at: touch.location(in: view), time: touch.timestamp)
-        }
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        for touch in touches {
-            rests.moved(ObjectIdentifier(touch), to: touch.location(in: view), time: touch.timestamp)
-            drag.moved(to: touch.location(in: nil))
-        }
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        for touch in touches { rests.ended(ObjectIdentifier(touch), time: touch.timestamp) }
-        guard rests.isEmpty else { return }
-        if drag.lifted() { onFingerDrag?() }
-        state = .failed
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        for touch in touches { rests.cancelled(ObjectIdentifier(touch)) }
-        drag.cancelled()
-        if rests.isEmpty { state = .failed }
-    }
-
-    override func reset() {
-        rests.lift()
-        drag = FingerDrag()
-    }
-
-    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-}
-
-extension ShapeSnap {
-    /// A shape drawn with `tool`, in its ink and about as broad as its strokes by hand, from the corner nearest `start`.
-    static func stroke(_ shape: SnappedShape, tool: PKInkingTool, startingNear start: CGPoint) -> PKStroke {
-        let locations = shape.controlPoints(startingNear: start)
-        let size = CGSize(width: pointSize(for: tool), height: pointSize(for: tool))
-        let points = locations.enumerated().map { index, location in
-            PKStrokePoint(location: location, timeOffset: 0.005 * Double(index), size: size, opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
-        }
-        return PKStroke(ink: PKInk(tool.inkType, color: tool.color), path: PKStrokePath(controlPoints: points, creationDate: Date()))
-    }
-
-    /// PencilKit draws a pen's, fineliner's or fountain pen's nib 2 pt narrower all round than its points: a pen's shape is
-    /// drawn as wide as it is set, and never finer than a stroke by hand, and the others at the size a stroke by hand records.
-    static func pointSize(for tool: PKInkingTool) -> CGFloat {
-        switch tool.inkType {
-        case .pen: max(tool.width / 2 + 2, 3)
-        case .monoline: tool.width + 2
-        case .fountainPen: 2.2 + 0.57 * tool.width
-        default: tool.width
-        }
-    }
-
-    /// How broad a shape drawn with `tool` comes out, for the outline shown while it is dragged.
-    static func drawnWidth(for tool: PKInkingTool) -> CGFloat {
-        switch tool.inkType {
-        case .pen, .monoline, .fountainPen: max(2 * (pointSize(for: tool) - 2), 1)
-        default: max(tool.width, 1)
-        }
-    }
-}
-
-/// A shape picked from the strip over the tray, drawn from where a drag starts to where it ends.
-enum ShapeKind: String, CaseIterable, Identifiable, Sendable {
-    case line, arrow, circle, rectangle, triangle
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .line: String(localized: "Line")
-        case .arrow: String(localized: "Arrow")
-        case .circle: String(localized: "Circle")
-        case .rectangle: String(localized: "Rectangle")
-        case .triangle: String(localized: "Triangle")
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .line: "line.diagonal"
-        case .arrow: "arrow.up.right"
-        case .circle: "circle"
-        case .rectangle: "rectangle"
-        case .triangle: "triangle"
-        }
-    }
-
-    /// A circle is the ellipse in the drag's box, and a true circle when the box is nearly square. A triangle
-    /// stands on the box's foot. An arrow points where the drag ends, its head larger for a wider pen.
-    func shape(from a: CGPoint, to b: CGPoint, width: CGFloat = 0) -> SnappedShape {
-        let box = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
-        switch self {
-        case .line:
-            let (start, end) = ShapeRecognizer.squared(a, b)
-            return .line(start, end)
-        case .arrow:
-            let (tail, tip) = ShapeRecognizer.squared(a, b)
-            return .arrow(tail, tip, head: min(14 + 3 * width, ShapeRecognizer.distance(tail, tip) / 3))
-        case .circle:
-            var radii = CGSize(width: box.width / 2, height: box.height / 2)
-            if abs(radii.width - radii.height) < 0.14 * max(radii.width, radii.height) {
-                radii = CGSize(width: (radii.width + radii.height) / 2, height: (radii.width + radii.height) / 2)
-            }
-            return .ellipse(center: CGPoint(x: box.midX, y: box.midY), radii: radii, rotation: 0)
-        case .rectangle:
-            return .polygon([CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
-                             CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)])
-        case .triangle:
-            return .polygon([CGPoint(x: box.midX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)])
-        }
-    }
-}

@@ -52,9 +52,7 @@ enum InkText {
             ink = drawing.image(from: frame, scale: scale)
         }
         guard let ink else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: scale, opaque: true)
         return UIGraphicsImageRenderer(size: frame.size, format: format).image { context in
             UIColor.white.setFill()
             context.fill(CGRect(origin: .zero, size: frame.size))

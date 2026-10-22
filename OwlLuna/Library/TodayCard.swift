@@ -88,10 +88,7 @@ struct DeskCards: View {
             StartJournalCard(today: today, zoomID: "today-\(newJournalID.uuidString)", zoomNamespace: zoomNamespace, asRow: asRows,
                              action: startJournal) { promptHidden = true }
                 .keepsDayCurrent($today, scenePhase: scenePhase)
-                .notice("The journal couldn't be created", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } }),
-                        message: Text(failure ?? "")) {
-                    Button("OK", role: .cancel) {}
-                }
+                .notice("The journal couldn't be created", message: $failure)
         }
     }
 
@@ -174,10 +171,10 @@ struct TodayCard: View {
     @State private var image: UIImage?
     @PaperNight private var night
 
-    private var title: String { record.title.isEmpty ? String(localized: "Untitled") : record.title }
+    private var title: String { record.title.orUntitled }
     private var todayIndex: Int? { manifest?.pages.lastIndex { $0.day == today } }
     private var date: Date { DailyJournal.date(fromKey: today) ?? .now }
-    private var dayText: String { date.formatted(.dateTime.weekday(.wide).day().month(.wide)) }
+    private var dayText: String { date.formatted(.dayName) }
 
     /// Today's page, or the one tapping will add.
     private var preview: NotebookPage? {
@@ -201,21 +198,14 @@ struct TodayCard: View {
                     .zoomSource(id: "today-\(record.id.uuidString)", in: zoomNamespace)
             } text: {
                 Text("Today")
-                    .font(.footnote.weight(.bold).smallCaps())
-                    .tracking(0.8)
-                    .foregroundStyle(Color.accentColor)
+                    .eyebrowStyle(Color.accentColor)
                 Text(dayText)
                     .modifier(DeskTitle(asRow: asRow, lines: 1))
                 Text(place)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
             } accessory: {
-                Image(systemName: isWritten ? "checkmark" : "pencil.line")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle.plate)
-                    .contentTransition(.symbolEffect(.replace))
+                DeskAccessory(systemName: isWritten ? "checkmark" : "pencil.line")
             }
         }
         .buttonStyle(DeskCardButtonStyle())
@@ -326,6 +316,20 @@ struct DeskCardLayout<Thumbnail: View, Content: View, Accessory: View>: View {
             }
         }
         .contentShape(RoundedRectangle.plate)
+    }
+}
+
+/// The tinted symbol at the end of a desk card, which swaps when what the card says changes.
+struct DeskAccessory: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 36, height: 36)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle.plate)
+            .contentTransition(.symbolEffect(.replace))
     }
 }
 

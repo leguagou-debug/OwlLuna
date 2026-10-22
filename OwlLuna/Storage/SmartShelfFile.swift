@@ -45,12 +45,7 @@ struct SmartShelfFile: Sendable, Hashable {
     var extra: [String: JSONValue] = [:]
 
     static func read(_ root: StorageRoot) -> SmartShelfFile {
-        guard let data = try? Data(contentsOf: root.smartShelvesFile) else { return SmartShelfFile() }
-        guard let file = SmartShelfFile(data) else {
-            _ = try? Quarantine.move(root.smartShelvesFile)
-            return SmartShelfFile()
-        }
-        return file
+        Quarantine.read(root.smartShelvesFile) { SmartShelfFile($0) } ?? SmartShelfFile()
     }
 
     /// Nil for data that isn't a list of shelves.
@@ -61,7 +56,7 @@ struct SmartShelfFile: Sendable, Hashable {
         extra = object
         for raw in values {
             guard let object = raw.objectValue,
-                  let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
+                  let id = object["id"]?.uuidValue,
                   let name = object["name"]?.stringValue else {
                 opaque.append(raw)
                 continue
@@ -120,7 +115,7 @@ struct SmartShelfFile: Sendable, Hashable {
                 if let current = inFile[shelf.id] { result.append(current) }
             } else {
                 var changed = shelf
-                changed.changedAt = max(date, (inFile[shelf.id]?.changedAt ?? .distantPast).addingTimeInterval(0.001))
+                changed.changedAt = LibraryState.stamp(after: inFile[shelf.id]?.changedAt, at: date)
                 result.append(changed)
             }
         }
@@ -129,7 +124,6 @@ struct SmartShelfFile: Sendable, Hashable {
     }
 
     func write(_ root: StorageRoot) throws {
-        try FileManager.default.createDirectory(at: root.library, withIntermediateDirectories: true)
-        try encoded().write(to: root.smartShelvesFile, options: .atomic)
+        try root.writeLibraryFile(root.smartShelvesFile) { try encoded() }
     }
 }

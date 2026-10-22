@@ -37,6 +37,8 @@ enum AppAction: Equatable, Sendable {
 extension Notification.Name {
     /// Asks the editor showing a notebook (object: its ID) to save and close.
     static let owlLunaCloseEditor = Notification.Name("OwlLunaCloseEditor")
+    /// Asks the editor showing a notebook (object: its ID) to go to a page (userInfo "page": the page ID).
+    static let owlLunaShowPage = Notification.Name("OwlLunaShowPage")
     /// Tells the editor showing a notebook (object: its ID) that a sync set its document aside for a newer version, to open again.
     static let owlLunaReopenNotebook = Notification.Name("OwlLunaReopenNotebook")
 }
@@ -74,7 +76,7 @@ struct NotebookEntity: AppEntity {
     @MainActor
     init(_ record: NotebookRecord) {
         id = record.id
-        title = record.title.isEmpty ? String(localized: "Untitled") : record.title
+        title = record.title.orUntitled
         pages = record.pageCount
     }
 }

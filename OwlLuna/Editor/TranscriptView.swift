@@ -10,7 +10,7 @@ struct TranscriptLines: View {
         ForEach(lines) { line in
             Button { select(line) } label: {
                 HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
-                    Text(Transcript.clock(line.start))
+                    Text(RecordingStop.clock(line.start))
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(Color.textSecondary)
                     Text(line.text)
@@ -33,7 +33,7 @@ struct TranscriptLines: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("\(Transcript.clock(line.start)), \(line.text)"))
+            .accessibilityLabel(Text("\(RecordingStop.clock(line.start)), \(line.text)"))
             .accessibilityAddTraits(line.id == current ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("transcript.line.\(line.id + 1)")
         }
@@ -90,7 +90,7 @@ struct TranscriptView: View {
                     Text("This notebook is read-only.").foregroundStyle(Color.textSecondary)
                 } else {
                     Button("Transcribe") { start(recording) }
-                        .prominentButton()
+                        .buttonStyle(.owlLuna(.primary))
                         .disabled(recorder.isRecording)
                         .accessibilityIdentifier("transcript.start")
                     if languages.count > 1 { languagePicker }

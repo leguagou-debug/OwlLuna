@@ -30,21 +30,14 @@ struct StudyCard: View {
                 .frame(width: asRow ? 48 : 60, height: asRow ? 40 : 48)
             } text: {
                 Text("Flashcards")
-                    .font(.footnote.weight(.bold).smallCaps())
-                    .tracking(0.8)
-                    .foregroundStyle(Color.accentColor)
+                    .eyebrowStyle(Color.accentColor)
                 Text(due.isEmpty ? String(localized: "All caught up") : String(localized: "\(due.count) cards to review"))
                     .modifier(DeskTitle(asRow: asRow, lines: 1))
                 Text(detail)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
             } accessory: {
-                Image(systemName: due.isEmpty ? "checkmark" : "arrow.forward")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle.plate)
-                    .contentTransition(.symbolEffect(.replace))
+                DeskAccessory(systemName: due.isEmpty ? "checkmark" : "arrow.forward")
             }
         }
         .buttonStyle(DeskCardButtonStyle())

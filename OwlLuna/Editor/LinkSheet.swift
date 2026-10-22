@@ -38,10 +38,7 @@ struct LinkSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .barGround(Color.desk)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.buttonStyle(.owlLuna(.secondary, inBar: true))
-                }
-                .boardBackground()
+                CancelToolbarItem { dismiss() }
             }
         }
     }
@@ -74,10 +71,7 @@ private struct LinkPagePicker: View {
                 }
                 .padding(Space.x5)
             }
-            .onAppear {
-                guard document.pages.indices.contains(session.currentPage) else { return }
-                proxy.scrollTo(document.pages[session.currentPage].id, anchor: .center)
-            }
+            .onAppear { if let page = session.shownPage { proxy.scrollTo(page.id, anchor: .center) } }
         }
         .accessibilityIdentifier("link.picker")
     }
@@ -159,7 +153,7 @@ private struct LinkNotebookPages: View {
                     Label("The Whole Notebook", systemImage: "book.closed")
                         .frame(maxWidth: .infinity)
                 }
-                .prominentButton()
+                .buttonStyle(.owlLuna(.primary))
                 .accessibilityHint(Text("The link opens the notebook where you left it"))
                 .accessibilityIdentifier("link.notebook.whole")
                 if record.isLocked {

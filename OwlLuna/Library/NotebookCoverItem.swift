@@ -15,7 +15,7 @@ struct RecordCover: View {
         let id = record.id
         CoverView(request: record.coverRequest(width: width, scale: displayScale, colorScheme: colorScheme, contrast: contrast, root: root),
                   showsShadow: showsShadow, isObscured: record.isLocked) {
-            _ = await PageThumbnailer.ensureFirstPage(root: root, notebookID: id)
+            await PageThumbnailer.ensureFirstPage(root: root, notebookID: id)
         }
     }
 }
@@ -68,12 +68,7 @@ struct NotebookCoverItem: View {
         .accessibilityValue(app?.sync.isUploading(record.id) == true ? String(localized: "Not uploaded yet") : "")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
-        .accessibilityActions {
-            if record.isTrashed, !isSelecting {
-                Button("Restore") { changes.restore([record], in: store, undoManager: undoManager) }
-                Button("Delete Permanently") { changes.requestPermanentDelete([record.id]) }
-            }
-        }
+        .accessibilityActions { if !isSelecting { changes.trashActions(for: record, in: store, undoManager: undoManager) } }
         .accessibilityIdentifier("notebook.\(record.title)")
     }
 

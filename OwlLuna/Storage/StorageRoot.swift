@@ -3,7 +3,7 @@ import os
 
 /// Where everything lives. The app uses `.live`; tests pass a temporary directory.
 struct StorageRoot: Sendable, Hashable {
-    private static let log = Logger(subsystem: "com.owais.OwlLuna", category: "storage")
+    private static let log = Logger(category: "storage")
 
     let url: URL
 
@@ -20,6 +20,32 @@ struct StorageRoot: Sendable, Hashable {
 
     func package(_ id: UUID) -> URL {
         library.appending(path: "\(id.uuidString).\(Self.packageExtension)", directoryHint: .isDirectory)
+    }
+
+    /// A new folder in `Arriving/` for a notebook to be put together in, before it is moved into the library.
+    func staging(_ id: UUID) -> URL {
+        arriving.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
+    }
+
+    /// Moves a notebook's package into `Deleting/` under a name of its own, which a quit leaves to be swept. Returns where it went.
+    func moveToDeleting(_ id: UUID) throws -> URL {
+        let fileManager = FileManager.default
+        let tombstone = deleting.appending(path: "\(id.uuidString)-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try fileManager.createDirectory(at: deleting, withIntermediateDirectories: true)
+        try fileManager.moveItem(at: package(id), to: tombstone)
+        return tombstone
+    }
+
+    /// Deletes a notebook's package: one move out of the library, then its files.
+    func removePackage(_ id: UUID) throws {
+        let tombstone = try moveToDeleting(id)
+        try? FileManager.default.removeItem(at: tombstone)
+    }
+
+    /// Writes one of the library's own files whole, making `Library/` first.
+    func writeLibraryFile(_ file: URL, _ data: () throws -> Data) throws {
+        try FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
+        try data().write(to: file, options: .atomic)
     }
 
     static let packageExtension = "owlluna"
@@ -97,5 +123,31 @@ enum Quarantine {
         }
         try fileManager.moveItem(at: url, to: target)
         return target
+    }
+
+    /// A file decoded, or nil when there is none. One that is there and won't decode is set aside first.
+    static func read<Value>(_ url: URL, _ decode: (Data) -> Value?) -> Value? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let value = decode(data) else {
+            _ = try? move(url)
+            return nil
+        }
+        return value
+    }
+}
+
+extension URL {
+    /// When the file's contents last changed, nil when that can't be read.
+    var contentModificationDate: Date? {
+        (try? resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+}
+
+extension NSError {
+    /// Whether this, or an error it came from, is a full disk.
+    var isOutOfSpace: Bool {
+        (domain == NSCocoaErrorDomain && code == NSFileWriteOutOfSpaceError)
+            || (domain == NSPOSIXErrorDomain && code == Int(ENOSPC))
+            || (userInfo[NSUnderlyingErrorKey] as? NSError)?.isOutOfSpace == true
     }
 }

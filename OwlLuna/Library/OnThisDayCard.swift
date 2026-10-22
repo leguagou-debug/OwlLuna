@@ -13,7 +13,7 @@ struct OnThisDayCard: View {
     @PaperNight private var night
 
     private var record: NotebookRecord { memory.record }
-    private var notebookTitle: String { record.title.isEmpty ? String(localized: "Untitled") : record.title }
+    private var notebookTitle: String { record.title.orUntitled }
     private var fullDate: String { memory.resurfaced.date.formatted(.dateTime.day().month(.wide).year()) }
     private var zoomID: String { "onthisday-\(record.id.uuidString)" }
 
@@ -38,9 +38,7 @@ struct OnThisDayCard: View {
                     Image(systemName: "clock.arrow.circlepath").imageScale(.small)
                 }
                 .labelStyle(DeskEyebrowLabelStyle())
-                .font(.footnote.weight(.bold).smallCaps())
-                .tracking(0.8)
-                .foregroundStyle(Color.textSecondary)
+                .eyebrowStyle(Color.textSecondary)
                 Text(title)
                     .modifier(DeskTitle(asRow: asRow))
                 Text(detail)

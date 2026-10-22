@@ -94,3 +94,13 @@ enum SettingsKey {
     static let trashLength = "trashLength"
     static let playbackSpeed = "playbackSpeed"
 }
+
+extension UserDefaults {
+    /// A setting's switch, `value` until it is first changed.
+    func bool(forKey key: String, default value: Bool) -> Bool { object(forKey: key) as? Bool ?? value }
+
+    /// The paper Settings chose for new notebooks.
+    var defaultTemplate: PaperTemplate { string(forKey: SettingsKey.defaultTemplate).flatMap(PaperTemplate.init(rawValue:)) ?? .narrowRuled }
+    var defaultPaperColor: PaperColor { string(forKey: SettingsKey.defaultPaperColor).flatMap(PaperColor.init(rawValue:)) ?? .white }
+    var defaultPageSize: PageSize { string(forKey: SettingsKey.defaultPageSize).flatMap(PageSize.init(rawValue:)) ?? .letter }
+}

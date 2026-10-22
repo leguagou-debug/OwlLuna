@@ -46,19 +46,13 @@ enum ActivityFile {
     static let detailedDays = 400
 
     static func read(_ root: StorageRoot) -> ActivityLog {
-        guard let data = try? Data(contentsOf: root.activityFile) else { return ActivityLog() }
-        guard let log = decode(data) else {
-            _ = try? Quarantine.move(root.activityFile)
-            return ActivityLog()
-        }
-        return log
+        Quarantine.read(root.activityFile, decode) ?? ActivityLog()
     }
 
     static func write(_ log: ActivityLog, to root: StorageRoot, now: Date = .now, calendar: Calendar = .current) throws {
         var log = log
         log.compact(before: compactionCutoff(now: now, calendar: calendar))
-        try FileManager.default.createDirectory(at: root.library, withIntermediateDirectories: true)
-        try encode(log).write(to: root.activityFile, options: .atomic)
+        try root.writeLibraryFile(root.activityFile) { try encode(log) }
     }
 
     static func compactionCutoff(now: Date, calendar: Calendar) -> String {
@@ -103,7 +97,7 @@ enum ActivityFile {
             guard let entries = notebooks.objectValue else { return nil }
             for (key, value) in entries {
                 guard let id = UUID(uuidString: key), let pages = value.arrayValue else { return nil }
-                let ids = pages.compactMap { $0.stringValue.flatMap(UUID.init(uuidString:)) }
+                let ids = pages.compactMap { $0.uuidValue }
                 guard ids.count == pages.count else { return nil }
                 day.notebooks[id, default: []].formUnion(ids)
             }
@@ -129,8 +123,7 @@ enum ActivityFile {
 
     /// "2026-09-29" for the day `date` falls on in the calendar's time zone. Always Gregorian, whatever the user's calendar.
     static func dayKey(for date: Date, calendar: Calendar) -> String {
-        let parts = gregorian(calendar.timeZone).dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        WidgetSnapshot.dayKey(for: date, calendar: calendar)
     }
 
     /// The start of the day a key names, or nil for anything that isn't a real date.
@@ -143,7 +136,7 @@ enum ActivityFile {
         return date
     }
 
-    private static func gregorian(_ timeZone: TimeZone) -> Calendar {
+    static func gregorian(_ timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         return calendar

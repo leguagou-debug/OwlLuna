@@ -31,8 +31,6 @@ struct TabStrip: View {
     let openBeside: ((UUID) -> Void)?
     @Environment(EditorWindow.self) private var window
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.colorSchemeContrast) private var contrast
     @Query(filter: #Predicate<NotebookRecord> { $0.deletedAt == nil }) private var records: [NotebookRecord]
     @Namespace private var thumb
     @State private var dragging: UUID?
@@ -55,7 +53,7 @@ struct TabStrip: View {
                             self.tab(tab.id, record: byID[tab.id], number: index + 1, of: tabs.count)
                         }
                     }
-                    .background { if let selected = window.selected { thumbView.matchedGeometryEffect(id: selected, in: thumb, isSource: false) } }
+                    .background { if let selected = window.selected { SegmentThumb().matchedGeometryEffect(id: selected, in: thumb, isSource: false) } }
                     .animation(slide, value: window.selected)
                 }
                 .scrollIndicators(.hidden)
@@ -88,7 +86,7 @@ struct TabStrip: View {
 
     private func tab(_ id: UUID, record: NotebookRecord?, number: Int, of count: Int) -> some View {
         let selected = id == window.selected
-        let title = record.map { $0.title.isEmpty ? String(localized: "Untitled") : $0.title } ?? String(localized: "Notebook")
+        let title = record.map { $0.title.orUntitled } ?? String(localized: "Notebook")
         let index = number - 1
         return HStack(spacing: 0) {
             Button { select(id) } label: {
@@ -206,16 +204,6 @@ struct TabStrip: View {
             .frame(maxWidth: .infinity, alignment: after ? .trailing : .leading)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-    }
-
-    /// The board under the tab on show, as `OwlLunaSegmentedPicker` draws its own.
-    private var thumbView: some View {
-        let shape = RoundedRectangle.thumb
-        return Color.clear
-            .board(in: shape)
-            .overlay { if scheme == .dark { shape.fill(Color.ink.opacity(0.10)) } }
-            .overlay { if contrast == .increased { shape.strokeBorder(Color.inkSecondary, lineWidth: 1) } }
-            .padding(4)
     }
 
     @ViewBuilder

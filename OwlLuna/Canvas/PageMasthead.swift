@@ -85,9 +85,9 @@ enum PageMasthead {
             calendar.timeZone = .current
             guard let date = DailyJournal.date(fromKey: day, calendar: calendar) else { return nil }
             let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
-            return Lines(weekday: line(date.formatted(.dateTime.weekday(.wide)), font: smallCaps(weight: .semibold), kern: 1.6),
-                         date: line(date.formatted(.dateTime.day().month(.wide).year()), font: OwlLunaFonts.coverLabel(size: 26), kern: 0),
-                         count: line(String(localized: "Day \(dayOfYear)"), font: smallCaps(weight: .medium), kern: 1.4))
+            return Lines(weekday: .contextColoured(date.formatted(.dateTime.weekday(.wide)), font: smallCaps(weight: .semibold), kern: 1.6),
+                         date: .contextColoured(date.formatted(.dateTime.day().month(.wide).year()), font: OwlLunaFonts.coverLabel(size: 26), kern: 0),
+                         count: .contextColoured(String(localized: "Day \(dayOfYear)"), font: smallCaps(weight: .medium), kern: 1.4))
         }
     }
 
@@ -100,8 +100,11 @@ enum PageMasthead {
         let descriptor = UIFont.systemFont(ofSize: 11, weight: weight).fontDescriptor.addingAttributes([.featureSettings: features])
         return UIFont(descriptor: descriptor, size: 11) as CTFont
     }
+}
 
-    private static func line(_ string: String, font: CTFont, kern: CGFloat) -> CTLine {
+extension CTLine {
+    /// A line of `string` drawn in whatever fill colour the context has.
+    static func contextColoured(_ string: String, font: CTFont, kern: CGFloat) -> CTLine {
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,

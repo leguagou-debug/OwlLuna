@@ -18,9 +18,7 @@ enum CoverShadowPlate {
 
     /// 72 pt square with a 40 pt cover shape at inset 16; the shape itself is cleared, leaving only its shadow.
     private static func make(dark: Bool, highContrast: Bool) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 2
-        format.opaque = false
+        let format = UIGraphicsImageRendererFormat(scale: 2)
         return UIGraphicsImageRenderer(size: CGSize(width: 72, height: 72), format: format).image { context in
             let ctx = context.cgContext
             let shape = UIBezierPath(roundedRect: CGRect(x: 16, y: 16, width: 40, height: 40), cornerRadius: 4).cgPath

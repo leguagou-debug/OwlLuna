@@ -89,3 +89,63 @@ private struct ClothNotebook: View {
             .frame(width: 66, height: 88)
     }
 }
+
+struct ShelfLabel: View {
+    let title: String
+    var cloth: ClothColor?
+    var body: some View {
+        HStack(spacing: Space.x3) {
+            if let cloth { SpineChip(cloth: cloth) }
+            Text(title).metaStyle(.footnote).fixedSize().accessibilityAddTraits(.isHeader)
+            Rectangle().fill(Color.hairline).frame(height: 1).accessibilityHidden(true)
+        }
+    }
+}
+
+struct EmptyShelf<Actions: View, Illustration: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let title: String
+    let message: String
+    @ViewBuilder var actions: Actions
+    @ViewBuilder var illustration: Illustration
+
+    init(title: String, message: String, @ViewBuilder actions: () -> Actions = { EmptyView() },
+         @ViewBuilder illustration: () -> Illustration = { EmptyView() }) {
+        self.title = title
+        self.message = message
+        self.actions = actions()
+        self.illustration = illustration()
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content.frame(minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: Space.x4) {
+            illustration
+            Text(title)
+                .displayFont(30, relativeTo: .title)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color.ink)
+                .accessibilityAddTraits(.isHeader)
+            Text(message)
+                .displayTextFont(17, relativeTo: .body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color.textSecondary)
+            (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: Space.x3)) : AnyLayout(HStackLayout(spacing: Space.x3))) {
+                actions
+            }
+            .controlSize(.large)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 420)
+        .padding(Space.x8)
+        .frame(maxWidth: .infinity)
+    }
+}

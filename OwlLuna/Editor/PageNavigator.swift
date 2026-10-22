@@ -109,7 +109,7 @@ struct PageNavigator: View {
                     .boardBackground()
                 }
             }
-            .notice("Delete this page?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            .notice("Delete this page?", isPresented: Binding(isPresent: $pendingDelete),
                     message: Text("You can undo this.")) {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete Page", role: .destructive) { if let pendingDelete { document.removePages([pendingDelete]) } }
@@ -131,10 +131,7 @@ struct PageNavigator: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { if !goToFitsBar { goToRow } }
-            .onAppear {
-                guard document.pages.indices.contains(currentPage) else { return }
-                proxy.scrollTo(document.pages[currentPage].id, anchor: .center)
-            }
+            .onAppear { if let page = session.shownPage { proxy.scrollTo(page.id, anchor: .center) } }
         }
     }
 
@@ -246,31 +243,28 @@ struct PageNavigator: View {
 
     @ViewBuilder
     private func menu(for page: NotebookPage, at index: Int) -> some View {
-        if !document.isReadOnly { editMenu(for: page, at: index) }
-    }
-
-    @ViewBuilder
-    private func editMenu(for page: NotebookPage, at index: Int) -> some View {
-        Button { session.addPage(after: index) } label: {
-            Label("Insert Page After", systemImage: "doc.badge.plus")
+        if !document.isReadOnly {
+            Button { session.addPage(after: index) } label: {
+                Label("Insert Page After", systemImage: "doc.badge.plus")
+            }
+            Button { Task { await session.duplicatePage(at: index) } } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            if page.bookmark == nil {
+                Button { document.setBookmark("", forPage: page.id) } label: { Label("Bookmark", systemImage: "bookmark") }
+            } else {
+                Button { document.setBookmark(nil, forPage: page.id) } label: { Label("Remove Bookmark", systemImage: "bookmark.slash") }
+            }
+            Button { tagging = .page(page.id) } label: { Label("Tags…", systemImage: "tag") }
+            if index > 0 {
+                Button { move(page.id, to: index - 1) } label: { Label("Move Earlier", systemImage: "arrow.backward") }
+            }
+            if index < document.pages.count - 1 {
+                Button { move(page.id, to: index + 1) } label: { Label("Move Later", systemImage: "arrow.forward") }
+            }
+            MenuBreak()
+            Button(role: .destructive) { pendingDelete = page.id } label: { Label("Delete", systemImage: "trash") }
         }
-        Button { Task { await session.duplicatePage(at: index) } } label: {
-            Label("Duplicate", systemImage: "plus.square.on.square")
-        }
-        if page.bookmark == nil {
-            Button { document.setBookmark("", forPage: page.id) } label: { Label("Bookmark", systemImage: "bookmark") }
-        } else {
-            Button { document.setBookmark(nil, forPage: page.id) } label: { Label("Remove Bookmark", systemImage: "bookmark.slash") }
-        }
-        Button { tagging = .page(page.id) } label: { Label("Tags…", systemImage: "tag") }
-        if index > 0 {
-            Button { move(page.id, to: index - 1) } label: { Label("Move Earlier", systemImage: "arrow.backward") }
-        }
-        if index < document.pages.count - 1 {
-            Button { move(page.id, to: index + 1) } label: { Label("Move Later", systemImage: "arrow.forward") }
-        }
-        MenuBreak()
-        Button(role: .destructive) { pendingDelete = page.id } label: { Label("Delete", systemImage: "trash") }
     }
 }
 

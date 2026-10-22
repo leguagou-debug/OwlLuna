@@ -38,7 +38,7 @@ enum PageWords {
     /// size, turn and centre to where they lie. One whose kept reading found nothing isn't read again.
     private static func words(onPictures items: [PageItem], of page: NotebookPage, package: NotebookPackage) -> [Word] {
         guard !items.isEmpty else { return [] }
-        let kept = (try? Data(contentsOf: package.pictureTextURL(page.id))).flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        let kept = NotebookPackage.pictureText(at: package.pictureTextURL(page.id))
         var read: [String: [RecognizedLine]] = [:], words: [Word] = []
         for item in items {
             guard let file = item.assetFile, let key = item.readingKey, kept[key] != [] else { continue }

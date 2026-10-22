@@ -142,7 +142,7 @@ private struct InkWell: View {
 
     var body: some View {
         let night = scheme == .dark && !onDark
-        let rim = night ? ToolSwatch.rim(contrast) : (onDark ? Color.white : Color.labelInk).opacity(contrast == .increased ? 0.6 : 0.22)
+        let rim = ToolSwatch.labelRim(night: night, onDark: onDark, contrast: contrast)
         ZStack {
             Circle().fill(ToolSwatch.paper(onDark: onDark, night: night))
             Circle().fill(ToolSwatch.ink(preset, onDark: onDark, night: night, turned: turned))
@@ -154,16 +154,7 @@ private struct InkWell: View {
         }
         .frame(width: InkDish.well, height: InkDish.well)
         .overlay { Circle().strokeBorder(inUse ? Color.accentColor : rim, lineWidth: inUse ? 2 : 1) }
-        .overlay(alignment: .bottomTrailing) {
-            if inUse {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 8, weight: .heavy))
-                    .foregroundStyle(Color.onPrimaryCloth)
-                    .frame(width: 14, height: 14)
-                    .background(Color.primaryCloth, in: Circle())
-                    .offset(x: 2, y: 2)
-            }
-        }
+        .overlay(alignment: .bottomTrailing) { if inUse { ToolSwatch.inUseBadge(offset: 2) } }
         .accessibilityHidden(true)
     }
 

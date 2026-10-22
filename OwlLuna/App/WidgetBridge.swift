@@ -10,7 +10,7 @@ enum WidgetBridge {
     static func snapshot(library: LibraryStore, activity: WritingActivity, now: Date = .now, calendar: Calendar = .current) async -> WidgetSnapshot {
         var snapshot = WidgetSnapshot()
         if let record = library.lastOpenedNotebook(includingLocked: false) {
-            snapshot.notebook = .init(id: record.id, title: record.title.isEmpty ? String(localized: "Untitled") : record.title,
+            snapshot.notebook = .init(id: record.id, title: record.title.orUntitled,
                                       page: min(record.currentPage + 1, max(record.pageCount, 1)), pageCount: record.pageCount, clothHex: record.cloth.hex)
         }
         if activity.isEnabled, let start = calendar.date(byAdding: .day, value: -60, to: now) {

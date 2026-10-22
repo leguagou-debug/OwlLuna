@@ -361,7 +361,7 @@ struct PageItem: Sendable, Hashable, Identifiable {
     }
 
     init?(json: JSONValue) {
-        guard let object = json.objectValue, let id = object["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
+        guard let object = json.objectValue, let id = object["id"]?.uuidValue,
               let x = object["x"]?.doubleValue, let y = object["y"]?.doubleValue,
               let w = object["w"]?.doubleValue, let h = object["h"]?.doubleValue,
               [x, y, w, h].allSatisfy(\.isFinite), w > 0, h > 0 else { return nil }
@@ -394,10 +394,10 @@ struct PageItem: Sendable, Hashable, Identifiable {
             let label = object["label"]?.stringValue ?? ""
             if let url = object["url"]?.stringValue.flatMap(WebAddress.url(from:)) {
                 content = .link(PageLink(.web(url), label: label))
-            } else if let notebook = object["notebook"]?.stringValue.flatMap(UUID.init(uuidString:)) {
-                let page = object["page"]?.stringValue.flatMap(UUID.init(uuidString:))
+            } else if let notebook = object["notebook"]?.uuidValue {
+                let page = object["page"]?.uuidValue
                 content = .link(PageLink(.notebook(notebook, page: page, name: object["name"]?.stringValue ?? ""), label: label))
-            } else if let target = object["target"]?.stringValue.flatMap(UUID.init(uuidString:)) {
+            } else if let target = object["target"]?.uuidValue {
                 content = .link(PageLink(target: target, label: label))
             } else {
                 content = .unknown
@@ -480,11 +480,7 @@ struct PageItem: Sendable, Hashable, Identifiable {
 
     /// A fingerprint of everything an older build rewrites when it refits a box by its own plainer measure.
     private static func fit(_ box: TextBox, size: CGSize) -> JSONValue {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in "\(Double(size.width))|\(Double(size.height))|\(Double(box.fontSize))|\(box.isBold)|\(box.string)".utf8 {
-            hash = (hash ^ UInt64(byte)) &* 0x0100_0000_01b3
-        }
-        return .string(String(hash, radix: 16))
+        .string(String(fnv1a("\(Double(size.width))|\(Double(size.height))|\(Double(box.fontSize))|\(box.isBold)|\(box.string)"), radix: 16))
     }
 }
 

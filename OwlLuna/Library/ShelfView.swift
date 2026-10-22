@@ -63,10 +63,7 @@ struct ShelfView: View {
     @State private var barRoom = CGFloat.infinity
     @State private var actionsWidth: CGFloat = 0
 
-    private var folder: FolderRecord? {
-        if case .folder(let id) = scope { return folders.first { $0.id == id } }
-        return nil
-    }
+    private var folder: FolderRecord? { scope.folder(in: folders) }
 
     private var title: String {
         switch scope {
@@ -148,6 +145,8 @@ struct ShelfView: View {
     /// Tagged pages show under their notebooks, but not while searching.
     private var showsTagPages: Bool { rule != nil && searchText.isEmpty && !tagPages.isEmpty }
 
+    private var showsPageHits: Bool { !searchText.isEmpty && !pageHits.isEmpty && scope != .trash }
+
     private var tagPagesKey: String {
         "\(scope)|\(store.indexVersion)|" + (rule.map { "\($0.match.rawValue)|\(Tags.joined($0.tags))" } ?? "")
     }
@@ -195,7 +194,7 @@ struct ShelfView: View {
             }
             .ignoresSafeArea()
         }
-        .notice("Rename Notebook", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+        .notice("Rename Notebook", isPresented: Binding(isPresent: $renaming)) {
             TextField("Title", text: $renameText)
         } actions: {
             Button("Cancel", role: .cancel) {}
@@ -220,7 +219,7 @@ struct ShelfView: View {
         .sheet(item: $export) { job in ExportSheet(job: job).presentationCornerRadius(Radius.sheet) }
         .sheet(item: $editingCover) { record in CoverEditorView(record: record).presentationCornerRadius(Radius.sheet) }
         .sheet(item: $tagging) { record in
-            TagSheet(subject: record.title.isEmpty ? String(localized: "Untitled") : record.title, initial: record.tags) { tags in
+            TagSheet(subject: record.title.orUntitled, initial: record.tags) { tags in
                 changes.setTags(tags, for: record, in: store, undoManager: undoManager)
             }
             .presentationCornerRadius(Radius.sheet)
@@ -251,7 +250,7 @@ struct ShelfView: View {
     // MARK: Shelves
 
     private func shelves(_ visible: [NotebookRecord]) -> some View {
-        ScrollView {
+        scroller {
             LazyVStack(alignment: .leading, spacing: Space.x6) {
                 LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: showsRhythm, onOpenPage: onOpenPage)
                 if let recent = continueCandidate {
@@ -259,10 +258,7 @@ struct ShelfView: View {
                         .id("spread-\(recent.id.uuidString)")
                 }
                 if scope == .all, searchText.isEmpty, !isSelecting { DeskCards(records: records, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed) }
-                if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash {
-                    PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
-                        .transition(.opacity)
-                }
+                searchHits(visible)
                 ForEach(groups(visible)) { shelf in
                     ShelfLabel(title: shelf.title, cloth: shelf.cloth)
                         .padding(.top, Space.x2)
@@ -279,32 +275,21 @@ struct ShelfView: View {
                         }
                     }
                 }
-                if showsTagPages {
-                    PageHitsSection(records: taggedNotebooks, hits: tagPages, query: "", zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
-                        .padding(.top, Space.x2)
-                        .transition(.opacity)
-                }
+                taggedPagesSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { shelfWidth = $0 }
-            .padding(.horizontal, Space.x8)
-            .padding(.vertical, Space.x6)
         }
-        .scrollDismissesKeyboard(.immediately)
-        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
     /// Rows on the paper under the shelves' own labels, with folder and tags beside each title where the pane has room.
     private func list(_ visible: [NotebookRecord]) -> some View {
         let isLarge = dynamicTypeSize.isAccessibilitySize
         let side = NotebookCatalogueRow.showsSide(width: listWidth, scale: textScale, isAccessibilitySize: isLarge)
-        return ScrollView {
+        return scroller {
             LazyVStack(alignment: .leading, spacing: Space.x5) {
                 LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: showsRhythm, onOpenPage: onOpenPage)
-                if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash {
-                    PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
-                        .transition(.opacity)
-                }
+                searchHits(visible)
                 // At the accessibility sizes the tabs would stand as tall as the screen; the bar's Sort menu does the same.
                 if !visible.isEmpty, !isLarge {
                     ShelfListSort(sort: $sort, reversed: $sortReversed)
@@ -321,29 +306,57 @@ struct ShelfView: View {
                         }
                     }
                 }
-                if showsTagPages {
-                    PageHitsSection(records: taggedNotebooks, hits: tagPages, query: "", zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
-                        .padding(.top, Space.x2)
-                        .transition(.opacity)
-                }
+                taggedPagesSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
-            .padding(.horizontal, Space.x8)
-            .padding(.vertical, Space.x6)
+        }
+    }
+
+    /// The scroll view each layout sits in, which drops the keyboard and shows the bar's title once the header has gone by.
+    private func scroller<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            content()
+                .padding(.horizontal, Space.x8)
+                .padding(.vertical, Space.x6)
         }
         .scrollDismissesKeyboard(.immediately)
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
+    /// Pages whose writing matches the search, above the notebooks.
+    @ViewBuilder
+    private func searchHits(_ visible: [NotebookRecord]) -> some View {
+        if showsPageHits {
+            PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
+                .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private var taggedPagesSection: some View {
+        if showsTagPages {
+            PageHitsSection(records: taggedNotebooks, hits: tagPages, query: "", zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
+                .padding(.top, Space.x2)
+                .transition(.opacity)
+        }
+    }
+
     /// What every row of the list and the ledger does: opens or chooses its notebook, holds a menu and can be dragged.
     private func listRow<Row: View>(_ record: NotebookRecord, @ViewBuilder row: () -> Row) -> some View {
-        row()
-            .accessibilityLabel(record.accessibilityDescription)
-            .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
-            .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
-            .accessibilityIdentifier("notebook.\(record.title)")
-            .accessibilityActions { if !isSelecting { trashActions(for: record) } }
+        held(record) {
+            row()
+                .accessibilityLabel(record.accessibilityDescription)
+                .accessibilityHint(record.accessibilityHint(isSelecting: isSelecting))
+                .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
+                .accessibilityIdentifier("notebook.\(record.title)")
+                .accessibilityActions { if !isSelecting { changes.trashActions(for: record, in: store, undoManager: undoManager) } }
+        }
+    }
+
+    /// Gives a notebook its held menu and lets it be dragged out.
+    private func held<Content: View>(_ record: NotebookRecord, @ViewBuilder content: () -> Content) -> some View {
+        content()
             .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
             .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
     }
@@ -375,15 +388,15 @@ struct ShelfView: View {
     }
 
     private func item(_ record: NotebookRecord, width: CGFloat) -> some View {
-        NotebookCoverItem(record: record, width: width, isSelecting: isSelecting, isSelected: selection.contains(record.id),
-                          zoomNamespace: zoomNamespace, showsFolder: showsFolder) { tap(record) }
-        .heldMenu(Text(record.title), when: !isSelecting, draggable: true) { menu(for: record) }
-        .onDrag { NotebookDrag.provider(for: record, root: store.root) } preview: { dragPreview(record) }
+        held(record) {
+            NotebookCoverItem(record: record, width: width, isSelecting: isSelecting, isSelected: selection.contains(record.id),
+                              zoomNamespace: zoomNamespace, showsFolder: showsFolder) { tap(record) }
+        }
     }
 
     /// The shelf at the accessibility text sizes: a board for what the shelf leads with, then a board for each run.
     private func ledger(_ visible: [NotebookRecord]) -> some View {
-        ScrollView {
+        scroller {
             LazyVStack(alignment: .leading, spacing: Space.x5) {
                 LibraryHeader(title: title, summary: subtitle(visible), showsRhythm: false, onOpenPage: onOpenPage)
                 Group(subviews: desk) { rows in
@@ -399,7 +412,7 @@ struct ShelfView: View {
                         }
                     }
                 }
-                if !searchText.isEmpty, !pageHits.isEmpty, scope != .trash { pageBoard(visible, hits: pageHits, query: hitsQuery) }
+                if showsPageHits { pageBoard(visible, hits: pageHits, query: hitsQuery) }
                 ForEach(groups(visible)) { shelf in
                     ShelfListBoard(title: shelf.title, cloth: shelf.cloth) {
                         ForEach(shelf.records) { record in
@@ -413,11 +426,7 @@ struct ShelfView: View {
                 if showsTagPages { pageBoard(taggedNotebooks, hits: tagPages, query: "") }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Space.x8)
-            .padding(.vertical, Space.x6)
         }
-        .scrollDismissesKeyboard(.immediately)
-        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 56 } action: { showsBarTitle = $1 }
     }
 
     /// Continue writing, this week and the desk cards, each a row of the ledger's first board.
@@ -428,7 +437,7 @@ struct ShelfView: View {
                 HStack(alignment: .top, spacing: Space.x3) {
                     RecordCover(record: recent, width: CoverWidth.row, showsShadow: false).frame(width: min(48 * textScale, CoverWidth.row))
                     VStack(alignment: .leading, spacing: Space.x1) {
-                        Text("Continue writing").font(.footnote.weight(.bold).smallCaps()).tracking(0.8).foregroundStyle(Color.accentColor)
+                        Text("Continue writing").eyebrowStyle(Color.accentColor)
                         Text(recent.title).font(.headline).foregroundStyle(Color.ink)
                         Text("Page \(recent.currentPage + 1) of \(recent.pageCount)").font(.subheadline).foregroundStyle(Color.textSecondary)
                     }
@@ -716,25 +725,15 @@ struct ShelfView: View {
     }
 
     @ViewBuilder
-    private func trashActions(for record: NotebookRecord) -> some View {
-        if record.isTrashed {
-            Button("Restore") { changes.restore([record], in: store, undoManager: undoManager) }
-            Button("Delete Permanently") { changes.requestPermanentDelete([record.id]) }
-        }
-    }
-
-    @ViewBuilder
     private func menu(for record: NotebookRecord) -> some View {
         if record.isTrashed {
             Button { changes.restore([record], in: store, undoManager: undoManager) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
             Button(role: .destructive) { changes.requestPermanentDelete([record.id]) } label: { Label("Delete Permanently", systemImage: "trash") }
         } else if record.isReadOnly {
             Button { onOpen(record) } label: { Label("Open", systemImage: "book") }
-            Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
-            Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
-            Button { startExport(record, as: .text) } label: { Label("Export as Text", systemImage: "doc.plaintext") }
+            exportButtons(for: record)
             MenuBreak()
-            Button(role: .destructive) { changes.moveToTrash([record], in: store, undoManager: undoManager) } label: { Label("Delete", systemImage: "trash") }
+            deleteButton(for: record)
                 .accessibilityIdentifier("notebook.menu.delete")
             Text("Made with a newer version of OwlLuna, so it can only be read here.")
                 .font(.footnote)
@@ -759,9 +758,7 @@ struct ShelfView: View {
             } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
             Button { changeCover(record) } label: { Label("Change Cover…", systemImage: "book.closed") }
             Button { tagging = record } label: { Label("Tags…", systemImage: "tag") }
-            Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
-            Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
-            Button { startExport(record, as: .text) } label: { Label("Export as Text", systemImage: "doc.plaintext") }
+            exportButtons(for: record)
             Toggle(isOn: Binding(get: { journalID == record.id.uuidString }, set: { store.setDailyJournal($0 ? record.id : nil) })) {
                 Label("Use as Daily Journal", systemImage: "calendar")
             }
@@ -769,8 +766,19 @@ struct ShelfView: View {
                 Label(record.isLocked ? "Remove Lock…" : "Lock…", systemImage: record.isLocked ? "lock.open" : "lock")
             }
             MenuBreak()
-            Button(role: .destructive) { changes.moveToTrash([record], in: store, undoManager: undoManager) } label: { Label("Delete", systemImage: "trash") }
+            deleteButton(for: record)
         }
+    }
+
+    @ViewBuilder
+    private func exportButtons(for record: NotebookRecord) -> some View {
+        Button { startExport(record, as: .pdf) } label: { Label("Export as PDF", systemImage: "square.and.arrow.up") }
+        Button { startExport(record, as: .images) } label: { Label("Export as Images", systemImage: "photo.on.rectangle") }
+        Button { startExport(record, as: .text) } label: { Label("Export as Text", systemImage: "doc.plaintext") }
+    }
+
+    private func deleteButton(for record: NotebookRecord) -> some View {
+        Button(role: .destructive) { changes.moveToTrash([record], in: store, undoManager: undoManager) } label: { Label("Delete", systemImage: "trash") }
     }
 
     private func startExport(_ record: NotebookRecord, as format: ExportJob.Format) {
@@ -908,160 +916,6 @@ extension Array where Element == NotebookRecord {
             return map { ($0, order.date(of: $0)) }.sorted { reversed ? $0.1 < $1.1 : $0.1 > $1.1 }.map(\.0)
         }
     }
-}
-
-struct ShelfLabel: View {
-    let title: String
-    var cloth: ClothColor?
-    var body: some View {
-        HStack(spacing: Space.x3) {
-            if let cloth { SpineChip(cloth: cloth) }
-            Text(title).metaStyle(.footnote).fixedSize().accessibilityAddTraits(.isHeader)
-            Rectangle().fill(Color.hairline).frame(height: 1).accessibilityHidden(true)
-        }
-    }
-}
-
-struct EmptyShelf<Actions: View, Illustration: View>: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let title: String
-    let message: String
-    @ViewBuilder var actions: Actions
-    @ViewBuilder var illustration: Illustration
-
-    init(title: String, message: String, @ViewBuilder actions: () -> Actions = { EmptyView() },
-         @ViewBuilder illustration: () -> Illustration = { EmptyView() }) {
-        self.title = title
-        self.message = message
-        self.actions = actions()
-        self.illustration = illustration()
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                content.frame(minHeight: geometry.size.height)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-    }
-
-    private var content: some View {
-        VStack(spacing: Space.x4) {
-            illustration
-            Text(title)
-                .displayFont(30, relativeTo: .title)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.ink)
-                .accessibilityAddTraits(.isHeader)
-            Text(message)
-                .displayTextFont(17, relativeTo: .body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.textSecondary)
-            (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: Space.x3)) : AnyLayout(HStackLayout(spacing: Space.x3))) {
-                actions
-            }
-            .controlSize(.large)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: 420)
-        .padding(Space.x8)
-        .frame(maxWidth: .infinity)
-    }
-}
-
-/// Holds first responder while the library is in front, so ⌘F reaches the search field and ⌘Z the library's undo.
-private struct SearchActivator: UIViewRepresentable {
-    let isSearching: Bool
-    let isCovered: Bool
-    let onFind: () -> Void
-    @Environment(\.undoManager) private var undoManager
-
-    func makeUIView(context: Context) -> ActivatorView { ActivatorView() }
-
-    /// Acts only on changes, so ordinary library updates never move first responder.
-    func updateUIView(_ view: ActivatorView, context: Context) {
-        view.onFind = onFind
-        view.libraryUndoManager = undoManager
-        if isCovered != view.wasCovered {
-            view.wasCovered = isCovered
-            view.isCovered = isCovered
-            DispatchQueue.main.async { if isCovered { view.resignFirstResponder() } else { view.reclaimFirstResponder() } }
-        }
-        guard isSearching != view.wasSearching else { return }
-        view.wasSearching = isSearching
-        if !isSearching { DispatchQueue.main.async { view.reclaimFirstResponder() } }
-    }
-
-    final class ActivatorView: UIView {
-        var onFind: (() -> Void)?
-        var wasSearching = false
-        var wasCovered = false
-        var isCovered = false
-        weak var libraryUndoManager: UndoManager?
-
-        override var canBecomeFirstResponder: Bool { !isCovered }
-
-        override var keyCommands: [UIKeyCommand]? {
-            guard !isCovered else { return [] }
-            let commands = [
-                UIKeyCommand(title: String(localized: "Search Library"), action: #selector(findRequested), input: "f", modifierFlags: .command),
-                UIKeyCommand(title: String(localized: "Undo"), action: #selector(undoLibraryChange), input: "z", modifierFlags: .command),
-                UIKeyCommand(title: String(localized: "Redo"), action: #selector(redoLibraryChange), input: "z", modifierFlags: [.command, .shift]),
-            ]
-            for command in commands { command.wantsPriorityOverSystemBehavior = true }
-            return commands
-        }
-
-        @objc private func findRequested() { if !isCovered { onFind?() } }
-
-        @objc private func undoLibraryChange() { libraryUndoManager?.undo() }
-
-        @objc private func redoLibraryChange() { libraryUndoManager?.redo() }
-
-        override func find(_ sender: Any?) { findRequested() }
-
-        override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-            switch action {
-            case #selector(undoLibraryChange): !isCovered && libraryUndoManager?.canUndo == true
-            case #selector(redoLibraryChange): !isCovered && libraryUndoManager?.canRedo == true
-            default: (action == #selector(find(_:)) && !isCovered) || super.canPerformAction(action, withSender: sender)
-            }
-        }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            guard window != nil else { return }
-            NotificationCenter.default.removeObserver(self, name: UITextField.textDidEndEditingNotification, object: nil)
-            NotificationCenter.default.addObserver(self, selector: #selector(textDidEndEditing(_:)), name: UITextField.textDidEndEditingNotification, object: nil)
-            DispatchQueue.main.async { self.reclaimFirstResponder() }
-        }
-
-        @objc private func textDidEndEditing(_ note: Notification) {
-            guard (note.object as? UIView)?.window === window else { return }
-            DispatchQueue.main.async { self.reclaimFirstResponder() }
-        }
-
-        /// Takes ⌘F back once a field stops editing, unless the user has gone straight into another one.
-        func reclaimFirstResponder() {
-            guard !isCovered, let window else { return }
-            if let field = UIResponder.current as? UIView, field is UITextInput, field.window === window { return }
-            becomeFirstResponder()
-        }
-    }
-}
-
-private extension UIResponder {
-    private static weak var found: UIResponder?
-
-    /// Whatever holds first responder in the app right now.
-    static var current: UIResponder? {
-        found = nil
-        UIApplication.shared.sendAction(#selector(owlLunaCaptureFirstResponder), to: nil, from: nil, for: nil)
-        return found
-    }
-
-    @objc private func owlLunaCaptureFirstResponder() { UIResponder.found = self }
 }
 
 private extension View {

@@ -7,10 +7,8 @@ enum CardClipping {
 
     /// The part of the page a strip of study tape sits in: the line it covers and a little of what is round it.
     static func region(around tape: PageItem, on page: NotebookPage) -> CGRect {
-        let cosine = abs(cos(tape.rotation)), sine = abs(sin(tape.rotation))
-        let width = tape.size.width * cosine + tape.size.height * sine, height = tape.size.width * sine + tape.size.height * cosine
-        let box = CGRect(x: tape.center.x - width / 2, y: tape.center.y - height / 2, width: width, height: height)
-        let reach = max((420 - width) / 2, 90)
+        let box = tape.boundingBox
+        let reach = max((420 - box.width) / 2, 90)
         return fitted(box.insetBy(dx: -reach, dy: -64), to: page)
     }
 
@@ -34,9 +32,7 @@ enum CardClipping {
                          lifted: lifted, revealed: moved)
         }
         let whole = PageRenderer.image(of: page, ink: ink, assets: assets, width: page.size.width, scale: scale, lifted: lifted)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = true
+        let format = UIGraphicsImageRendererFormat(scale: scale, opaque: true)
         return UIGraphicsImageRenderer(size: region.size, format: format).image { context in
             let ctx = context.cgContext
             ctx.translateBy(x: -region.minX, y: -region.minY)
@@ -68,8 +64,7 @@ enum CardClipping {
         guard cuts.count > 1 else { return first }
         let width = cuts.map(\.size.width).max() ?? first.size.width
         let height = cuts.reduce(0) { $0 + $1.size.height } + CGFloat(cuts.count - 1) * 6
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
+        let format = UIGraphicsImageRendererFormat(scale: scale)
         return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { _ in
             var y: CGFloat = 0
             for cut in cuts {
