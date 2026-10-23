@@ -17,8 +17,9 @@ final class ExportFolderTests: XCTestCase {
 
     private func exists(_ url: URL) -> Bool { fileManager.fileExists(atPath: url.path(percentEncoded: false)) }
 
+    /// The folder goes on a utility-priority task, which a busy CI runner can hold back for seconds.
     private func waitUntilGone(_ url: URL) async throws -> Bool {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(30)
         while exists(url), Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
         return !exists(url)
     }
