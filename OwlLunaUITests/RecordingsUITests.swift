@@ -1,6 +1,7 @@
 import XCTest
 
 /// A recording is named, moved along, played faster and shared from the Recordings list, and its replay keeps the speed.
+/// Deleting it asks first, and Undo brings it back.
 @MainActor
 final class RecordingsUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -85,5 +86,37 @@ final class RecordingsUITests: XCTestCase {
         app.buttons["1×"].tap()
         XCTAssertEqual(replaySpeed.value as? String, "1×")
         app.buttons["editor.replay.done"].tap()
+
+        app.buttons["Recordings"].firstMatch.tap()
+        XCTAssertTrue(options.waitForExistence(timeout: 10))
+        options.tap()
+        app.buttons["recording.delete"].tap()
+        let asking = app.staticTexts["Delete “Cell membranes”?"]
+        XCTAssertTrue(asking.waitForExistence(timeout: 5), "deleting asks first")
+        XCTAssertTrue(app.staticTexts["You can undo this."].exists)
+        attach(app, "recording-delete")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(asking.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(named.exists, "Cancel keeps it")
+        options.tap()
+        app.buttons["recording.delete"].tap()
+        XCTAssertTrue(asking.waitForExistence(timeout: 5))
+        app.buttons["Delete Recording"].tap()
+        XCTAssertTrue(app.staticTexts["No Recordings"].firstMatch.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.5)).tap()
+        let undo = app.buttons["editor.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        undo.tap()
+        app.buttons["Recordings"].firstMatch.tap()
+        XCTAssertTrue(named.waitForExistence(timeout: 5), "Undo brings it back with its name")
+
+        // A swipe's buttons are hidden from VoiceOver, so Delete is tapped where it stands.
+        let edge = options.frame.maxX
+        named.swipeLeft()
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: edge - 16, dy: options.frame.midY)).tap()
+        XCTAssertTrue(asking.waitForExistence(timeout: 5), "a swipe asks first too")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(asking.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(named.exists)
     }
 }

@@ -118,6 +118,226 @@ final class RecordingsTests: XCTestCase {
         XCTAssertEqual(alike.map { files[$0.id]?.number }, ["", " 2", ""], "named alike, the later one is numbered so neither file replaces the other")
     }
 
+    // MARK: Deleting
+
+    func testDeletingARecordingIsOneUndoStepThatBringsItBackWithItsTranscript() async throws {
+        var lecture = recording("lecture.wav", at: 600, duration: 4)
+        lecture.title = "Cells"
+        let first = recording("a.wav"), last = recording("c.wav", at: 1200)
+        let document = try await notebook(recordings: [first, lecture, last])
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let package = document.package
+        let file = try await package.writeTranscript(script(), recordingID: lecture.id)
+        document.setTranscript(file, forRecording: lecture.id)
+        var changes = 0
+        recorder.onTranscriptChange = { changes += 1 }
+        func searchable() -> Bool { LibraryIndex.searchText(in: package.textDirectory).contains("Cells divide") }
+        XCTAssertTrue(searchable())
+        XCTAssertFalse(document.undoManager.canUndo)
+
+        recorder.delete(try XCTUnwrap(recorder.recordings.first { $0.id == lecture.id }))
+        XCTAssertEqual(recorder.recordings.map(\.id), [first.id, last.id])
+        XCTAssertEqual(document.undoManager.undoActionName, "Delete Recording")
+        await waitUntil { changes == 1 }
+        XCTAssertFalse(searchable(), "its words leave search")
+
+        document.undoManager.undo()
+        XCTAssertEqual(recorder.recordings.map(\.id), [first.id, lecture.id, last.id], "Undo puts it back in its place")
+        let back = try XCTUnwrap(recorder.recordings.first { $0.id == lecture.id })
+        XCTAssertEqual(back.title, "Cells")
+        XCTAssertEqual(back.transcriptFile, file)
+        XCTAssertEqual(recorder.transcript(for: back)?.text, script().text)
+        XCTAssertFalse(document.undoManager.canUndo, "it was one step")
+        await waitUntil { changes == 2 }
+        XCTAssertTrue(searchable(), "and its words are found again")
+        _ = await document.save()
+        let hits = await PageSearch.hits(for: "divide", in: [document.id], root: package.root)
+        XCTAssertEqual(hits[document.id]?.first?.recording?.id, lecture.id)
+
+        XCTAssertEqual(document.undoManager.redoActionName, "Delete Recording")
+        document.undoManager.redo()
+        XCTAssertEqual(recorder.recordings.map(\.id), [first.id, last.id], "Redo deletes it again")
+        await waitUntil { changes == 3 }
+        XCTAssertFalse(searchable())
+        document.undoManager.undo()
+        await waitUntil { changes == 4 }
+        XCTAssertEqual(recorder.recordings.map(\.id), [first.id, lecture.id, last.id])
+        XCTAssertTrue(searchable())
+    }
+
+    func testADeletedRecordingsAudioOutlastsASaveAndASyncSoUndoCanStillBringItBack() async throws {
+        let document = try await notebook(recordings: [recording(duration: 3)])
+        document.updateLibraryState { $0.isLocked = true }
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        addTeardownBlock { @MainActor in recorder.shutdown() }
+        let entry = try XCTUnwrap(recorder.recordings.first)
+        let package = document.package, audio = package.assetURL(entry.file)
+        let cloud = CloudFolder(url: temporaryRoot(self).url)
+        func synced() throws -> NotebookManifest {
+            try ManifestCodec.decode(Data(contentsOf: cloud.package(document.id).appending(path: "manifest.json")), fallbackID: document.id).manifest
+        }
+
+        recorder.delete(entry)
+        let saved = await document.save()
+        XCTAssertTrue(saved)
+        let written = try await package.readManifest().manifest
+        XCTAssertEqual(written.recordings, [], "saved without it")
+        XCTAssertTrue(exists(audio), "while its audio stays until the editor closes")
+        _ = try await LibrarySync.run(root: package.root, cloud: cloud)
+        XCTAssertTrue(exists(audio), "a sync pass leaves it too")
+        XCTAssertEqual(try synced().recordings, [])
+
+        document.undoManager.undo()
+        XCTAssertEqual(recorder.recordings.map(\.id), [entry.id])
+        let resaved = await document.save()
+        XCTAssertTrue(resaved)
+        let rewritten = try await package.readManifest().manifest
+        XCTAssertEqual(rewritten.recordings.map(\.id), [entry.id])
+        _ = try await LibrarySync.run(root: package.root, cloud: cloud)
+        let there = try synced()
+        XCTAssertEqual(there.recordings.map(\.id), [entry.id], "the next pass sends it back")
+        XCTAssertTrue(exists(cloud.package(document.id).appending(path: "assets/\(entry.file)")), "with its audio")
+        XCTAssertTrue(there.library.isLocked, "and the notebook stays locked")
+        recorder.togglePlayback(try XCTUnwrap(recorder.recordings.first))
+        await waitUntil { recorder.playingID != nil }
+        XCTAssertEqual(recorder.playingID, entry.id, "it plays as before")
+    }
+
+    func testDeletingARecordingStopsItPlayingAndOneDeletedAsItStartsNeverSounds() async throws {
+        let document = try await notebook(recordings: [recording(duration: 20)])
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let session = AudioSessionOwner.shared
+        addTeardownBlock { @MainActor in recorder.shutdown() }
+        let entry = try XCTUnwrap(recorder.recordings.first)
+        recorder.togglePlayback(entry)
+        await waitUntil { recorder.playingID != nil }
+        XCTAssertEqual(recorder.playingID, entry.id)
+
+        recorder.delete(entry)
+        XCTAssertNil(recorder.playingID, "it stops as it is deleted")
+        XCTAssertFalse(session.isPlaying(recorder))
+        document.undoManager.undo()
+        XCTAssertNil(recorder.playingID, "and doesn't start again when Undo brings it back")
+        recorder.togglePlayback(try XCTUnwrap(recorder.recordings.first))
+        await waitUntil { recorder.playingID != nil }
+        XCTAssertEqual(recorder.playingID, entry.id, "its audio is still there to play")
+        document.undoManager.redo()
+        XCTAssertNil(recorder.playingID, "Redo stops it too")
+
+        document.undoManager.undo()
+        recorder.togglePlayback(try XCTUnwrap(recorder.recordings.first))
+        recorder.delete(entry)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertNil(recorder.playingID, "one deleted while its playback is starting never sounds")
+        XCTAssertFalse(session.isPlaying(recorder), "and lets go of the session")
+    }
+
+    /// Waits until let go, then hears two words. A cancel takes a moment to stop it and ends in an error, as the recogniser's does.
+    private final class HeldTranscriber: SpeechTranscribing, @unchecked Sendable {
+        private let lock = NSLock()
+        private var open = false
+        private var stops = 0
+
+        func letGo() { lock.withLock { open = true } }
+        var stopped: Int { lock.withLock { stops } }
+
+        func transcribe(_ url: URL, locale: Locale, progress: @escaping @Sendable (Double) -> Void) async throws -> Transcript {
+            while !lock.withLock({ open }) {
+                if Task.isCancelled {
+                    await withCheckedContinuation { done in DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { done.resume() } }
+                    lock.withLock { stops += 1 }
+                    throw TranscriptionError.failed("Recognition request was canceled")
+                }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            return Transcript(locale: "en-US", words: [.init(text: "Cells", start: 1, duration: 0.4), .init(text: "divide.", start: 1.5, duration: 0.4)])
+        }
+    }
+
+    func testARecordingDeletedWhileBeingTranscribedComesBackUntranscribedAndCanBeTranscribedAgain() async throws {
+        let entry = recording(duration: 4)
+        let document = try await notebook(recordings: [entry])
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let held = HeldTranscriber()
+        recorder.transcriber = held
+        recorder.transcribe(entry, locale: Locale(identifier: "en-US"))
+        XCTAssertNotNil(recorder.transcribing[entry.id])
+
+        recorder.delete(entry)
+        XCTAssertNil(recorder.transcribing[entry.id], "deleting it stops the transcription")
+        document.undoManager.undo()
+        let back = try XCTUnwrap(recorder.recordings.first)
+        XCTAssertNil(back.transcriptFile, "Undo brings it back untranscribed")
+        recorder.transcribe(back, locale: Locale(identifier: "en-US"))
+        await waitUntil { held.stopped == 1 }
+        await waitUntil(1) { recorder.transcribing[entry.id] == nil }
+        XCTAssertNotNil(recorder.transcribing[entry.id], "the transcription that was stopped doesn't clear the one started since")
+        XCTAssertNil(recorder.errorMessage, "and its stopping isn't told as a failure")
+
+        held.letGo()
+        await waitUntil { recorder.recordings.first?.transcriptFile != nil }
+        XCTAssertNotNil(recorder.recordings.first?.transcriptFile)
+        XCTAssertNil(recorder.transcribing[entry.id])
+        XCTAssertTrue(LibraryIndex.searchText(in: document.package.textDirectory).contains("Cells divide"))
+    }
+
+    func testARecordingBeingMadeCantBeDeletedAndStoppingItLeavesNothingToUndo() async throws {
+        let document = try await notebook(recordings: [])
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let page = document.pages[0].id
+        _ = await document.ink(page)
+        document.canvasDidChangeInk(page, to: PKDrawing(strokes: [stroke(from: CGPoint(x: 40, y: 40), to: CGPoint(x: 200, y: 60))]))
+        XCTAssertEqual(document.undoManager.undoActionName, "Ink")
+        var entry = RecordingEntry(id: UUID(), file: "\(UUID().uuidString).aac", createdAt: start, duration: 0)
+        entry.startedAt = start
+        let audio = document.package.assetURL(entry.file)
+        try FileManager.default.moveItem(at: try cutOff(try scratchFolder().appending(path: "a.aac"), seconds: 2), to: audio)
+
+        document.beginRecording(entry)
+        XCTAssertEqual(recorder.recordings, [], "while it is being made it isn't in the list to delete")
+        recorder.delete(entry)
+        XCTAssertEqual(document.manifest.unfinishedRecordings.map(\.id), [entry.id], "and asking anyway changes nothing")
+        XCTAssertEqual(document.undoManager.undoActionName, "Ink")
+
+        entry.duration = 2
+        document.finishRecording(entry)
+        await document.finishPendingWork()
+        XCTAssertEqual(recorder.recordings.map(\.id), [entry.id])
+        XCTAssertEqual(document.undoManager.undoActionName, "Ink", "Stop is no undo step, so an Undo meant for the stroke can't take the recording")
+        document.undoManager.undo()
+        XCTAssertEqual(recorder.recordings.map(\.id), [entry.id])
+        XCTAssertEqual(document.loadedInk(page)?.strokes.count, 0)
+        XCTAssertFalse(document.undoManager.canUndo)
+    }
+
+    func testClosingTheEditorStillClearsAwayADeletedRecordingAndNothingIsLeftToUndo() async throws {
+        let entry = recording(duration: 3)
+        let document = try await notebook(recordings: [entry])
+        let package = document.package
+        let schema = LibraryIndex.schema
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let store = LibraryStore(root: package.root, context: container.mainContext)
+        let registry = DocumentRegistry.shared
+        registry.register(document, scene: nil)
+        let recorder = NotebookRecorder(document: document, defaults: defaults())
+        let file = try await package.writeTranscript(script(), recordingID: entry.id)
+        document.setTranscript(file, forRecording: entry.id)
+
+        recorder.delete(try XCTUnwrap(recorder.recordings.first))
+        await waitUntil { !exists(package.transcriptTextURL(entry.id)) }
+        await EditorScreen.putAway(document, store: store)
+        XCTAssertNil(registry.document(for: document.id))
+        XCTAssertFalse(exists(package.assetURL(entry.file)), "closing clears away its audio, as before")
+        XCTAssertFalse(exists(package.assetURL(file)), "and its transcript")
+
+        let again = try await registry.open(document.id, root: package.root, scene: nil) { _ in }
+        addTeardownBlock { @MainActor in registry.unregister(again.id, document: again) }
+        XCTAssertFalse(again === document)
+        XCTAssertEqual(again.manifest.recordings, [])
+        XCTAssertFalse(again.undoManager.canUndo, "opened again, there is no undo step left to bring it back")
+        withExtendedLifetime((container, recorder)) {}
+    }
+
     // MARK: Speed
 
     func testPlaybackSpeedIsAppliedAndTheReplayKeepsToTheSoundAtTwice() async throws {

@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A notebook you favourite, lock, tag, file or move to Recently Deleted just before opening it now keeps that change. Its first save could undo it.
 - A box or triangle drawn and held round writing now straightens instead of selecting it. A loop that selects can be undone back to ink, and the Select Ink bar's Keep Circle keeps a round one as a circle.
 - A held box or triangle whose end runs on past its start now straightens without a spike at that corner, and a rough loop is less often straightened into a box.
+- Deleting a recording now asks first, and Undo brings it back with its name and transcript.
 
 ## [1.0.0-build.3] - 2026-10-21
 

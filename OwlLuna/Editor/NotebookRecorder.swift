@@ -87,6 +87,7 @@ final class NotebookRecorder: NSObject {
     @ObservationIgnored var onTranscriptChange: (() -> Void)?
     @ObservationIgnored private var transcriptTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var transcripts: [String: Transcript] = [:]
+    @ObservationIgnored private var transcriptTextChange: Task<Void, Never>?
 
     init(document: NotebookDocument, defaults: UserDefaults = .standard) {
         self.document = document
@@ -278,7 +279,8 @@ final class NotebookRecorder: NSObject {
                 return false
             }
             let player = try await Self.readyPlayer(for: document.package.assetURL(recording.file))
-            if lockStop != nil, startingPlayback == request { startingPlayback = nil }
+            let deleted = !recordings.contains { $0.id == recording.id }
+            if lockStop != nil || deleted, startingPlayback == request { startingPlayback = nil }
             guard startingPlayback == request, !isRecording else {
                 if startingPlayback == nil, self.player == nil { AudioSessionOwner.shared.releasePlayback(by: self) }
                 return false
@@ -381,13 +383,24 @@ final class NotebookRecorder: NSObject {
         report(player.duration)
     }
 
-    /// Removes the entry; the audio file is cleaned up with the package's other unreferenced assets.
+    /// Removes the entry as one undo step; the audio file is cleaned up with the package's other unreferenced assets.
     func delete(_ recording: RecordingEntry) {
+        document.removeRecording(recording.id)
+    }
+
+    /// The document took a recording out of the list, by Delete or Redo: it stops playing and its words leave search.
+    func recordingRemoved(_ recording: RecordingEntry) {
         if playingID == recording.id { stopPlayback() }
         cancelTranscription(recording.id)
-        document.removeRecording(recording.id)
         guard recording.transcriptFile != nil else { return }
         removeTranscriptText(of: recording.id)
+    }
+
+    /// Undo brought a recording back: its words go back into search. One deleted while transcribing comes back untranscribed.
+    func recordingRestored(_ recording: RecordingEntry) {
+        guard let file = recording.transcriptFile else { return }
+        let id = recording.id
+        changeTranscriptText { try? await $0.restoreTranscriptText(id, from: file) }
     }
 
     /// Nothing, or only spaces, takes it back to being named after when it began.
@@ -449,8 +462,10 @@ final class NotebookRecorder: NSObject {
                 self.onTranscriptChange?()
             } catch is CancellationError {
             } catch {
-                self?.errorMessage = error.localizedDescription
+                if !Task.isCancelled { self?.errorMessage = error.localizedDescription }
             }
+            // A cancelled one was let go of already, and a transcription started since is not this one's to clear.
+            guard !Task.isCancelled else { return }
             self?.transcribing[id] = nil
             self?.transcriptTasks[id] = nil
         }
@@ -470,9 +485,15 @@ final class NotebookRecorder: NSObject {
 
     /// Takes a recording's words out of search, then says so.
     private func removeTranscriptText(of id: UUID) {
-        let package = document.package
-        Task { [weak self] in
-            await package.removeTranscriptText(id)
+        changeTranscriptText { await $0.removeTranscriptText(id) }
+    }
+
+    /// Changes a recording's words in search after any change before it, so an undo straight after a delete can't be overtaken.
+    private func changeTranscriptText(_ change: @escaping @Sendable (NotebookPackage) async -> Void) {
+        let package = document.package, before = transcriptTextChange
+        transcriptTextChange = Task { [weak self] in
+            await before?.value
+            await change(package)
             self?.onTranscriptChange?()
         }
     }

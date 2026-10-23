@@ -7,6 +7,7 @@ struct RecordingList: View {
     @State private var path: [UUID] = []
     @State private var renaming: RecordingEntry?
     @State private var name = ""
+    @State private var deleting: RecordingEntry?
     @State private var sharing: SharedFiles?
     @Environment(\.panelClose) private var panelClose
 
@@ -26,10 +27,11 @@ struct RecordingList: View {
                                      name = recording.title ?? ""
                                      renaming = recording
                                  },
-                                 share: { share($0, of: recording) })
+                                 share: { share($0, of: recording) },
+                                 delete: { deleting = recording })
                     .ledgerSwipe {
                         if !recorder.isReadOnly {
-                            Button(role: .destructive) { recorder.delete(recording) } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) { deleting = recording } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                 }
@@ -67,6 +69,10 @@ struct RecordingList: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let renaming { recorder.rename(renaming, to: name) } }
         }
+        .notice("Delete “\(deleting?.name ?? "")”?", isPresented: Binding(isPresent: $deleting), message: Text("You can undo this.")) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Recording", role: .destructive) { if let deleting { recorder.delete(deleting) } }
+        }
         .sheet(item: $sharing) { files in
             ShareSheet(items: files.urls)
                 .presentationCornerRadius(Radius.sheet)
@@ -95,6 +101,7 @@ private struct RecordingRow: View {
     let openTranscript: () -> Void
     let rename: () -> Void
     let share: (NotebookRecorder.Part) -> Void
+    let delete: () -> Void
 
     var body: some View {
         let playing = recorder.playingID == recording.id
@@ -165,7 +172,7 @@ private struct RecordingRow: View {
             }
             if !recorder.isReadOnly {
                 MenuBreak()
-                Button(role: .destructive) { recorder.delete(recording) } label: { Label("Delete", systemImage: "trash") }
+                Button(role: .destructive, action: delete) { Label("Delete", systemImage: "trash") }
                     .accessibilityIdentifier("recording.delete")
             }
         } label: {

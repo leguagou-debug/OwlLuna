@@ -553,10 +553,23 @@ final class NotebookDocument {
         note(.recordingStopped, message, replacing: [.recordingStopped])
     }
 
+    /// One undo step. Its audio and transcript stay in the package until the editor closes, so undo has them to bring back.
     func removeRecording(_ id: UUID) {
-        guard !isReadOnly else { return }
-        manifest.recordings.removeAll { $0.id == id }
+        guard !isReadOnly, let index = manifest.recordings.firstIndex(where: { $0.id == id }) else { return }
+        let recording = manifest.recordings.remove(at: index)
         structureChanged()
+        recorder?.recordingRemoved(recording)
+        undoManager.registerUndo(withTarget: self) { $0.restoreRecording(recording, at: index) }
+        undoManager.setActionName(String(localized: "Delete Recording"))
+    }
+
+    private func restoreRecording(_ recording: RecordingEntry, at index: Int) {
+        guard !manifest.recordings.contains(where: { $0.id == recording.id }) else { return }
+        manifest.recordings.insert(recording, at: min(index, manifest.recordings.count))
+        structureChanged()
+        recorder?.recordingRestored(recording)
+        undoManager.registerUndo(withTarget: self) { $0.removeRecording(recording.id) }
+        undoManager.setActionName(String(localized: "Delete Recording"))
     }
 
     /// One undo step. Nothing, or only spaces, takes the name off.

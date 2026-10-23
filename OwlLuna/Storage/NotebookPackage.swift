@@ -342,9 +342,19 @@ actor NotebookPackage {
     /// plain text beside the pages' recognised text, so search finds them.
     func writeTranscript(_ transcript: Transcript, recordingID: UUID) throws -> String {
         let file = try writeAsset(JSONEncoder().encode(transcript), ext: "json")
+        try writeTranscriptText(transcript, recordingID: recordingID)
+        return file
+    }
+
+    /// Puts a recording's words back into search from the transcript its entry names, for a recording that comes back.
+    func restoreTranscriptText(_ recordingID: UUID, from file: String) throws {
+        guard let transcript = readTranscript(file) else { return }
+        try writeTranscriptText(transcript, recordingID: recordingID)
+    }
+
+    private func writeTranscriptText(_ transcript: Transcript, recordingID: UUID) throws {
         try makeDirectoryInExistingPackage(textDirectory)
         try Data(transcript.text.utf8).write(to: transcriptTextURL(recordingID), options: .atomic)
-        return file
     }
 
     nonisolated func readTranscript(_ file: String) -> Transcript? {
