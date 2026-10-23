@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A box or triangle drawn and held round writing now straightens instead of selecting it. A loop that selects can be undone back to ink, and the Select Ink bar's Keep Circle keeps a round one as a circle.
 - A held box or triangle whose end runs on past its start now straightens without a spike at that corner, and a rough loop is less often straightened into a box.
 - Deleting a recording now asks first, and Undo brings it back with its name and transcript.
+- The page no longer jumps to its top when the editor changes size. ⌘F, Select PDF Text and the tabs hiding leave it where it is, turning the iPad or resizing a window keeps what you were looking at in view, and dragging the divider between two notebooks is smoother.
 
 ## [1.0.0-build.3] - 2026-10-21
 

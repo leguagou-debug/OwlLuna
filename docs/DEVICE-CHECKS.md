@@ -373,6 +373,18 @@ Expect: a notebook open in one window is brought forward there, never opened twi
 
 Many tabs, on an Xcode build: open twelve heavy, PDF and photo notebooks as tabs. For 30 minutes, step through them with ⇧⌘], write, undo, record for five minutes and leave the app twice, writing down memory every five minutes. Expect no crash or `JetsamEvent`, no blank tab, undo kept per tab, and memory levelling off. With twelve open, Open Another Notebook in a Tab… is greyed out. Keep an Allocations trace.
 
+## Resizing the editor
+
+Only checked in the simulator and in tests. Use a written notebook of several pages with two tabs open, and scroll to the lower half of page 3.
+
+1. Loop and hold round some ink so it selects, then Done. Press ⌘F, then Esc. On a PDF page choose Select PDF Text, then Done.
+2. Turn the iPad to landscape and back, at 1× and pinched to 5×.
+3. Hold a tab for Open Beside, then drag the divider slowly, then quickly, as far as it goes both ways.
+4. With Stage Manager on, resize the window by its corner.
+5. Repeat steps 2 to 4 while typing in a text box, with the zoom window open, and with a Find match showing.
+
+Expect: step 1 moves nothing as the bars and tabs go and come back. A turn or a resize keeps what you were looking at in view at the same zoom, and turning back puts it where it was. The text box, the zoom window's outline and the match stay where they were on the page and in view. The divider drag stays smooth; ink may look soft while it moves and is sharp a moment after you stop. Keep Animation Hitches for 30 seconds of dragging the divider.
+
 ## Second screen
 
 So far only checked with a stand-in window. Connect a display (mirroring, Stage Manager off) and use a notebook with Presenter Notes… on three pages and study tape on one.

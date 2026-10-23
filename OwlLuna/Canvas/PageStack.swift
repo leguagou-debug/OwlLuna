@@ -137,6 +137,15 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var boardViews: [UUID: (center: CGPoint, zoom: CGFloat)] = [:]
     private var isSolo: Bool { layout.solo != nil }
     private var lastSafeTop: CGFloat = 0
+    /// The view's top in its window at the last change of size, to tell a bar going above the pages from one below.
+    private var lastTop: CGFloat?
+    private var hasAppeared = false
+    /// While the width keeps changing, as when a divider is dragged, the pages are magnified as they are and laid out
+    /// at the new width once it rests.
+    private var resizeSettle: DispatchWorkItem?
+    private var lastWidthChange: CFTimeInterval = 0
+    /// The place a drag of the width keeps from its first step, and where that left the scroll, so the steps don't drift.
+    private var heldPlace: (place: ReadersPlace, offset: CGPoint)?
     private var firstInkPage: UUID?
     private var firstInkReported = false
     private let openedAt = CACurrentMediaTime()
@@ -166,6 +175,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     var paperPixelCount: Int { slots.values.reduce(0) { $0 + ($1.paper?.pixelCount ?? 0) } }
     var zoomWindowRect: CGRect? { zoomWindow?.rect }
     var isPaperDrawn: Bool { slots.values.allSatisfy { $0.paper?.isDrawn ?? false } }
+    /// How many times the pages have been laid out at a new scale (for tests).
+    private(set) var bakeCount = 0
 
     func canvas(forPage index: Int) -> PageCanvasView? {
         pages.indices.contains(index) ? canvases[pages[index].id] : nil
@@ -253,6 +264,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        hasAppeared = true
         keepsAnchor = true
         toolTrayDidChange()
     }
@@ -299,6 +311,14 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         let bounds = view.bounds
         guard bounds.width > 0, bounds.height > 0, bounds.size != lastBounds.size else { return }
         let isFirst = lastBounds == .zero
+        let top = windowTop
+        defer { lastTop = top }
+        // The pages keep the reader's place once they are on screen. Presenting, a replay and an open whiteboard keep their own.
+        if !isFirst, hasAppeared, !isSolo, !isPresenting, replay == nil {
+            let old = lastBounds.size
+            lastBounds = bounds
+            return old.width == bounds.width ? keepPlace(fromHeight: old.height, top: top) : keepPlace(from: old)
+        }
         // While presenting or replaying, the page being shown is the session's: a panel comes in beside the pages,
         // and the scroll position is mid-change when the view resizes.
         let page = isFirst ? session.currentPage : isPresenting || replay != nil ? pendingPage ?? session.currentPage : currentPage
@@ -325,6 +345,123 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         updateWindow(force: true)
         if isPresenting { present(page: page) }
         resizeZoomWindow()
+    }
+
+    private var windowTop: CGFloat? { view.window.map { view.convert(CGPoint.zero, to: $0).y } }
+
+    /// Only the height changed, as when the tabs, a bar or a keyboard come or go: nothing moves and nothing is laid out again.
+    private func keepPlace(fromHeight old: CGFloat, top: CGFloat?) {
+        var offset = scrollView.contentOffset
+        // When it was the top edge that moved, the pages stay where they were on the screen.
+        if let top, let lastTop, abs(top - lastTop) <= abs(view.bounds.height - old) + 0.5 { offset.y += top - lastTop }
+        if resizeSettle == nil {
+            minimumZoom = min(smallestZoom, zoom)
+            scrollView.minimumZoomScale = minimumZoom / zoom
+        }
+        layoutZoomPanel()
+        updateInsets()
+        scrollView.contentOffset = clamped(offset)
+        updateWindow()
+        resizeZoomWindow()
+    }
+
+    /// The width changed, as when the iPad turns or a divider is dragged: the same point of the page stays at the same
+    /// spot of the view, at the same zoom. While the width keeps changing the pages are magnified as they are, and laid
+    /// out again once it rests or they have grown or shrunk too far.
+    private func keepPlace(from old: CGSize) {
+        scrollView.setContentOffset(scrollView.contentOffset, animated: false)
+        let now = CACurrentMediaTime(), ratio = fitScale(forWidth: view.bounds.width) / fitScale
+        let dragging = now - lastWidthChange < 0.3, magnifies = dragging && abs(log2(ratio)) < 0.5
+        let place = dragging ? held ?? readersPlace(in: old) : readersPlace(in: old)
+        lastWidthChange = now
+        layoutZoomPanel()
+        if magnifies {
+            isBaking = true
+            scrollView.minimumZoomScale = min(scrollView.minimumZoomScale, ratio)
+            scrollView.maximumZoomScale = max(scrollView.maximumZoomScale, ratio)
+            scrollView.zoomScale = ratio
+            isBaking = false
+            updateInsets()
+            resizeSettle?.cancel()
+            let settle = DispatchWorkItem { [weak self] in self?.settleResize() }
+            resizeSettle = settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: settle)
+        } else {
+            measure()
+            bake(zoom: zoom)
+        }
+        restore(place)
+        heldPlace = (place, scrollView.contentOffset)
+        updateWindow(force: !magnifies)
+        resizeZoomWindow()
+    }
+
+    /// The width has rested: the pages are laid out at the scale they are already shown at.
+    private func settleResize() {
+        guard resizeSettle != nil, !scrollView.isZooming else { return }
+        let place = held ?? readersPlace(in: view.bounds.size)
+        bake(zoom: zoom)
+        restore(place)
+        heldPlace = nil
+        updateWindow(force: true)
+    }
+
+    /// The held place, unless something has scrolled since.
+    private var held: ReadersPlace? {
+        heldPlace.flatMap { $0.offset == scrollView.contentOffset ? $0.place : nil }
+    }
+
+    /// Measures the view again if the pages are still magnified from a change of width.
+    private func catchUpWithWidth() {
+        guard let settle = resizeSettle else { return }
+        settle.cancel()
+        resizeSettle = nil
+        measure()
+    }
+
+    /// A point of the stack and where it was in the view, as a share of the view's size; or the top of a page, when
+    /// that is where the reader went.
+    private struct ReadersPlace {
+        let point: CGPoint
+        let share: CGPoint
+        let pageTop: Int?
+    }
+
+    /// What is being worked on, if it shows, else the page being gone to, else the middle of the view.
+    private func readersPlace(in size: CGSize) -> ReadersPlace {
+        let scale = max(effectiveScale, 0.001), offset = scrollView.contentOffset
+        var spot = CGPoint(x: size.width / 2, y: size.height / 2)
+        var pageTop: Int?
+        if let focus = focusRect.map({ CGPoint(x: $0.midX, y: $0.midY) }), CGRect(origin: .zero, size: size).contains(focus) {
+            spot = focus
+        } else if let pendingPage, layout.frames.indices.contains(pendingPage) {
+            pageTop = pendingPage
+        } else if !pages.isEmpty {
+            let index = layout.pageIndex(atY: (offset.y + scrollView.contentInset.top) / scale + PageStackLayout.margin / 2)
+            if abs(offset.y - pageTopOffset(index)) < 1 { pageTop = index }
+        }
+        return ReadersPlace(point: CGPoint(x: (offset.x + spot.x) / scale, y: (offset.y + spot.y) / scale),
+                            share: CGPoint(x: spot.x / size.width, y: spot.y / size.height), pageTop: pageTop)
+    }
+
+    private func restore(_ place: ReadersPlace) {
+        let scale = effectiveScale, size = view.bounds.size
+        var offset = CGPoint(x: place.point.x * scale - place.share.x * size.width, y: place.point.y * scale - place.share.y * size.height)
+        if let page = place.pageTop, layout.frames.indices.contains(page) { offset.y = pageTopOffset(page) }
+        scrollView.contentOffset = clamped(offset)
+    }
+
+    /// A text box being typed in, a selection, Find's match or the zoom window's outline, in the view's points.
+    private var focusRect: CGRect? {
+        let item: UIView? = textView ?? cropView ?? selectionView
+        if let item, let slot = item.superview { return view.convert(item.frame, from: slot) }
+        if let match = findCurrent, let index = index(of: match.pageID), layout.isLaidOut(index, in: pages) {
+            let frame = layout.frames[index]
+            return view.convert(match.rect.offsetBy(dx: frame.minX, dy: frame.minY).scaled(by: bakedScale), from: contentView)
+        }
+        if let zoomTarget, !zoomTarget.isHidden { return view.convert(zoomTarget.frame, from: contentView) }
+        if let bounds = inkLasso?.selectionBounds { return view.convert(bounds.scaled(by: bakedScale), from: contentView) }
+        return nil
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -394,6 +531,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     private func bake(zoom newZoom: CGFloat) {
+        catchUpWithWidth()
+        bakeCount += 1
         zoom = min(max(newZoom, minimumZoom), maximumZoom)
         bakedScale = zoom * fitScale
         paperLevel = 0
@@ -511,6 +650,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     func fit(_ fit: PageFit) {
+        catchUpWithWidth()
         guard !pages.isEmpty, fitScale > 0 else { return }
         let index = pendingPage.flatMap { layout.frames.indices.contains($0) ? $0 : nil } ?? currentPage, frame = layout.frames[index], area = readableArea
         if layout.solo == index {
@@ -550,12 +690,16 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         if pages[index].isBoard { return openBoard(index) }
         let animated = animated && !isSolo
         closeBoard()
-        let y = (layout.frames[index].minY - PageStackLayout.margin / 2) * effectiveScale - scrollView.contentInset.top
-        let target = clamped(CGPoint(x: scrollView.contentOffset.x, y: y))
+        let target = clamped(CGPoint(x: scrollView.contentOffset.x, y: pageTopOffset(index)))
         let moves = animated && abs(target.y - scrollView.contentOffset.y) > 0.5
         pendingPage = moves ? index : nil
         scrollView.setContentOffset(target, animated: moves)
         if !moves { updateWindow() }
+    }
+
+    /// Where the scroll puts a page's top just under the bar.
+    private func pageTopOffset(_ index: Int) -> CGFloat {
+        (layout.frames[index].minY - PageStackLayout.margin / 2) * effectiveScale - scrollView.contentInset.top
     }
 
     func scrollBy(viewportFraction: CGFloat, animated: Bool = false) {
@@ -1728,14 +1872,18 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         scrollView.scrollsToTop = !isSolo
         scrollView.showsVerticalScrollIndicator = !isSolo
         scrollView.showsHorizontalScrollIndicator = !isSolo
-        if isSolo {
-            fitScale = bounds.width / (PageStackLayout.sheetWidth(pages) + PageStackLayout.margin * 2)
-            minimumZoom = Whiteboard.minimumZoom
-        } else {
-            fitScale = bounds.width / layout.size.width
-            let tallest = layout.frames.map(\.height).max() ?? 1
-            minimumZoom = min(1, bounds.height / (tallest + PageStackLayout.margin * 2) / fitScale)
-        }
+        fitScale = fitScale(forWidth: bounds.width)
+        minimumZoom = isSolo ? Whiteboard.minimumZoom : smallestZoom
+    }
+
+    private func fitScale(forWidth width: CGFloat) -> CGFloat {
+        width / (isSolo ? PageStackLayout.sheetWidth(pages) + PageStackLayout.margin * 2 : layout.size.width)
+    }
+
+    /// The zoom the tallest page fits the view's height at, if that is below 1.
+    private var smallestZoom: CGFloat {
+        let tallest = layout.frames.map(\.height).max() ?? 1
+        return min(1, view.bounds.height / (tallest + PageStackLayout.margin * 2) / fitScale)
     }
 
     /// The point of the open whiteboard in the middle of what can be read.
@@ -2937,7 +3085,8 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         let before = effectiveScale
         let offset = scrollView.contentOffset
         let inset = scrollView.contentInset
-        bake(zoom: zoom * scale)
+        catchUpWithWidth()
+        bake(zoom: before / fitScale)
         let ratio = bakedScale / before
         scrollView.contentOffset = clamped(CGPoint(x: (offset.x + inset.left) * ratio - scrollView.contentInset.left,
                                                    y: (offset.y + inset.top) * ratio - scrollView.contentInset.top))
