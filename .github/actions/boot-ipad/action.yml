@@ -1,5 +1,5 @@
 name: Boot an iPad simulator
-description: Boots an iPad on the newest iOS runtime, or on the newest runtime of one iOS version, and sets SIMULATOR_UDID.
+description: Boots an iPad on the newest iOS runtime that has one, or on the newest such runtime of one iOS version, and sets SIMULATOR_UDID.
 
 inputs:
   ios:
@@ -19,26 +19,40 @@ runs:
       env:
         IOS: ${{ inputs.ios }}
       run: |
-        runtime=$(xcrun simctl list runtimes available --json | jq -r --arg ios "$IOS" '
+        runtimes=$(xcrun simctl list runtimes available --json)
+        devices=$(xcrun simctl list devices available --json)
+        candidates=$(jq -r --arg ios "$IOS" '
           [.runtimes[] | select(.platform == "iOS" and ($ios == "latest" or (.version | startswith($ios + "."))))]
-          | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty')
-        if [ -z "$runtime" ]; then
+          | sort_by(.version | split(".") | map(tonumber)) | reverse | .[].identifier' <<< "$runtimes")
+        if [ -z "$candidates" ]; then
           echo "udid=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        udid=$(xcrun simctl list devices available --json | jq -r --arg runtime "$runtime" '
-          .devices[$runtime] // []
-          | (map(select(.name | startswith("iPad Pro 11"))) + map(select(.name | startswith("iPad"))))
-          | first | .udid // empty')
-        if [ -z "$udid" ]; then
-          type=$(xcrun simctl list runtimes --json | jq -r --arg runtime "$runtime" '
+        # A runtime made for one new device (iOS 27.1 with only iPhone Duo) has no iPads, so take the newest that does.
+        runtime=
+        for candidate in $candidates; do
+          udid=$(jq -r --arg runtime "$candidate" '
+            .devices[$runtime] // []
+            | (map(select(.name | startswith("iPad Pro 11"))) + map(select(.name | startswith("iPad"))))
+            | first | .udid // empty' <<< "$devices")
+          type=$(jq -r --arg runtime "$candidate" '
             .runtimes[] | select(.identifier == $runtime) | .supportedDeviceTypes
             | (map(select(.name | startswith("iPad Pro 11"))) + map(select(.productFamily == "iPad")))
-            | first | .identifier // empty')
-          if [ -z "$type" ]; then
-            echo "::error::$runtime has no iPad device type."
-            exit 1
+            | first | .identifier // empty' <<< "$runtimes")
+          if [ -n "$udid" ] || [ -n "$type" ]; then
+            runtime=$candidate
+            break
           fi
+        done
+        if [ -z "$runtime" ]; then
+          echo "::error::No iOS runtime on this runner has an iPad ($(echo $candidates))."
+          exit 1
+        fi
+        newest=$(head -n 1 <<< "$candidates")
+        if [ "$runtime" != "$newest" ]; then
+          echo "::notice title=Older iOS runtime::$newest has no iPad, so this job uses $runtime."
+        fi
+        if [ -z "$udid" ]; then
           udid=$(xcrun simctl create "CI iPad" "$type" "$runtime")
         fi
         echo "Booting $(xcrun simctl list devices --json | jq -r --arg udid "$udid" '.devices[][] | select(.udid == $udid) | .name') on $runtime"
