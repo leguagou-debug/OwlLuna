@@ -77,6 +77,29 @@ final class ShapeSnapTests: XCTestCase {
         XCTAssertEqual(tilted.width, 160, accuracy: 10)
     }
 
+    /// Started at a corner, the hand runs on past it a little way, a few points off the first side.
+    func testABoxOrTriangleThatRunsOnPastItsStartKeepsItsCorners() {
+        let box = [CGPoint(x: 100, y: 100), CGPoint(x: 300, y: 104), CGPoint(x: 296, y: 240), CGPoint(x: 98, y: 236)]
+        let triangle = [CGPoint(x: 200, y: 100), CGPoint(x: 320, y: 300), CGPoint(x: 90, y: 290)]
+        for (figure, sides) in [(box, 4), (box.reversed(), 4), (triangle, 3), (triangle.reversed(), 3)] as [([CGPoint], Int)] {
+            for past: CGFloat in [0.05, 0.1, 0.15, 0.2] {
+                let start = figure[0], next = figure[1]
+                let end = CGPoint(x: start.x + (next.x - start.x) * past, y: start.y + (next.y - start.y) * past + 3)
+                let shape = held(figure + [start, end])
+                guard case .polygon(let corners)? = shape else { XCTFail("\(sides) sides run \(past) past the start read as \(String(describing: shape))"); continue }
+                XCTAssertEqual(corners.count, sides, "\(sides) sides run \(past) past the start")
+                for corner in figure {
+                    XCTAssertLessThan(corners.map { ShapeRecognizer.distance($0, corner) }.min() ?? 99, 8, "with no spike where it closed")
+                }
+                XCTAssertTrue(PencilGestures.keepsFigure(shape), "so round ink it straightens")
+            }
+        }
+        for lumps in [(0.15, 0.1, 0.03), (0.2, 0, 0.06)] as [(CGFloat, CGFloat, CGFloat)] {
+            let loop = ShapeRecognizer.recognize(roughLoop(centre: CGPoint(x: 300, y: 300), width: 300, height: 80, lumps: lumps))
+            XCTAssertFalse(PencilGestures.keepsFigure(loop), "a flat loop round words that runs on past its start still isn't a box: \(String(describing: loop))")
+        }
+    }
+
     func testOpenCornersAreStraightenedAndHandwritingIsLeftAlone() {
         let corner = along([CGPoint(x: 100, y: 100), CGPoint(x: 104, y: 300), CGPoint(x: 320, y: 296)])
         guard case .polyline(let points)? = ShapeRecognizer.recognize(corner) else { return XCTFail("an L wasn't read as two straight lines") }
@@ -315,5 +338,50 @@ final class ShapeSnapTests: XCTestCase {
         drag("pencil", &rests, from: 14)
         rests.ended("pencil", time: 15.1)
         XCTAssertEqual(try XCTUnwrap(rests.take(at: 15.15, within: 2, strokeBegan: 14.05)), 0.6, accuracy: 0.001, "the stroke the Pencil drew is")
+    }
+
+    func testOnlyAFigureOfThreeOrFourSidesRoundInkIsKeptRatherThanSelected() {
+        let rough: [(CGFloat, CGFloat, CGFloat)] = [(0.03, 0.02, 0.01), (0.07, 0.05, 0.03), (0.15, 0.12, 0.06), (0.2, 0.15, 0.05), (0.25, 0.1, 0.03)]
+        for lumps in rough {
+            for (width, height) in [(220, 100), (300, 80), (160, 140)] as [(CGFloat, CGFloat)] {
+                let shape = ShapeRecognizer.recognize(roughLoop(centre: CGPoint(x: 300, y: 300), width: width, height: height, lumps: lumps))
+                XCTAssertNotNil(shape, "loops round words mostly read as shapes")
+                XCTAssertFalse(PencilGestures.keepsFigure(shape), "but never with so few sides: \(lumps), \(width)×\(height) read as \(String(describing: shape))")
+            }
+        }
+        let box = along([CGPoint(x: 150, y: 72), CGPoint(x: 236, y: 74), CGPoint(x: 234, y: 150), CGPoint(x: 76, y: 148), CGPoint(x: 78, y: 73), CGPoint(x: 140, y: 72)])
+        let triangle = along([CGPoint(x: 200, y: 100), CGPoint(x: 320, y: 300), CGPoint(x: 90, y: 290), CGPoint(x: 198, y: 104)])
+        let diamond = along([CGPoint(x: 200, y: 80), CGPoint(x: 330, y: 200), CGPoint(x: 200, y: 320), CGPoint(x: 70, y: 200), CGPoint(x: 198, y: 82)])
+        for figure in [box, triangle, diamond] {
+            XCTAssertTrue(PencilGestures.keepsFigure(ShapeRecognizer.recognize(figure)), "a box, a triangle and a diamond are kept")
+        }
+        XCTAssertFalse(PencilGestures.keepsFigure(ShapeRecognizer.recognize(ellipse(centre: CGPoint(x: 300, y: 300), a: 160, b: 70))))
+        XCTAssertFalse(PencilGestures.keepsFigure(.polygon((0..<5).map { CGPoint(x: cos(CGFloat($0)), y: sin(CGFloat($0))) })))
+        XCTAssertFalse(PencilGestures.keepsFigure(.line(.zero, CGPoint(x: 100, y: 0))))
+        XCTAssertFalse(PencilGestures.keepsFigure(nil))
+    }
+
+    /// On a page, with nothing inside the shape: straightened as one undo step, and a second takes the stroke away.
+    @MainActor
+    func testAClosedShapeHeldOnBlankPaperIsStraightenedAndUndoGivesTheStrokeBack() async throws {
+        let open = try await OpenPage.open(self, ink: [])
+        let box = pencilStroke(along([CGPoint(x: 160, y: 100), CGPoint(x: 300, y: 104), CGPoint(x: 296, y: 240), CGPoint(x: 98, y: 236), CGPoint(x: 102, y: 98), CGPoint(x: 150, y: 101)]))
+        let ring = pencilStroke(ellipse(centre: CGPoint(x: 300, y: 500), a: 100, b: 100))
+        await open.draw(box, resting: 0.6)
+        await open.draw(ring, resting: 0.6)
+        XCTAssertEqual(open.session.mode, .writing, "with no ink inside it, the ring selects nothing")
+        XCTAssertEqual(open.ink.count, 2)
+        XCTAssertEqual(open.ink.map(\.path.count), [box, ring].compactMap { ShapeSnap.snapped($0)?.stroke.path.count }, "both are straightened")
+        XCTAssertEqual(open.document.undoManager.undoActionName, "Straighten Shape")
+
+        for (index, drawn) in [box, ring].enumerated().reversed() {
+            open.document.undoManager.undo()
+            try? await Task.sleep(for: .seconds(0.2))
+            XCTAssertEqual(open.ink.count, index + 1)
+            XCTAssertEqual(open.ink.last?.path.count, drawn.path.count, "undo gives the stroke back as it was drawn")
+            open.document.undoManager.undo()
+            try? await Task.sleep(for: .seconds(0.2))
+            XCTAssertEqual(open.ink.count, index, "and a second takes it away")
+        }
     }
 }

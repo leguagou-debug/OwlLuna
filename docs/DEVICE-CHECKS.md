@@ -202,25 +202,26 @@ Expect: one action each time, never the system's picker or palette: the eraser a
 Only test strokes have been recognised so far. Turn on Settings › Apple Pencil › Scribble to Erase and Circle and Hold to Select.
 
 1. Scribble back and forth about six times over a word. Do it on 20 words, undoing each.
-2. Loop round two words, hold half a second, lift and drag. Do it 20 times.
-3. Write "mmm", "www", loops and cross-hatching, and loop a word without holding. Scribble with the highlighter, crayon and watercolour.
+2. Loop round two words, hold half a second, lift and drag. Do it 20 times. Then loop once more and tap Undo in the bar.
+3. Holding each time, box a formula and draw a triangle round a word, 20 of each. Loop a word as roundly as you can and tap Keep Circle, then Undo twice.
+4. Write "mmm", "www", loops and cross-hatching, and loop a word without holding. Scribble with the highlighter, crayon and watercolour.
 
-Expect: a scribble erases only what it covers, and Undo brings it back. A held loop selects, the bar counts the strokes, and the loop leaves no ink. Step 3 never erases or selects. Count hits per 20, and whether misses were too strict or too loose.
+Expect: a scribble erases only what it covers, and Undo brings it back. A held loop selects, the bar counts the strokes, and the loop leaves no ink. Undo gives the loop back as drawn and leaves Select Ink. A held box or triangle round ink straightens instead of selecting. Keep Circle leaves a circle; Undo gives back the loop, a second Undo removes it. Step 4 never erases or selects. Count hits per 20, and whether misses were too strict or too loose.
 
-Tunable (`ScribbleRecognizer`, `LoopRecognizer`): a scribble needs 5 turns, a length of 4 times its diagonal, and half a stroke under it. A loop's ends meet within 30% of its size or 20 pt, then rest 0.45 s.
+Tunable (`ScribbleRecognizer`, `LoopRecognizer`, `PencilGestures.keepsFigure`): a scribble needs 5 turns, a length of 4 times its diagonal, and half a stroke under it. A loop's ends meet within 30% of its size or 20 pt, then rest 0.45 s. One that straightens into three or four sides is kept as a shape.
 
 ### Draw and hold
 
 With Settings › Apple Pencil › Straighten Shapes on:
 
 1. Draw a line and rest half a second before lifting. Draw one without resting.
-2. Resting each time: a circle, ellipse, rectangle, triangle, pentagon, three-piece zigzag, a line with a hook at its end, and a line with a barb either side of its tip. Undo twice after each.
+2. Resting each time: a circle, ellipse, rectangle, triangle, pentagon, three-piece zigzag, a line with a hook at its end, a line with a barb either side of its tip, and a rectangle round some writing. Undo twice after each.
 3. Rest on a shape under 24 pt, and on one in the zoom window. Write a page with your usual pauses.
 4. Turn on Shapes (tray › Customise Tools › Shortcuts in the Tray). Drag out each shape fast and slow, with each pen at its usual and thinnest width, then with a finger under Draw With › Apple Pencil Only and Pencil and Finger. Tap Undo on the strip, then Shapes, and write.
 
 Expect: only rested shapes straighten, into the kind drawn. Undo gives your stroke back, and a second Undo removes it. The hook and the barbs both make an arrow with a barb either side. Step 3 stays as drawn, and no L or tick becomes an arrow. Dragged shapes follow the tip, about as wide as the pen writes; a finger scrolls under Apple Pencil Only and draws under Pencil and Finger. One Undo removes a dragged shape. Count straightened holds per 20, and mistakes in handwriting.
 
-Tunable (`ShapeSnap`, `TouchRests`, `ShapeRecognizer`): rest 0.45 s within 6 pt, taken within 2 s of lifting. Smallest shape 24 pt. An arrow's hook is up to a third of the line, or barbs up to half, turned back 10° to 65°.
+Tunable (`ShapeSnap`, `TouchRests`, `ShapeRecognizer`): rest 0.45 s within 6 pt, taken within 2 s of lifting. Smallest shape 24 pt. A closed stroke that runs on past its start is cut there, if the rest stays within a quarter of its size. Three or four sides must fit at least as well as an ellipse. An arrow's hook is up to a third of the line, or barbs up to half, turned back 10° to 65°.
 
 ## Zoom window
 

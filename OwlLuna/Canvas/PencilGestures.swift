@@ -141,6 +141,13 @@ enum PencilGestures {
               !InkLasso.strokes(in: drawing, inside: outline).isEmpty else { return nil }
         return outline
     }
+
+    /// A held loop round ink that straightens into three or four sides is a box or triangle to keep, not a selection:
+    /// a loop round words hardly ever comes out with so few corners. Round ones still select.
+    static func keepsFigure(_ shape: SnappedShape?) -> Bool {
+        guard case .polygon(let corners)? = shape else { return false }
+        return corners.count <= 4
+    }
 }
 
 /// What a double-tap or a squeeze of the Pencil does.

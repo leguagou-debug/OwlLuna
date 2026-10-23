@@ -10869,6 +10869,28 @@
         }
       }
     },
+    "Circle to Select" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einkreisen zum Auswählen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rodear para seleccionar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entourer pour sélectionner"
+          }
+        }
+      }
+    },
     "Clear Text" : {
       "localizations" : {
         "de" : {
@@ -16398,6 +16420,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Conserver une copie de vos carnets dans iCloud ?"
+          }
+        }
+      }
+    },
+    "Keep Circle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kreis behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar círculo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver le cercle"
           }
         }
       }

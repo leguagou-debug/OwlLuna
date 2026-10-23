@@ -43,6 +43,14 @@ final class PencilGestureUITests: XCTestCase {
         XCTAssertTrue(status.waitForExistence(timeout: 5), "a held loop round ink starts selecting")
         XCTAssertEqual(status.label, "1 stroke. Drag it to move it.")
         XCTAssertEqual(strokeCount(canvas), start + 3, "and the loop is not kept as ink")
+        app.buttons["editor.ink.undo"].tap()
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "undo goes back to writing")
+        XCTAssertEqual(strokeCount(canvas), start + 4, "with the loop as it was drawn")
+        undo.tap()
+        XCTAssertEqual(strokeCount(canvas), start + 3)
+
+        draw(CGVector(dx: 0.15, dy: 0.45), CGVector(dx: 0.8, dy: 0.55), hold: 1.2)
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
         app.buttons["editor.ink.delete"].tap()
         XCTAssertEqual(strokeCount(canvas), start + 2)
         app.buttons["editor.ink.done"].tap()
@@ -50,8 +58,10 @@ final class PencilGestureUITests: XCTestCase {
         undo.tap()
         XCTAssertEqual(strokeCount(canvas), start + 3, "undo brings back what was deleted")
         undo.tap()
-        XCTAssertEqual(strokeCount(canvas), start + 2, "and then goes straight to the stroke before the loop: the loop left no step")
+        XCTAssertEqual(strokeCount(canvas), start + 4, "and then the loop")
+        undo.tap()
+        XCTAssertEqual(strokeCount(canvas), start + 3, "and then takes it away")
         draw(CGVector(dx: 0.25, dy: 0.8), CGVector(dx: 0.7, dy: 0.8))
-        XCTAssertEqual(strokeCount(canvas), start + 3, "writing carries on, and the loop doesn't come back")
+        XCTAssertEqual(strokeCount(canvas), start + 4, "writing carries on")
     }
 }

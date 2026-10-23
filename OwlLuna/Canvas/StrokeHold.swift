@@ -103,8 +103,15 @@ final class StrokeHoldRecognizer: UIGestureRecognizer {
     /// Whether a finger draws as well as the Pencil, asked as each touch lands.
     var fingersDraw: () -> Bool = { false }
 
+    /// Taken in place of the next stroke's rest, for tests, which have no touches.
+    var nextRest: TimeInterval?
+
     /// The rest at the end of `stroke`, once, if the touch that drew it rested and lifted less than `window` ago.
     func takeHold(for stroke: PKStroke?, within window: TimeInterval = 2) -> TimeInterval? {
+        if let rest = nextRest {
+            nextRest = nil
+            return rest
+        }
         let now = ProcessInfo.processInfo.systemUptime
         return rests.take(at: now, within: window, strokeBegan: stroke.map { now + $0.path.creationDate.timeIntervalSinceNow })
     }

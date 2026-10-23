@@ -23,6 +23,7 @@ protocol EditorCanvasControlling: AnyObject {
     func paneBecameActive()
     func setSelectingInk(_ selecting: Bool)
     func catchInk(inside outline: [CGPoint])
+    func keepHeldLoop()
     func duplicateInkSelection()
     func deleteInkSelection()
     func selectedInk() -> [PKDrawing]
@@ -102,6 +103,8 @@ final class EditorSession {
     private(set) var mode = EditorMode.writing
     /// How many strokes the lasso across pages has caught.
     var inkSelectionCount = 0
+    /// Whether the round loop that started the selection can still be kept as the circle it reads as.
+    var canKeepHeldLoop = false
     /// The study tape that is lifted for now. It isn't saved: every strip is back in place when the notebook is opened again.
     private(set) var liftedTapes: Set<UUID> = []
     /// The recording being replayed with its ink, and what was said in it if it has been transcribed.

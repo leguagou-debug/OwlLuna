@@ -76,6 +76,10 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var lassoMoveOrigin: CGPoint?
     private var isMovingInk = false
     private lazy var lassoPan = UIPanGestureRecognizer(target: self, action: #selector(lassoPanned))
+    /// The held loop that started the selection, while Keep Circle can still put it back as the circle it reads as.
+    private var heldLoop: (pageID: UUID, stamp: Date, circle: PKStroke, name: String)? {
+        didSet { if session.canKeepHeldLoop != (heldLoop != nil) { session.canKeepHeldLoop = heldLoop != nil } }
+    }
     /// Find in the notebook: the marks on each page, and the match being shown.
     private var isFinding = false
     private var findRects: [UUID: [CGRect]] = [:]
@@ -121,7 +125,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     private var keyboardOverlap: CGFloat = 0
     private var mirrored: String?
     private var fingersDraw = false
-    private let strokeHold = StrokeHoldRecognizer()
+    let strokeHold = StrokeHoldRecognizer()
     private lazy var itemTap = UITapGestureRecognizer(target: self, action: #selector(tappedPage))
     private lazy var itemHold = UILongPressGestureRecognizer(target: self, action: #selector(heldPage))
     private lazy var tapeTap = UITapGestureRecognizer(target: self, action: #selector(tappedTape))
@@ -927,17 +931,30 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         AccessibilityNotification.Announcement(String(localized: "Set as text: \(trimmed)")).post()
     }
 
-    /// Circle and hold to select, and scribble to erase. Neither stroke reaches the document: the loop leaves nothing
-    /// to undo, and the erasing is one undo step that brings the ink back without the scribble.
+    /// Circle and hold to select, and scribble to erase. The loop is ink and then a step that takes it off as the
+    /// selection starts, so Undo gives it back; a box or triangle round ink is left to Draw and Hold. The scribble
+    /// never reaches the document: the erasing is one undo step that brings the ink back without it.
     private func pencilGesture(on canvas: PageCanvasView, pageID: UUID, before: PKDrawing?, rest: TimeInterval?) -> Bool {
         guard let before, !before.strokes.isEmpty, let drawn = addedStroke(on: canvas, since: before),
               PencilGestures.writes(canvas.tool), !canvas.isRulerActive, !document.isReadOnly else { return false }
         if let rest, rest >= ShapeSnap.holdDuration, PencilGestures.circleSelects, let frame = stackFrames[pageID],
            let outline = PencilGestures.outline(of: drawn, roundInkIn: before) {
-            document.replaceInk(pageID, with: before)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let snapped = ShapeSnap.isEnabled ? ShapeSnap.snapped(drawn) : nil
+            // Writing that is to become type isn't straightened, so then a box selects too.
+            if !toolbox.typesHandwriting, PencilGestures.keepsFigure(snapped?.shape) { return false }
+            document.canvasDidChangeInk(pageID, to: canvas.drawing)
+            mirrorInk(from: canvas, pageID: pageID)
             let stack = outline.map { CGPoint(x: $0.x + frame.minX, y: $0.y + frame.minY) }
-            DispatchQueue.main.async { [weak self] in self?.session.selectInk(inside: stack) }
+            replaceLastStroke(drawn, with: nil, on: canvas, pageID: pageID, actionName: String(localized: "Circle to Select")) { [weak self] in
+                guard let self else { return }
+                let mode = session.mode
+                session.selectInk(inside: stack)
+                guard session.mode == .selecting else { return }
+                registerSelection(inside: stack, from: mode)
+                if let snapped, case .ellipse = snapped.shape {
+                    heldLoop = (pageID, drawn.path.creationDate, snapped.stroke, snapped.shape.displayName)
+                }
+            }
             return true
         }
         guard PencilGestures.scribbleErases, let erased = PencilGestures.erasing(drawn, from: before) else { return false }
@@ -994,10 +1011,12 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
         return true
     }
 
-    /// Puts a tidied stroke in place of the one just drawn, as an undo step of its own, so Undo gives the hand-drawn
-    /// one back. For that it has to wait until the stroke's own undo group has closed, which happens at the end of
-    /// this pass of the run loop. Nothing is done if the page has been written on since.
-    private func replaceLastStroke(_ drawn: PKStroke, with tidied: PKStroke, on canvas: PageCanvasView, pageID: UUID, actionName: String, announcement: String) {
+    /// Puts a tidied stroke in place of the one just drawn, or takes it off, as an undo step of its own, so Undo gives
+    /// the hand-drawn one back. For that it has to wait until the stroke's own undo group has closed, which happens at
+    /// the end of this pass of the run loop. Nothing is done if the page has been written on since. `then` runs inside
+    /// the step.
+    private func replaceLastStroke(_ drawn: PKStroke, with tidied: PKStroke?, on canvas: PageCanvasView, pageID: UUID, actionName: String,
+                                   announcement: String? = nil, then: (() -> Void)? = nil) {
         let count = canvas.drawing.strokes.count, stamp = drawn.path.creationDate
         func apply(tries: Int) {
             guard canvas.pageID == pageID, canvas.drawing.strokes.count == count, canvas.drawing.strokes.last?.path.creationDate == stamp else { return }
@@ -1005,16 +1024,42 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
                 return DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { apply(tries: tries - 1) }
             }
             var strokes = canvas.drawing.strokes
-            strokes[count - 1] = tidied
+            if let tidied { strokes[count - 1] = tidied } else { strokes.removeLast() }
             let drawing = PKDrawing(strokes: strokes)
             applyingDrawing { canvas.drawing = drawing }
             document.canvasDidChangeInk(pageID, to: drawing)
             mirrorInk(from: canvas, pageID: pageID)
             document.undoManager.setActionName(actionName)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            AccessibilityNotification.Announcement(announcement).post()
+            if let announcement { AccessibilityNotification.Announcement(announcement).post() }
+            then?()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { apply(tries: 5) }
+    }
+
+    /// Undoing the selection a held loop started goes back to writing, and redoing it selects again.
+    private func registerSelection(inside outline: [CGPoint], from mode: EditorMode) {
+        document.undoManager.registerUndo(withTarget: document) { [weak self] document in
+            guard let self else { return }
+            if session.mode == .selecting { session.enter(mode) }
+            document.undoManager.registerUndo(withTarget: document) { [weak self] _ in
+                guard let self else { return }
+                session.selectInk(inside: outline)
+                if session.mode == .selecting { registerSelection(inside: outline, from: mode) }
+            }
+        }
+    }
+
+    /// Keep Circle: the selection is let go and the loop that started it is straightened, as Draw and Hold would have
+    /// done. Undo then gives the loop back as it was drawn.
+    func keepHeldLoop() {
+        guard let held = heldLoop else { return }
+        heldLoop = nil
+        guard document.undoManager.undoActionName == String(localized: "Circle to Select") else { return }
+        document.undoManager.undo()
+        guard let canvas = canvases[held.pageID], canvas.isLoaded, let loop = canvas.drawing.strokes.last, loop.path.creationDate == held.stamp else { return }
+        replaceLastStroke(loop, with: held.circle, on: canvas, pageID: held.pageID, actionName: String(localized: "Straighten Shape"),
+                          announcement: String(localized: "Straightened: \(held.name)"))
     }
 
     /// Writing anywhere puts a selected picture down.
@@ -2019,6 +2064,7 @@ final class PageStackController: UIViewController, UIScrollViewDelegate, PKCanva
     }
 
     private func setInkSelection(_ selection: InkSelection) {
+        heldLoop = nil
         inkSelection = selection.filter { !$0.value.isEmpty }
         inkLasso?.showSelection(InkLasso.bounds(of: inkSelection, drawings: liveInk, frames: stackFrames))
         let count = inkSelection.values.reduce(0) { $0 + $1.count }

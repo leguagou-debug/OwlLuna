@@ -63,12 +63,13 @@ enum ShapeRecognizer {
 
         let ellipse = bestEllipse(points, box: box)
         let ellipseError = ellipse.error / diagonal
-        var corners = simplified(points + [first], tolerance: max(0.05 * diagonal, 6))
+        let outline = closedAtStart(points, diagonal: diagonal)
+        var corners = simplified(outline + [first], tolerance: max(0.05 * diagonal, 6))
         if corners.count > 1 { corners.removeLast() }
         corners = withoutStraightCorners(corners)
-        let polygonError = corners.count >= 3 ? fit(points, to: corners, closed: true) / diagonal : .infinity
+        let polygonError = corners.count >= 3 ? fit(outline, to: corners, closed: true) / diagonal : .infinity
 
-        if (3...4).contains(corners.count), polygonError <= 0.035, !(ellipseError < 0.5 * polygonError) {
+        if (3...4).contains(corners.count), polygonError <= 0.035, polygonError <= ellipseError {
             return .polygon(corners.count == 4 ? rectangle(from: corners) ?? corners : corners)
         }
         if (5...12).contains(corners.count), polygonError <= 0.02, polygonError < 0.5 * ellipseError { return .polygon(corners) }
@@ -185,6 +186,16 @@ enum ShapeRecognizer {
     }
 
     private static func direction(_ a: CGPoint, _ b: CGPoint) -> CGFloat { atan2(b.y - a.y, b.x - a.x) }
+
+    /// A stroke that runs on past its start would keep its start and the end of the run as corners, so it is cut where it
+    /// comes back closest to its start, if what follows stays near there.
+    private static func closedAtStart(_ points: [CGPoint], diagonal: CGFloat) -> [CGPoint] {
+        guard let first = points.first,
+              let far = points.indices.max(by: { distance(points[$0], first) < distance(points[$1], first) }),
+              let back = points[far...].indices.min(by: { distance(points[$0], first) < distance(points[$1], first) }),
+              points[back...].allSatisfy({ distance($0, first) <= 0.25 * diagonal }) else { return points }
+        return Array(points[...back])
+    }
 
     /// A stroke that starts in the middle of a side leaves a corner there that isn't one.
     private static func withoutStraightCorners(_ corners: [CGPoint]) -> [CGPoint] {

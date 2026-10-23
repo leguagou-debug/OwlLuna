@@ -906,6 +906,13 @@ fileprivate struct EditorContent: View {
                     .padding(.trailing, Space.x2)
                     .accessibilityIdentifier("editor.ink.status")
             }
+            if count > 0, session.canKeepHeldLoop {
+                Button("Keep Circle") { session.canvas?.keepHeldLoop() }
+                    .buttonStyle(.owlLuna(.secondary, compact: true))
+                    .fixedSize()
+                    .padding(.trailing, Space.x1)
+                    .accessibilityIdentifier("editor.ink.keep")
+            }
             if count > 0 {
                 arrangeButton("Turn into Text", "text.viewfinder") {
                     if let ink = session.canvas?.selectedInk(), !ink.isEmpty { readingInk = InkToRead(ink: ink) }

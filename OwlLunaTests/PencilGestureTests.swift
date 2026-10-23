@@ -166,30 +166,13 @@ final class PencilGestureTests: XCTestCase {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
+    private let written = [stroke(from: CGPoint(x: 110, y: 110), to: CGPoint(x: 200, y: 114)), stroke(from: CGPoint(x: 120, y: 104), to: CGPoint(x: 150, y: 120)),
+                           stroke(from: CGPoint(x: 100, y: 400), to: CGPoint(x: 300, y: 400))]
+
     /// The stroke-end path on a real canvas: the scribble never reaches the document, and one undo brings the ink back.
     func testAScribbleOnTheCanvasErasesAsOneUndoStepAndALoopStartsASelection() async throws {
-        let root = temporaryRoot(self)
-        let paper = PageDefaults(template: .blank, paperColor: .white, pageSize: .letter)
-        let manifest = NotebookManifest(title: "Gestures", defaults: paper, pages: [paper.newPage()])
-        let package = NotebookPackage(root: root, id: manifest.id)
-        try await package.create(manifest)
-        let page = manifest.pages[0].id
-        let written = [stroke(from: CGPoint(x: 110, y: 110), to: CGPoint(x: 200, y: 114)), stroke(from: CGPoint(x: 120, y: 104), to: CGPoint(x: 150, y: 120)),
-                       stroke(from: CGPoint(x: 100, y: 400), to: CGPoint(x: 300, y: 400))]
-        _ = try await package.write(SaveSnapshot(manifest: manifest, ink: [page: PKDrawing(strokes: written)]))
-        let document = try await NotebookDocument.open(manifest.id, root: root)
-        let session = EditorSession(document: document)
-        let controller = PageStackController(session: session)
-        session.canvas = controller
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
-        window.rootViewController = controller
-        window.makeKeyAndVisible()
-        addTeardownBlock { @MainActor in window.isHidden = true }
-        controller.view.layoutIfNeeded()
-        for _ in 0..<100 where controller.canvas(forPage: 0)?.isLoaded != true { await pause(0.05) }
-        let canvas = try XCTUnwrap(controller.canvas(forPage: 0))
+        let open = try await OpenPage.open(self, ink: written)
+        let (document, session, controller, canvas, page) = (open.document, open.session, open.controller, open.canvas, open.page)
         XCTAssertEqual(canvas.drawing.strokes.count, 3)
 
         canvas.tool = PKInkingTool(.marker, color: .yellow, width: 20)
@@ -232,5 +215,164 @@ final class PencilGestureTests: XCTestCase {
         XCTAssertEqual(document.loadedInk(page)?.strokes.count, 1, "and the ink bar's actions apply to it")
         session.enter(.writing)
         XCTAssertEqual(session.inkSelectionCount, 0)
+    }
+
+    func testAHeldLoopRoundInkSelectsItAndOneUndoGivesTheLoopBack() async throws {
+        let open = try await OpenPage.open(self, ink: written)
+        let loop = pen(roughLoop(centre: CGPoint(x: 155, y: 112), width: 220, height: 100))
+        guard case .ellipse? = ShapeSnap.snapped(loop)?.shape else { return XCTFail("the loop reads as an ellipse") }
+        await open.draw(loop, resting: 0.6)
+        XCTAssertEqual(open.session.mode, .selecting, "a held loop round ink selects it, though it reads as an ellipse")
+        XCTAssertEqual(open.session.inkSelectionCount, 2)
+        XCTAssertEqual(open.ink.count, 3, "and leaves no ink")
+        XCTAssertEqual(open.canvas.drawing.strokes.count, 3)
+        XCTAssertEqual(open.document.undoManager.undoActionName, "Circle to Select")
+
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.session.mode, .writing, "one undo goes back to writing")
+        XCTAssertEqual(open.ink.count, 4, "with the loop back")
+        XCTAssertEqual(open.ink.last?.path.count, loop.path.count, "as it was drawn")
+        XCTAssertEqual(open.canvas.drawing.strokes.count, 4)
+        open.document.undoManager.redo()
+        await pause(0.2)
+        XCTAssertEqual(open.session.mode, .selecting, "redo selects again")
+        XCTAssertEqual(open.session.inkSelectionCount, 2)
+        XCTAssertEqual(open.ink.count, 3)
+        open.document.undoManager.undo()
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.session.mode, .writing)
+        XCTAssertEqual(open.ink.count, 3, "and a second undo takes the loop away")
+
+        await open.draw(loop)
+        XCTAssertEqual(open.session.mode, .writing, "a loop that isn't held is ink")
+        XCTAssertEqual(open.ink.count, 4)
+    }
+
+    func testOnlyARoundLoopCanBeKeptAsACircleAndUndoThenGivesItBackAsDrawn() async throws {
+        let open = try await OpenPage.open(self, ink: written)
+        let lumpy = pen(roughLoop(centre: CGPoint(x: 155, y: 112), width: 220, height: 100, lumps: (0.2, 0.15, 0.05)))
+        guard case .polygon(let sides)? = ShapeSnap.snapped(lumpy)?.shape, sides.count > 4 else { return XCTFail("a lumpy loop reads as many sides") }
+        await open.draw(lumpy, resting: 0.6)
+        XCTAssertEqual(open.session.mode, .selecting, "so it selects")
+        XCTAssertFalse(open.session.canKeepHeldLoop, "with no circle to keep")
+        open.session.enter(.writing)
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 4, "after Done, one undo still gives the loop back")
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 3)
+
+        let loop = pen(roughLoop(centre: CGPoint(x: 155, y: 112), width: 220, height: 100))
+        let circle = try XCTUnwrap(ShapeSnap.snapped(loop))
+        await open.draw(loop, resting: 0.6)
+        XCTAssertTrue(open.session.canKeepHeldLoop, "a round one can be kept")
+        open.controller.keepHeldLoop()
+        await pause(0.2)
+        XCTAssertEqual(open.session.mode, .writing, "Keep Circle goes back to writing")
+        XCTAssertFalse(open.session.canKeepHeldLoop)
+        XCTAssertEqual(open.ink.count, 4)
+        XCTAssertEqual(open.ink.last?.path.count, circle.stroke.path.count, "with the loop straightened")
+        XCTAssertEqual(open.document.undoManager.undoActionName, "Straighten Shape")
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 4)
+        XCTAssertEqual(open.ink.last?.path.count, loop.path.count, "undo gives the loop back as drawn")
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 3, "and a second takes it away")
+        XCTAssertFalse(open.document.undoManager.canUndo)
+
+        await open.draw(loop, resting: 0.6)
+        XCTAssertTrue(open.session.canKeepHeldLoop)
+        open.controller.deleteInkSelection()
+        XCTAssertFalse(open.session.canKeepHeldLoop, "anything done to the selection lets the circle go")
+    }
+
+    func testAHeldBoxRoundInkIsStraightenedAndOneUndoGivesItBackAsDrawn() async throws {
+        let open = try await OpenPage.open(self, ink: written)
+        let box = pen(along([CGPoint(x: 150, y: 72), CGPoint(x: 236, y: 74), CGPoint(x: 234, y: 150), CGPoint(x: 76, y: 148), CGPoint(x: 78, y: 73), CGPoint(x: 140, y: 72)]))
+        let tidied = try XCTUnwrap(ShapeSnap.snapped(box))
+        guard case .polygon(let corners) = tidied.shape, corners.count == 4 else { return XCTFail("the box reads as a rectangle") }
+        await open.draw(box, resting: 0.6)
+        XCTAssertEqual(open.session.mode, .writing, "a box round ink is kept, not a selection")
+        XCTAssertEqual(open.ink.count, 4)
+        XCTAssertEqual(open.ink.last?.path.count, tidied.stroke.path.count, "and straightened")
+        XCTAssertEqual(open.document.undoManager.undoActionName, "Straighten Shape")
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 4)
+        XCTAssertEqual(open.ink.last?.path.count, box.path.count, "one undo gives the box back as drawn")
+        XCTAssertEqual(open.canvas.drawing.strokes.count, 4)
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.ink.count, 3, "and a second takes it away")
+
+        let saved = UserDefaults.standard.object(forKey: SettingsKey.snapsShapes)
+        addTeardownBlock { UserDefaults.standard.set(saved, forKey: SettingsKey.snapsShapes) }
+        UserDefaults.standard.set(false, forKey: SettingsKey.snapsShapes)
+        await open.draw(box, resting: 0.6)
+        XCTAssertEqual(open.session.mode, .selecting, "with Straighten Shapes off a box has nothing to become, so it selects")
+        XCTAssertFalse(open.session.canKeepHeldLoop)
+        open.document.undoManager.undo()
+        await pause(0.2)
+        XCTAssertEqual(open.session.mode, .writing)
+        XCTAssertEqual(open.ink.last?.path.count, box.path.count, "and undo gives it back too")
+    }
+}
+
+/// A loop as drawn round some words: lumpy, flattened and past its start. Draw and hold reads a smooth one as an
+/// ellipse and a lumpy one as many straight sides.
+func roughLoop(centre: CGPoint, width: CGFloat, height: CGFloat, lumps: (CGFloat, CGFloat, CGFloat) = (0.07, 0.05, 0.03)) -> [CGPoint] {
+    (0...120).map { index in
+        let angle = 0.3 + 2.1 * .pi * CGFloat(index) / 120
+        let r = 1 + lumps.0 * sin(2 * angle + 1) + lumps.1 * sin(3 * angle + 2) + lumps.2 * sin(5 * angle)
+        return CGPoint(x: centre.x + width / 2 * r * cos(angle), y: centre.y + height / 2 * r * sin(angle))
+    }
+}
+
+/// A notebook of one blank page holding `ink`, open in a page stack in a window, with a pen in hand.
+@MainActor
+struct OpenPage {
+    let document: NotebookDocument
+    let session: EditorSession
+    let controller: PageStackController
+    let canvas: PageCanvasView
+    let page: UUID
+
+    var ink: [PKStroke] { document.loadedInk(page)?.strokes ?? [] }
+
+    static func open(_ test: XCTestCase, ink: [PKStroke]) async throws -> OpenPage {
+        let root = temporaryRoot(test)
+        let paper = PageDefaults(template: .blank, paperColor: .white, pageSize: .letter)
+        let manifest = NotebookManifest(title: "Gestures", defaults: paper, pages: [paper.newPage()])
+        let package = NotebookPackage(root: root, id: manifest.id)
+        try await package.create(manifest)
+        let page = manifest.pages[0].id
+        _ = try await package.write(SaveSnapshot(manifest: manifest, ink: [page: PKDrawing(strokes: ink)]))
+        let document = try await NotebookDocument.open(manifest.id, root: root)
+        let session = EditorSession(document: document)
+        let controller = PageStackController(session: session)
+        session.canvas = controller
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 834, height: 1194)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        test.addTeardownBlock { @MainActor in window.isHidden = true }
+        controller.view.layoutIfNeeded()
+        for _ in 0..<100 where controller.canvas(forPage: 0)?.isLoaded != true { try? await Task.sleep(for: .seconds(0.05)) }
+        let canvas = try XCTUnwrap(controller.canvas(forPage: 0))
+        canvas.tool = PKInkingTool(.pen, color: .black, width: 3)
+        return OpenPage(document: document, session: session, controller: controller, canvas: canvas, page: page)
+    }
+
+    /// Ends `stroke` on the page as if the pen had rested `rest` seconds before lifting, and waits for what that does.
+    func draw(_ stroke: PKStroke, resting rest: TimeInterval? = nil) async {
+        controller.strokeHold.nextRest = rest
+        canvas.drawing = PKDrawing(strokes: canvas.drawing.strokes + [stroke])
+        try? await Task.sleep(for: .seconds(0.3))
     }
 }
