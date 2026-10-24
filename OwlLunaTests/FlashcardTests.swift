@@ -23,6 +23,13 @@ final class FlashcardTests: XCTestCase {
         Flashcard(front: CardSide(text: question), back: CardSide(text: answer), now: monday, calendar: calendar)
     }
 
+    private var tenDayCard: Flashcard {
+        var card = card("Q", "A")
+        card.interval = 10
+        card.due = "2026-10-15"
+        return card
+    }
+
     func testACardComesBackLaterEachTimeItIsRemembered() {
         var card = card("Powerhouse of the cell?", "Mitochondria")
         XCTAssertEqual(card.due, "2026-10-05", "a new card is due the day it is made")
@@ -52,6 +59,8 @@ final class FlashcardTests: XCTestCase {
         hard.ease = 1.35
         XCTAssertEqual(CardSchedule.graded(hard, .again, now: monday, calendar: calendar).ease, CardSchedule.minimumEase, "ease never falls below its floor")
         XCTAssertEqual(CardSchedule.graded(card("Q", "A"), .again, now: monday, calendar: calendar).lapses, 0, "a card not yet learned can't lapse")
+        let missed = CardSchedule.graded(CardSchedule.graded(card("Q", "A"), .again, now: monday, calendar: calendar), .again, now: monday, calendar: calendar)
+        XCTAssertEqual(missed.ease, CardSchedule.startingEase, "or lose ease before its first wait")
 
         let easy = CardSchedule.graded(learned, .easy, now: monday, calendar: calendar)
         XCTAssertEqual(easy.interval, 65)
@@ -59,7 +68,79 @@ final class FlashcardTests: XCTestCase {
         XCTAssertEqual(CardSchedule.interval(after: .easy, for: card("Q", "A")), 4)
         var old = learned
         old.interval = 300
-        XCTAssertEqual(CardSchedule.interval(after: .easy, for: old), CardSchedule.longestInterval, "no wait is longer than a year")
+        XCTAssertEqual(CardSchedule.interval(after: .easy, for: old, now: monday, calendar: calendar), CardSchedule.longestInterval, "no wait is longer than a year")
+    }
+
+    func testCrammingACardBeforeItIsDueDoesNotPushItAway() {
+        let evening = monday.addingTimeInterval(11 * 3600)
+        var crammed = tenDayCard
+        for _ in 0..<3 { crammed = CardSchedule.graded(crammed, .good, now: evening, calendar: calendar) }
+        XCTAssertEqual(crammed.interval, 10)
+        XCTAssertEqual(crammed.due, "2026-10-15", "going over it again the day it was learned leaves its day where it was")
+        XCTAssertEqual(crammed.ease, CardSchedule.startingEase)
+        XCTAssertEqual(crammed.reviews, 3)
+
+        let sunday = calendar.date(byAdding: .day, value: 6, to: monday)!
+        let early = CardSchedule.graded(tenDayCard, .good, now: sunday, calendar: calendar)
+        XCTAssertEqual(early.interval, 15, "it grows from the six days it waited, not the ten it was given")
+        XCTAssertEqual(early.due, "2026-10-26")
+        XCTAssertEqual(early.ease, CardSchedule.startingEase)
+        XCTAssertEqual(CardSchedule.graded(early, .good, now: sunday, calendar: calendar).due, "2026-10-26", "and a second pass that evening leaves it there")
+
+        var farOff = tenDayCard
+        farOff.due = "2026-10-17"
+        XCTAssertEqual(CardSchedule.graded(farOff, .good, now: monday, calendar: calendar).due, "2026-10-17", "an early answer never brings its day nearer")
+    }
+
+    func testAnEarlyEasyGrowsFromTheDaysWaitedAndLeavesTheEase() {
+        let friday = calendar.date(byAdding: .day, value: 4, to: monday)!
+        let easy = CardSchedule.graded(tenDayCard, .easy, now: friday, calendar: calendar)
+        XCTAssertEqual(easy.interval, 13)
+        XCTAssertEqual(easy.due, "2026-10-22")
+        XCTAssertEqual(easy.ease, CardSchedule.startingEase, "answering early can't raise the ease")
+        let twice = CardSchedule.graded(easy, .easy, now: friday, calendar: calendar)
+        XCTAssertEqual(twice.interval, 13)
+        XCTAssertEqual(twice.due, "2026-10-22")
+        XCTAssertEqual(twice.ease, CardSchedule.startingEase)
+    }
+
+    func testForgettingACardIsALapseOnlyOnceItHasWaitedADay() {
+        let sameDay = CardSchedule.graded(tenDayCard, .again, now: monday, calendar: calendar)
+        XCTAssertEqual(sameDay.interval, 0)
+        XCTAssertEqual(sameDay.due, "2026-10-05")
+        XCTAssertEqual(sameDay.lapses, 0, "missed the day it was given its wait")
+        XCTAssertEqual(sameDay.ease, CardSchedule.startingEase)
+
+        let friday = calendar.date(byAdding: .day, value: 4, to: monday)!
+        let forgotten = CardSchedule.graded(tenDayCard, .again, now: friday, calendar: calendar)
+        XCTAssertEqual(forgotten.interval, 0)
+        XCTAssertEqual(forgotten.due, "2026-10-09")
+        XCTAssertEqual(forgotten.lapses, 1, "missed four days into its wait")
+        XCTAssertEqual(forgotten.ease, 2.3, accuracy: 0.001)
+        let twice = CardSchedule.graded(CardSchedule.graded(forgotten, .good, now: friday, calendar: calendar), .again, now: friday, calendar: calendar)
+        XCTAssertEqual(twice.lapses, 1, "relearned and missed again in the same sitting isn't another lapse")
+        XCTAssertEqual(twice.ease, 2.3, accuracy: 0.001)
+
+        let evening = monday.addingTimeInterval(11 * 3600)
+        var crammed = card("Q", "A")
+        for _ in 0..<3 {
+            crammed = CardSchedule.graded(crammed, .again, now: evening, calendar: calendar)
+            crammed = CardSchedule.graded(crammed, .good, now: evening, calendar: calendar)
+        }
+        XCTAssertEqual(crammed.ease, CardSchedule.startingEase, "three passes in one evening don't wear a new card's ease down")
+        XCTAssertEqual(crammed.lapses, 0)
+    }
+
+    func testACardDueTomorrowIsEarlyWhereTheClocksSkipMidnight() {
+        var santiago = Calendar(identifier: .gregorian)
+        santiago.timeZone = TimeZone(identifier: "America/Santiago")!
+        let noon = santiago.date(from: DateComponents(year: 2026, month: 9, day: 6, hour: 12))!
+        var card = tenDayCard
+        card.due = "2026-09-07"
+        let early = CardSchedule.graded(card, .good, now: noon, calendar: santiago)
+        XCTAssertEqual(early.interval, 23, "it grows from the nine days it waited, not as a card that has come due")
+        XCTAssertEqual(early.due, "2026-09-29")
+        XCTAssertEqual(early.ease, CardSchedule.startingEase)
     }
 
     func testCardsAreKeptInTheNotebookAndReadBack() async throws {
@@ -312,6 +393,27 @@ final class FlashcardTests: XCTestCase {
         dropping.dropCurrent()
         XCTAssertEqual(dropping.remaining, 1)
         XCTAssertEqual(dropping.total, 1)
+    }
+
+    func testGoingThroughThemAllAgainTakesTheCardsAsTheyNowStand() async throws {
+        let root = temporaryRoot(self)
+        let manifest = try await makeNotebook(root)
+        let library = FlashcardLibrary(root: root)
+        await library.load()
+        library.add([card("One", "1"), card("Two", "2"), card("Three", "3")], to: manifest.id)
+        let all = library.all(in: [manifest.id])
+        let first = ReviewSession(cards: all)
+        while first.current != nil { first.answer(.good, in: library, now: monday) }
+        library.remove([all[2].id], from: manifest.id)
+
+        let again = ReviewSession(cards: library.refreshed(all))
+        XCTAssertEqual(again.queue.map(\.id), all.prefix(2).map(\.id), "a card deleted since doesn't come round")
+        let current = try XCTUnwrap(again.current)
+        XCTAssertEqual(current.card, library.cards(in: manifest.id).first { $0.id == current.id })
+        let shown = CardSchedule.interval(after: .easy, for: current.card, now: monday, calendar: .current)
+        XCTAssertEqual(shown, 1, "not the four days a new card would get")
+        again.answer(.easy, in: library, now: monday)
+        XCTAssertEqual(library.cards(in: manifest.id).first { $0.id == current.id }?.interval, shown, "the button's wait is the wait it gets")
     }
 
     func testWaitsAreSaidInDaysThenMonths() {

@@ -244,6 +244,11 @@ final class FlashcardLibrary {
             .sorted { ($0.card.due, $0.card.createdAt) < ($1.card.due, $1.card.createdAt) }
     }
 
+    /// The same cards as they stand now, without any deleted since.
+    func refreshed(_ cards: [DeckCard]) -> [DeckCard] {
+        cards.compactMap { old in decks[old.notebook]?.first { $0.id == old.id }.map { DeckCard(notebook: old.notebook, card: $0) } }
+    }
+
     /// The first day after `day` on which a card comes due.
     func nextDue(in notebooks: some Sequence<UUID>, after day: String = ActivityFile.dayKey(for: .now, calendar: .current)) -> String? {
         notebooks.flatMap { cards(in: $0).map(\.due) }.filter { $0 > day }.min()

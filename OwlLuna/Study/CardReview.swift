@@ -303,9 +303,9 @@ struct CardReview: View {
                     Button { dismiss() } label: { Text("Done").frame(maxWidth: 240) }
                         .buttonStyle(.owlLuna(.primary))
                         .accessibilityIdentifier("review.done")
-                    if !all.isEmpty {
+                    if !library.refreshed(all).isEmpty {
                         Button {
-                            withAnimation(motion) { session = ReviewSession(cards: all) }
+                            withAnimation(motion) { session = ReviewSession(cards: library.refreshed(all)) }
                         } label: {
                             Text(studied ? "Go Through Them All Again" : "Study Them Anyway").frame(maxWidth: 240)
                         }
