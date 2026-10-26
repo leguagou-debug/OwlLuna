@@ -162,7 +162,7 @@ extension FolderTree {
 @MainActor
 enum LibraryIndex {
     private static let log = Logger(category: "index")
-    static let schemaNumber = 7
+    static let schemaNumber = 8
 
     /// Opens the index. A store that can't be opened is set aside (never deleted) and a fresh one is rebuilt
     /// from the manifests; if even that fails, the app runs on an in-memory index for this launch.
@@ -299,18 +299,28 @@ enum LibraryIndex {
         return true
     }
 
-    /// The notebooks whose title, tags or text contains `query`. Only IDs are read, so a library full of PDF text stays on disk.
+    /// The notebooks with every term of `query` somewhere in their title, tags or text. Only IDs are read, so PDF text stays on disk.
     nonisolated static func notebookIDs(matching query: String, in context: ModelContext) -> Set<UUID> {
-        let tag = Tags.normalized(query) ?? query
-        var titles = FetchDescriptor<NotebookRecord>(predicate: #Predicate {
-            $0.title.localizedStandardContains(query) || $0.tagsRaw.localizedStandardContains(tag) || $0.pageTagsRaw.localizedStandardContains(tag)
-        })
-        titles.propertiesToFetch = [\.id]
-        var texts = FetchDescriptor<NotebookSearchText>(predicate: #Predicate { $0.text.localizedStandardContains(query) })
-        texts.propertiesToFetch = [\.notebookID]
-        let byTitle = ((try? context.fetch(titles)) ?? []).map(\.id)
-        let byText = ((try? context.fetch(texts)) ?? []).map(\.notebookID)
-        return Set(byTitle).union(byText)
+        var found: Set<UUID>?
+        // The longest term first, as it matches the fewest; each term after it looks only among the notebooks still in.
+        for term in SearchQuery(query).terms.sorted(by: { $0.count > $1.count }) {
+            let tag = Tags.normalized(term) ?? term
+            let anywhere = found == nil, among = Array(found ?? [])
+            var titles = FetchDescriptor<NotebookRecord>(predicate: #Predicate {
+                (anywhere || among.contains($0.id))
+                    && ($0.title.localizedStandardContains(term) || $0.tagsRaw.localizedStandardContains(tag) || $0.pageTagsRaw.localizedStandardContains(tag))
+            })
+            titles.propertiesToFetch = [\.id]
+            var texts = FetchDescriptor<NotebookSearchText>(predicate: #Predicate {
+                (anywhere || among.contains($0.notebookID)) && $0.text.localizedStandardContains(term)
+            })
+            texts.propertiesToFetch = [\.notebookID]
+            let byTitle = ((try? context.fetch(titles)) ?? []).map(\.id)
+            let byText = ((try? context.fetch(texts)) ?? []).map(\.notebookID)
+            found = Set(byTitle).union(byText)
+            if found?.isEmpty == true { break }
+        }
+        return found ?? []
     }
 
     nonisolated static func manifestDate(ofPackage url: URL) -> Date? {
@@ -345,12 +355,13 @@ enum LibraryIndex {
         return result
     }
 
+    /// One line for each page and transcript, so a phrase is found across the lines it was written on but not across pages.
     nonisolated static func searchText(in directory: URL) -> String {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "txt" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .map { $0.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.hasPrefix("#ink:") }.joined(separator: "\n") }
+            .map(SearchQuery.searchable)
             .joined(separator: "\n")
     }
 }

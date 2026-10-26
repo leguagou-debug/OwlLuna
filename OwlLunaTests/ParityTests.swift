@@ -49,8 +49,8 @@ final class ParityTests: XCTestCase {
         try await package.writeText("#ink:none\nactive transport", pageID: pages[2].id)
         try await package.writeText("#ink:none\nosmosis again", pageID: pages[3].id)
         let hits = await PageSearch.hits(for: "osmosis", in: [manifest.id], root: root)
-        XCTAssertEqual(hits[manifest.id]?.map(\.index), [1, 3])
-        XCTAssertEqual(hits[manifest.id]?.first?.page.id, pages[1].id)
+        XCTAssertEqual(hits.pages[manifest.id]?.map(\.index), [1, 3])
+        XCTAssertEqual(hits.pages[manifest.id]?.first?.page.id, pages[1].id)
     }
 
     func testQuickNoteUsesTheSettingsDefaultsAndTheCurrentShelf() async throws {
@@ -171,8 +171,8 @@ final class ParityTests: XCTestCase {
             ids.append(manifest.id)
         }
         let hits = await PageSearch.hits(for: "osmosis", in: ids, root: root, limitPerNotebook: 8, limit: 20)
-        XCTAssertEqual(hits.values.map(\.count).reduce(0, +), 20)
-        XCTAssertEqual(hits[ids[0]]?.count, 8)
+        XCTAssertEqual(hits.pages.values.map(\.count).reduce(0, +), 20)
+        XCTAssertEqual(hits.pages[ids[0]]?.count, 8)
     }
 
     func testEditorKeysAreOffWhileASheetIsUp() async throws {

@@ -4,6 +4,7 @@ import SwiftUI
 struct StudyGuideSheet: View {
     let session: EditorSession
     @Environment(FlashcardLibrary.self) private var library
+    @Environment(EditorWindow.self) private var window: EditorWindow?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scope: StudyScope
@@ -15,7 +16,10 @@ struct StudyGuideSheet: View {
     @State private var savedCards = false
     @State private var summaryRun: UUID?
     @State private var quizRun: UUID?
+    @State private var tasks: [Tab: Task<Void, Never>] = [:]
     private let status = StudyGuide.status
+    /// The part of the progress bar that reading the pages fills; the model fills the rest.
+    private static let readingShare = 0.25
 
     enum Tab: Hashable { case summary, quiz }
 
@@ -76,14 +80,23 @@ struct StudyGuideSheet: View {
         .onAppear(perform: write)
         .onChange(of: tab) { write() }
         .onChange(of: scope) {
+            stop(.summary)
+            stop(.quiz)
             summary = .idle
             quiz = .idle
-            summaryRun = nil
-            quizRun = nil
             shown = []
             copied = false
             savedCards = false
             write()
+        }
+        .onDisappear {
+            stop(.summary)
+            stop(.quiz)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)) { note in
+            guard (note.object as? UIScene)?.session.persistentIdentifier == window?.scene else { return }
+            stop(.summary)
+            stop(.quiz)
         }
         .notice("Something went wrong", isPresented: Binding(get: { library.lastError != nil }, set: { if !$0 { library.clearError() } }),
                 message: Text(library.lastError ?? "")) {
@@ -321,20 +334,23 @@ struct StudyGuideSheet: View {
 
     // MARK: Writing
 
-    /// Starts writing what the showing tab lacks. The work outlives a redraw of the sheet; a newer request replaces it.
+    /// Starts writing what the showing tab lacks. The work outlives a redraw of the sheet and a change of tab; a newer request replaces it.
     private func write() {
         guard status == .ready, let model = StudyGuide.model() else { return }
         let scope = scope, document = document, token = UUID()
         switch tab {
         case .summary:
             guard summary == .idle else { return }
+            stop(.summary)
             summary = .working(0)
             summaryRun = token
-            Task {
+            tasks[.summary] = Task {
                 do {
-                    let text = await StudyGuide.text(for: scope, in: document)
+                    let text = try await StudyGuide.text(for: scope, in: document) { value in
+                        if summaryRun == token { summary = .working(value * Self.readingShare) }
+                    }
                     let points = try await StudyGuide.summary(of: text, using: model) { value in
-                        if summaryRun == token { summary = .working(value) }
+                        if summaryRun == token { summary = .working(Self.readingShare + value * (1 - Self.readingShare)) }
                     }
                     guard summaryRun == token else { return }
                     summary = .done(points)
@@ -345,13 +361,16 @@ struct StudyGuideSheet: View {
             }
         case .quiz:
             guard quiz == .idle else { return }
+            stop(.quiz)
             quiz = .working(0)
             quizRun = token
-            Task {
+            tasks[.quiz] = Task {
                 do {
-                    let text = await StudyGuide.text(for: scope, in: document)
+                    let text = try await StudyGuide.text(for: scope, in: document) { value in
+                        if quizRun == token { quiz = .working(value * Self.readingShare) }
+                    }
                     let items = try await StudyGuide.quiz(of: text, using: model) { value in
-                        if quizRun == token { quiz = .working(value) }
+                        if quizRun == token { quiz = .working(Self.readingShare + value * (1 - Self.readingShare)) }
                     }
                     guard quizRun == token else { return }
                     quiz = .done(items)
@@ -360,6 +379,18 @@ struct StudyGuideSheet: View {
                     if quizRun == token { quiz = .failed(error.localizedDescription) }
                 }
             }
+        }
+    }
+
+    /// Cancels a tab's writing and forgets its run.
+    private func stop(_ tab: Tab) {
+        tasks.removeValue(forKey: tab)?.cancel()
+        if tab == .summary {
+            summaryRun = nil
+            if case .working = summary { summary = .idle }
+        } else {
+            quizRun = nil
+            if case .working = quiz { quiz = .idle }
         }
     }
 }

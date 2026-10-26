@@ -32,41 +32,60 @@ struct PageHit: Identifiable, Hashable, Sendable {
     }
 }
 
-/// Finds which pages of the matching notebooks contain the query, from each page's recognised text, and which
+/// The hits listed under each notebook, and how many more of its pages and transcripts match than are listed.
+struct PageHits: Hashable, Sendable {
+    var pages: [UUID: [PageHit]] = [:]
+    var more: [UUID: Int] = [:]
+}
+
+/// Finds which pages of the matching notebooks contain every term of the query, from each page's recognised text, and which
 /// recordings from their transcripts. A recording's match opens the first page written on while it ran.
 enum PageSearch {
-    static func hits(for query: String, in ids: [UUID], root: StorageRoot, limitPerNotebook: Int = 8, limit: Int = 60) async -> [UUID: [PageHit]] {
-        var result: [UUID: [PageHit]] = [:]
+    static func hits(for query: String, in ids: [UUID], root: StorageRoot, limitPerNotebook: Int = 8, limit: Int = 60) async -> PageHits {
+        let search = SearchQuery(query)
+        var result = PageHits()
+        guard !search.isEmpty else { return result }
         var total = 0
         for id in ids {
             if Task.isCancelled || total >= limit { break }
             let package = NotebookPackage(root: root, id: id)
             guard let manifest = try? await package.readManifest().manifest else { continue }
             let pages = manifest.pages
-            var hits: [PageHit] = []
-            for (index, page) in pages.enumerated() where hits.count < limitPerNotebook && total + hits.count < limit {
+            var hits: [PageHit] = [], more = 0
+            func take(_ text: String, as hit: (String) -> PageHit) {
+                let body = SearchQuery.searchable(text)
+                if hits.count < limitPerNotebook && total + hits.count < limit {
+                    if let snippet = snippet(of: body, for: search) { hits.append(hit(snippet)) }
+                } else if search.matches(body) {
+                    more += 1
+                }
+            }
+            for (index, page) in pages.enumerated() {
                 if Task.isCancelled { return result }
-                guard let text = await package.readText(page.id), let snippet = snippet(in: text, for: query) else { continue }
-                hits.append(PageHit(notebookID: id, page: page, index: index, snippet: snippet))
+                guard let text = await package.readText(page.id) else { continue }
+                take(text) { PageHit(notebookID: id, page: page, index: index, snippet: $0) }
             }
-            for recording in manifest.recordings where recording.transcriptFile != nil && hits.count < limitPerNotebook && total + hits.count < limit {
-                guard let text = try? String(contentsOf: package.transcriptTextURL(recording.id), encoding: .utf8),
-                      let snippet = snippet(in: text, for: query) else { continue }
+            for recording in manifest.recordings where recording.transcriptFile != nil {
+                if Task.isCancelled { return result }
                 let index = recording.inkedPages?.compactMap { id in pages.firstIndex { $0.id == id } }.min() ?? 0
-                guard pages.indices.contains(index) else { continue }
-                hits.append(PageHit(notebookID: id, page: pages[index], index: index, snippet: snippet,
-                                    recording: PageHit.Recording(id: recording.id, name: recording.name)))
+                guard pages.indices.contains(index),
+                      let text = try? String(contentsOf: package.transcriptTextURL(recording.id), encoding: .utf8) else { continue }
+                take(text) { PageHit(notebookID: id, page: pages[index], index: index, snippet: $0, recording: PageHit.Recording(id: recording.id, name: recording.name)) }
             }
-            if !hits.isEmpty { result[id] = hits }
+            if !hits.isEmpty { result.pages[id] = hits }
+            if more > 0 { result.more[id] = more }
             total += hits.count
         }
         return result
     }
 
-    /// The text around the first match, on one line, without the "#ink:" header.
+    /// The text around the whole query, or else its longest term, on one line without the "#ink:" header. Nil unless every term is in it.
     static func snippet(in text: String, for query: String, radius: Int = 36) -> String? {
-        let body = text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.hasPrefix("#ink:") }.joined(separator: " ")
-        guard let range = body.localizedStandardRange(of: query) else { return nil }
+        snippet(of: SearchQuery.searchable(text), for: SearchQuery(query), radius: radius)
+    }
+
+    private static func snippet(of body: String, for search: SearchQuery, radius: Int = 36) -> String? {
+        guard search.matches(body), let range = search.focus(in: body) else { return nil }
         let start = body.index(range.lowerBound, offsetBy: -radius, limitedBy: body.startIndex) ?? body.startIndex
         let end = body.index(range.upperBound, offsetBy: radius, limitedBy: body.endIndex) ?? body.endIndex
         let excerpt = body[start..<end].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -77,19 +96,14 @@ enum PageSearch {
     private static let highlighter = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .mustard : UIColor(hex: 0x806113) })
     private static let onHighlighter = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .onMustard : .labelCream })
 
-    /// The snippet with every match in bold on a mustard band, so a match never relies on colour alone.
+    /// The snippet with the query and its terms in bold on a mustard band, so a match never relies on colour alone.
     static func highlighted(_ snippet: String, query: String) -> AttributedString {
         var text = AttributedString(snippet)
-        let needle = query.trimmingCharacters(in: .whitespaces)
-        guard !needle.isEmpty else { return text }
-        var remaining = snippet.startIndex..<snippet.endIndex
-        while let match = snippet.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive], range: remaining) {
-            if let range = Range(match, in: text) {
-                text[range].backgroundColor = highlighter
-                text[range].foregroundColor = onHighlighter
-                text[range].font = .subheadline.bold()
-            }
-            remaining = match.upperBound..<snippet.endIndex
+        for match in SearchQuery(query).highlights(in: snippet) {
+            guard let range = Range(match, in: text) else { continue }
+            text[range].backgroundColor = highlighter
+            text[range].foregroundColor = onHighlighter
+            text[range].font = .subheadline.bold()
         }
         return text
     }
@@ -99,6 +113,7 @@ enum PageSearch {
 struct PageHitsSection: View {
     let records: [NotebookRecord]
     let hits: [UUID: [PageHit]]
+    var more: [UUID: Int] = [:]
     let query: String
     let zoomNamespace: Namespace.ID
     let onOpen: (NotebookRecord, UUID, String) -> Void
@@ -108,7 +123,7 @@ struct PageHitsSection: View {
             ShelfLabel(title: String(localized: "Pages"))
             ForEach(records.filter { hits[$0.id] != nil }) { record in
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    Text(record.title).font(.headline).foregroundStyle(Color.ink)
+                    title(record)
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: Space.x4) {
                             ForEach(hits[record.id] ?? []) { hit in
@@ -121,6 +136,23 @@ struct PageHitsSection: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The notebook's name, then how many more matches it has than are shown, on one line where they fit.
+    @ViewBuilder
+    private func title(_ record: NotebookRecord) -> some View {
+        let name = Text(record.title).font(.headline).foregroundStyle(Color.ink)
+        if let count = more[record.id] {
+            let line = String(localized: "\(count) more matches")
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.x3) { name; Text(line).metaStyle(.footnote) }
+                VStack(alignment: .leading, spacing: Space.x1) { name; Text(line).metaStyle(.footnote) }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("\(record.title), \(line)"))
+        } else {
+            name
         }
     }
 }

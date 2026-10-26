@@ -39,7 +39,7 @@ struct ShelfView: View {
     @AppStorage(SettingsKey.trashLength) private var trashLength: TrashLength = .initial
     @State private var searchText = ""
     @State private var matches: Set<UUID>?
-    @State private var pageHits: [UUID: [PageHit]] = [:]
+    @State private var pageHits = PageHits()
     @State private var hitsQuery = ""
     @State private var tagPages: [UUID: [PageHit]] = [:]
     @State private var tagging: NotebookRecord?
@@ -94,14 +94,14 @@ struct ShelfView: View {
     /// Matches titles and handwriting on a background context, a moment after typing stops, so neither the
     /// keystroke nor a library full of PDF text ever scans on the main thread.
     private func runSearch() async {
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else {
+        let query = searchText.trimmingCharacters(in: .whitespaces), terms = SearchQuery(query).terms
+        guard !terms.isEmpty else {
             matches = nil
-            pageHits = [:]
+            pageHits = PageHits()
             searchPending = false
             return
         }
-        if query != hitsQuery { pageHits = [:] }
+        if query != hitsQuery { pageHits = PageHits() }
         searchPending = true
         defer { if !Task.isCancelled { searchPending = false } }
         try? await Task.sleep(for: .milliseconds(250))
@@ -113,12 +113,13 @@ struct ShelfView: View {
         guard !Task.isCancelled else { return }
         // What is written in a locked notebook isn't searched: only its title and its own tags can match.
         let locked = records.filter(\.isLocked)
-        let tag = Tags.normalized(query) ?? query
         let hidden = Set(locked.filter { record in
-            !record.title.localizedStandardContains(query) && !record.tags.contains { $0.localizedStandardContains(tag) }
+            !terms.allSatisfy { term in
+                record.title.localizedStandardContains(term) || record.tags.contains { $0.localizedStandardContains(Tags.normalized(term) ?? term) }
+            }
         }.map(\.id))
         matches = found.subtracting(hidden)
-        guard scope != .trash else { pageHits = [:]; return }
+        guard scope != .trash else { pageHits = PageHits(); return }
         let closed = Set(locked.map(\.id))
         let ordered = visible.map(\.id).filter { found.contains($0) && !closed.contains($0) }
         let hits = await PageSearch.hits(for: query, in: ordered, root: store.root)
@@ -145,7 +146,7 @@ struct ShelfView: View {
     /// Tagged pages show under their notebooks, but not while searching.
     private var showsTagPages: Bool { rule != nil && searchText.isEmpty && !tagPages.isEmpty }
 
-    private var showsPageHits: Bool { !searchText.isEmpty && !pageHits.isEmpty && scope != .trash }
+    private var showsPageHits: Bool { !searchText.isEmpty && !pageHits.pages.isEmpty && scope != .trash }
 
     private var tagPagesKey: String {
         "\(scope)|\(store.indexVersion)|" + (rule.map { "\($0.match.rawValue)|\(Tags.joined($0.tags))" } ?? "")
@@ -328,7 +329,7 @@ struct ShelfView: View {
     @ViewBuilder
     private func searchHits(_ visible: [NotebookRecord]) -> some View {
         if showsPageHits {
-            PageHitsSection(records: visible, hits: pageHits, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
+            PageHitsSection(records: visible, hits: pageHits.pages, more: pageHits.more, query: hitsQuery, zoomNamespace: zoomNamespace, onOpen: onOpenZoomed)
                 .transition(.opacity)
         }
     }
@@ -412,7 +413,7 @@ struct ShelfView: View {
                         }
                     }
                 }
-                if showsPageHits { pageBoard(visible, hits: pageHits, query: hitsQuery) }
+                if showsPageHits { pageBoard(visible, hits: pageHits.pages, more: pageHits.more, query: hitsQuery) }
                 ForEach(groups(visible)) { shelf in
                     ShelfListBoard(title: shelf.title, cloth: shelf.cloth) {
                         ForEach(shelf.records) { record in
@@ -454,20 +455,32 @@ struct ShelfView: View {
         if scope == .all, searchText.isEmpty, !isSelecting { DeskCards(records: records, zoomNamespace: zoomNamespace, asRows: true, onOpen: onOpenZoomed) }
     }
 
-    private func pageBoard(_ records: [NotebookRecord], hits: [UUID: [PageHit]], query: String) -> some View {
+    private func pageBoard(_ records: [NotebookRecord], hits: [UUID: [PageHit]], more: [UUID: Int] = [:], query: String) -> some View {
         ShelfListBoard(title: String(localized: "Pages")) {
-            ForEach(records.flatMap { record in (hits[record.id] ?? []).map { (record, $0) } }, id: \.1.id) { record, hit in
-                Button { onOpenPage(record, hit.page.id) } label: {
-                    VStack(alignment: .leading, spacing: Space.x1) {
-                        Text(hit.title(in: record.title)).font(.headline).foregroundStyle(Color.ink)
-                        Text(PageSearch.highlighted(hit.snippet, query: query)).font(.subheadline).foregroundStyle(Color.textSecondary)
+            ForEach(records.filter { hits[$0.id] != nil }) { record in
+                ForEach(hits[record.id] ?? []) { hit in
+                    Button { onOpenPage(record, hit.page.id) } label: {
+                        VStack(alignment: .leading, spacing: Space.x1) {
+                            Text(hit.title(in: record.title)).font(.headline).foregroundStyle(Color.ink)
+                            Text(PageSearch.highlighted(hit.snippet, query: query)).font(.subheadline).foregroundStyle(Color.textSecondary)
+                        }
                     }
+                    .buttonStyle(ShelfListRowStyle(isSelected: false))
+                    .overlay(alignment: .top) { ShelfRule() }
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel(Text(hit.label(in: record.title)))
+                    .accessibilityHint(Text("Opens the notebook at this page"))
                 }
-                .buttonStyle(ShelfListRowStyle(isSelected: false))
-                .overlay(alignment: .top) { ShelfRule() }
-                .hoverEffect(.highlight)
-                .accessibilityLabel(Text(hit.label(in: record.title)))
-                .accessibilityHint(Text("Opens the notebook at this page"))
+                if let count = more[record.id] {
+                    let line = String(localized: "\(count) more matches")
+                    Text(line)
+                        .metaStyle(.subheadline)
+                        .padding(.horizontal, Space.x3)
+                        .padding(.vertical, Space.x2)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .overlay(alignment: .top) { ShelfRule() }
+                        .accessibilityLabel(Text("\(record.title), \(line)"))
+                }
             }
         }
     }

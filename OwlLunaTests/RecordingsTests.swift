@@ -152,7 +152,7 @@ final class RecordingsTests: XCTestCase {
         XCTAssertTrue(searchable(), "and its words are found again")
         _ = await document.save()
         let hits = await PageSearch.hits(for: "divide", in: [document.id], root: package.root)
-        XCTAssertEqual(hits[document.id]?.first?.recording?.id, lecture.id)
+        XCTAssertEqual(hits.pages[document.id]?.first?.recording?.id, lecture.id)
 
         XCTAssertEqual(document.undoManager.redoActionName, "Delete Recording")
         document.undoManager.redo()

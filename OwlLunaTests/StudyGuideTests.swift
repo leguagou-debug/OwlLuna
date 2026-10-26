@@ -27,8 +27,73 @@ final class StudyGuideTests: XCTestCase {
         }
     }
 
+    /// Answers with the notes' own lines, from its `held`th question on only once let go, and counts how often it was asked.
+    private final class Held: StudyModel, @unchecked Sendable {
+        private let lock = NSLock()
+        private let held: Int, limit: Int
+        private var asked = 0, released = false
+        private var waiting: CheckedContinuation<Void, Never>?
+        var calls: Int { lock.withLock { asked } }
+
+        init(holding held: Int, limit: Int = .max) {
+            self.held = held
+            self.limit = limit
+        }
+
+        func keyPoints(in text: String, atMost limit: Int) async throws -> [String] {
+            try await answer(text)
+            return Array(text.split(separator: "\n").map(String.init).prefix(limit))
+        }
+
+        func questions(about text: String, count: Int) async throws -> [QuizItem] {
+            try await answer(text)
+            return text.split(separator: "\n").prefix(count).map { QuizItem(question: "What about \($0)?", answer: String($0)) }
+        }
+
+        func letGo() {
+            lock.withLock { released = true; return waiting.take() }?.resume()
+        }
+
+        private func answer(_ text: String) async throws {
+            if lock.withLock({ asked += 1; return asked }) >= held {
+                await withCheckedContinuation { wait in
+                    lock.withLock { if released { wait.resume() } else { waiting = wait } }
+                }
+            }
+            if text.count > limit { throw StudyGuideError.tooLong }
+        }
+    }
+
+    /// Writes points about 710 characters long, so a piece's points fill more than a piece again.
+    private final class Wordy: StudyModel, @unchecked Sendable {
+        private let lock = NSLock()
+        private var asked = 0
+        var calls: Int { lock.withLock { asked } }
+
+        func keyPoints(in text: String, atMost limit: Int) async throws -> [String] {
+            let call = lock.withLock { asked += 1; return asked }
+            return (0..<limit).map { "Point \(call).\($0) " + String(repeating: "word ", count: 140) }
+        }
+
+        func questions(about text: String, count: Int) async throws -> [QuizItem] { [] }
+    }
+
     private func notes(_ lines: Int) -> String {
         (1...lines).map { "Fact number \($0) is that cells divide by mitosis in stage \($0)." }.joined(separator: "\n")
+    }
+
+    /// A notebook with each of `texts` typed on a page of its own.
+    private func notebook(_ texts: [String]) async throws -> NotebookDocument {
+        let root = temporaryRoot(self)
+        let paper = PageDefaults(template: .blank, paperColor: .white, pageSize: .letter)
+        let pages = texts.map { text in
+            var page = paper.newPage()
+            page.items = [PageItem(content: .text(TextBox(string: text)), center: CGPoint(x: 200, y: 200), size: CGSize(width: 240, height: 40))]
+            return page
+        }
+        let manifest = NotebookManifest(title: "Biology", defaults: paper, pages: pages)
+        try await NotebookPackage(root: root, id: manifest.id).create(manifest)
+        return try await NotebookDocument.open(manifest.id, root: root)
     }
 
     func testNotesAreCutBetweenLinesAndALongLineBetweenWords() {
@@ -69,6 +134,57 @@ final class StudyGuideTests: XCTestCase {
         XCTAssertEqual(points.count, 6)
         XCTAssertEqual(progress.last, 1)
         XCTAssertEqual(progress, progress.sorted())
+    }
+
+    func testAVeryLongNotebookIsSummarisedFromPiecesSpreadThroughIt() async throws {
+        let model = Recorder()
+        let text = notes(2000)
+        let chunks = StudyGuide.chunks(of: text)
+        XCTAssertGreaterThan(chunks.count, StudyGuide.summaryPieces)
+        let points = try await StudyGuide.summary(of: text, using: model, limit: 6)
+        let read = model.prompts.filter { !$0.hasPrefix("- ") }
+        let places = read.compactMap { chunks.firstIndex(of: $0) }
+        XCTAssertEqual(read.count, StudyGuide.summaryPieces, "no more pieces than the limit are read")
+        XCTAssertEqual(places.count, read.count)
+        XCTAssertEqual(places, places.sorted())
+        XCTAssertEqual(places.first, 0)
+        XCTAssertEqual(places.last, chunks.count - 1, "the end of the notes is read too")
+        XCTAssertLessThanOrEqual(model.prompts.count - read.count, 4, "then their points are boiled down")
+        XCTAssertEqual(points.count, 6)
+    }
+
+    func testPointsThatNeverGetShorterAreBoiledDownOnlyAFewTimes() async throws {
+        let model = Wordy()
+        let points = try await StudyGuide.summary(of: notes(2000), using: model)
+        XCTAssertEqual(points.count, 7)
+        XCTAssertLessThanOrEqual(model.calls, StudyGuide.summaryPieces * 3)
+    }
+
+    func testCancellingARunStopsAskingTheModel() async throws {
+        let text = notes(150), short = notes(10)
+        let last = StudyGuide.chunks(of: text).count
+        let runs: [(held: Int, limit: Int, write: @Sendable (any StudyModel) async throws -> Void)] = [
+            (1, .max, { _ = try await StudyGuide.summary(of: text, using: $0) }),
+            (last, .max, { _ = try await StudyGuide.summary(of: text, using: $0) }),
+            (1, .max, { _ = try await StudyGuide.quiz(of: text, using: $0) }),
+            (2, 400, { _ = try await StudyGuide.quiz(of: short, using: $0) }),
+        ]
+        for (held, limit, write) in runs {
+            let model = Held(holding: held, limit: limit)
+            let run = Task { try await write(model) }
+            let deadline = ContinuousClock.now + .seconds(5)
+            while model.calls < held, .now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertEqual(model.calls, held, "the run gets as far as the held question")
+            run.cancel()
+            model.letGo()
+            do {
+                try await run.value
+                XCTFail("a cancelled run doesn't finish")
+            } catch {
+                XCTAssertTrue(error is CancellationError)
+            }
+            XCTAssertEqual(model.calls, held, "no next piece, boil-down or other half is asked once the run is cancelled")
+        }
     }
 
     func testAPieceTheModelFindsTooLongIsReadInHalves() async throws {
@@ -158,20 +274,35 @@ final class StudyGuideTests: XCTestCase {
     }
 
     func testAStudyGuideReadsTypedTextAndHandwritingFromThePages() async throws {
-        let root = temporaryRoot(self)
-        let paper = PageDefaults(template: .blank, paperColor: .white, pageSize: .letter)
-        var first = paper.newPage(), second = paper.newPage()
-        first.items = [PageItem(content: .text(TextBox(string: "Mitochondria make ATP.")), center: CGPoint(x: 200, y: 200), size: CGSize(width: 240, height: 40))]
-        second.items = [PageItem(content: .text(TextBox(string: "Ribosomes build proteins.")), center: CGPoint(x: 200, y: 200), size: CGSize(width: 240, height: 40))]
-        let manifest = NotebookManifest(title: "Biology", defaults: paper, pages: [first, second])
-        try await NotebookPackage(root: root, id: manifest.id).create(manifest)
-        let document = try await NotebookDocument.open(manifest.id, root: root)
-
-        let whole = await StudyGuide.text(for: .notebook, in: document)
+        let document = try await notebook(["Mitochondria make ATP.", "Ribosomes build proteins."])
+        let whole = try await StudyGuide.text(for: .notebook, in: document)
         XCTAssertEqual(whole, "Mitochondria make ATP.\n\nRibosomes build proteins.")
-        let page = await StudyGuide.text(for: .page(second.id), in: document)
+        let page = try await StudyGuide.text(for: .page(document.pages[1].id), in: document)
         XCTAssertEqual(page, "Ribosomes build proteins.")
-        let recording = await StudyGuide.text(for: .recording(UUID()), in: document)
+        let recording = try await StudyGuide.text(for: .recording(UUID()), in: document)
         XCTAssertEqual(recording, "")
+    }
+
+    func testReadingThePagesMovesTheProgressAPageAtATime() async throws {
+        let document = try await notebook((1...4).map { "Fact \($0) about cells." })
+        var progress: [Double] = []
+        _ = try await StudyGuide.text(for: .notebook, in: document) { progress.append($0) }
+        XCTAssertEqual(progress, [0, 0.25, 0.5, 0.75, 1])
+    }
+
+    func testACancelledGuideStopsReadingThePages() async throws {
+        let document = try await notebook(["Mitochondria make ATP.", "Ribosomes build proteins."])
+        let run = Task { try await StudyGuide.text(for: .notebook, in: document) }
+        run.cancel()
+        do {
+            _ = try await run.value
+            XCTFail("a cancelled guide doesn't go on to read the pages")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        for page in document.pages {
+            let read = await document.package.readText(page.id)
+            XCTAssertNil(read, "the indexer stopped before reading a page")
+        }
     }
 }

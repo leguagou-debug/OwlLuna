@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The page no longer jumps to its top when the editor changes size. ⌘F, Select PDF Text and the tabs hiding leave it where it is, turning the iPad or resizing a window keeps what you were looking at in view, and dragging the divider between two notebooks is smoother.
 - Study Them Anyway and Go Through Them All Again no longer send cards months away. A card answered before its day grows only from the days it has waited, so going over a deck again the same evening leaves it where it was.
 - Missing a card on the same day you last answered it no longer counts as forgetting it, so going over a new deck several times doesn't make its waits grow more slowly later.
+- Library search finds every word you type, in any order, even when a line ends between them. Put words in quotes to find them together. A notebook with more matching pages than are shown says how many more.
+- Closing a study guide, changing what it is written from, or choosing Write It Again now stops the writing in progress. A very long notebook's summary is written from 24 pieces spread through it, and the progress bar moves while pages are read.
 
 ## [1.0.0-build.3] - 2026-10-21
 

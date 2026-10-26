@@ -97,7 +97,7 @@ final class TranscriptTests: XCTestCase {
         XCTAssertTrue(LibraryIndex.searchText(in: package.textDirectory).contains("cell membrane"), "and its words are in the notebook's search text")
 
         let hits = await PageSearch.hits(for: "membrane", in: [manifest.id], root: root)
-        let hit = try XCTUnwrap(hits[manifest.id]?.first)
+        let hit = try XCTUnwrap(hits.pages[manifest.id]?.first)
         XCTAssertEqual(hit.recording?.id, entry.id)
         XCTAssertEqual(hit.index, 1, "it opens the page that was written on during the recording")
         XCTAssertEqual(hit.place, entry.name, "named after the recording, not its place in the list")
@@ -108,7 +108,7 @@ final class TranscriptTests: XCTestCase {
         XCTAssertNil(recorder.recordings.first?.transcriptFile)
         XCTAssertFalse(LibraryIndex.searchText(in: package.textDirectory).contains("membrane"))
         let none = await PageSearch.hits(for: "membrane", in: [manifest.id], root: root)
-        XCTAssertNil(none[manifest.id])
+        XCTAssertNil(none.pages[manifest.id])
     }
 
     func testARecordingWithNoSpeechSaysSoAndIsLeftAsItWas() async throws {

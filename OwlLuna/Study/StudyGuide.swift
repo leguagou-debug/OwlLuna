@@ -57,6 +57,8 @@ protocol StudyModel: Sendable {
 enum StudyGuide {
     /// About as much as the model can take in with room left to answer.
     static let chunkLimit = 3200
+    /// Longer notes are summarised from this many pieces, spread evenly through them.
+    static let summaryPieces = 24
     static let minimumText = 40
 
     static var status: StudyModelStatus {
@@ -118,21 +120,25 @@ enum StudyGuide {
         return chunks
     }
 
-    /// The main points of the text. Long notes are read a piece at a time, and the pieces' points are then boiled down.
-    static func summary(of text: String, using model: any StudyModel, limit: Int = 7,
+    /// The main points of the text, with long notes read a piece at a time and the pieces' points boiled down.
+    static func summary(of text: String, using model: any StudyModel, limit: Int = 7, rounds: Int = 2,
                         progress: @MainActor @Sendable (Double) -> Void = { _ in }) async throws -> [String] {
-        let pieces = try chunksToRead(text)
+        let pieces = spread(try chunksToRead(text), atMost: summaryPieces)
         var points: [String] = []
         for (index, piece) in pieces.enumerated() {
-            try Task.checkCancellation()
             points += try await keyPoints(in: piece, atMost: pieces.count == 1 ? limit : 5, using: model)
             await progress(Double(index + 1) / Double(pieces.count + (pieces.count > 1 ? 1 : 0)))
         }
         points = distinct(points)
         if pieces.count > 1, points.count > limit {
             let listed = points.map { "- \($0)" }.joined(separator: "\n")
-            points = listed.count > chunkLimit ? try await summary(of: listed, using: model, limit: limit)
-                                               : distinct(try await keyPoints(in: listed, atMost: limit, using: model))
+            if listed.count <= chunkLimit {
+                points = distinct(try await keyPoints(in: listed, atMost: limit, using: model))
+            } else if rounds > 0 {
+                points = try await summary(of: listed, using: model, limit: limit, rounds: rounds - 1)
+            } else {
+                points = spread(points, atMost: limit)
+            }
         }
         await progress(1)
         guard !points.isEmpty else { throw StudyGuideError.nothingToRead }
@@ -142,15 +148,10 @@ enum StudyGuide {
     /// Practice questions with their answers, spread over the whole of the text.
     static func quiz(of text: String, using model: any StudyModel, count: Int = 8,
                      progress: @MainActor @Sendable (Double) -> Void = { _ in }) async throws -> [QuizItem] {
-        var pieces = try chunksToRead(text)
-        if pieces.count > count {
-            let step = Double(pieces.count) / Double(count)
-            pieces = (0..<count).map { pieces[Int(Double($0) * step)] }
-        }
+        let pieces = spread(try chunksToRead(text), atMost: count)
         let each = Int((Double(count) / Double(pieces.count)).rounded(.up))
         var items: [QuizItem] = [], asked: Set<String> = []
         for (index, piece) in pieces.enumerated() {
-            try Task.checkCancellation()
             for item in try await questions(about: piece, count: each, using: model) {
                 let question = item.question.trimmingCharacters(in: .whitespacesAndNewlines), answer = item.answer.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !question.isEmpty, !answer.isEmpty, asked.insert(question.lowercased()).inserted else { continue }
@@ -169,6 +170,13 @@ enum StudyGuide {
         return pieces
     }
 
+    /// At most `count` of the items, one from the middle of each of `count` equal stretches.
+    private static func spread<Item>(_ items: [Item], atMost count: Int) -> [Item] {
+        guard items.count > count else { return items }
+        let step = Double(items.count) / Double(count)
+        return (0..<count).map { items[Int((Double($0) + 0.5) * step)] }
+    }
+
     private static func keyPoints(in text: String, atMost limit: Int, using model: any StudyModel) async throws -> [String] {
         try await read(text, asking: limit, perHalf: max(limit / 2, 2)) { try await model.keyPoints(in: $0, atMost: $1) }
     }
@@ -177,16 +185,20 @@ enum StudyGuide {
         try await read(text, asking: count, perHalf: max(count / 2, 1)) { try await model.questions(about: $0, count: $1) }
     }
 
-    /// A piece the model found too long is read as two halves.
+    /// A piece the model found too long is read as two halves. Once the task is cancelled the model isn't asked again.
     private static func read<Item>(_ text: String, asking whole: Int, perHalf half: Int,
                                    _ ask: (String, Int) async throws -> [Item]) async throws -> [Item] {
         do {
+            try Task.checkCancellation()
             return try await ask(text, whole)
         } catch StudyGuideError.tooLong {
             let halves = chunks(of: text, limit: max(text.count / 2, 200))
             guard halves.count > 1 else { throw StudyGuideError.tooLong }
             var results: [Item] = []
-            for piece in halves { results += try await ask(piece, half) }
+            for piece in halves {
+                try Task.checkCancellation()
+                results += try await ask(piece, half)
+            }
             return results
         }
     }
@@ -208,7 +220,8 @@ enum StudyGuide {
 extension StudyGuide {
     /// The words of the pages or recording in `scope`, with handwriting read first where it hasn't been yet.
     @MainActor
-    static func text(for scope: StudyScope, in document: NotebookDocument) async -> String {
+    static func text(for scope: StudyScope, in document: NotebookDocument,
+                     progress: @MainActor @Sendable (Double) -> Void = { _ in }) async throws -> String {
         switch scope {
         case .recording(let id):
             guard let file = document.manifest.recordings.first(where: { $0.id == id })?.transcriptFile else { return "" }
@@ -218,13 +231,15 @@ extension StudyGuide {
             var pages = document.pages
             if case .page(let id) = scope { pages = pages.filter { $0.id == id } }
             let package = document.package
-            await HandwritingIndexer.shared.index(HandwritingIndexer.Job(package: package, pages: pages))
+            await HandwritingIndexer.shared.index(HandwritingIndexer.Job(package: package, pages: pages)) { await progress($0) }
             var parts: [String] = []
             for page in pages {
+                try Task.checkCancellation()
                 guard let text = await package.readText(page.id) else { continue }
                 let body = body(ofPageText: text).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !body.isEmpty { parts.append(body) }
             }
+            progress(1)
             return parts.joined(separator: "\n\n")
         }
     }

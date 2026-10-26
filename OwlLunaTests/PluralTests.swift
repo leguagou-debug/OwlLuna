@@ -24,6 +24,10 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(try text("\(5) pages", "de"), "5 Seiten")
         XCTAssertEqual(try text("\(1) strokes. Drag them to move them.", "en"), "1 stroke. Drag it to move it.")
         XCTAssertEqual(try text("\(1) notebooks waiting until they're closed", "de"), "1 Notizbuch wartet, bis es geschlossen ist")
+        XCTAssertEqual(try text("\(1) more matches", "en"), "1 more match")
+        XCTAssertEqual(try text("\(12) more matches", "en"), "12 more matches")
+        XCTAssertEqual(try text("\(1) more matches", "de"), "1 weiterer Treffer")
+        XCTAssertEqual(try text("\(3) more matches", "fr"), "3 autres résultats")
     }
 
     func testCountsInsideSentencesAgreeToo() throws {

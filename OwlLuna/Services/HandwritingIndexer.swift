@@ -20,9 +20,10 @@ actor HandwritingIndexer {
     /// Queues recognition for pages whose text is missing or older than their ink. Returns the notebook's full text.
     /// A page already being read by another job is awaited rather than read twice.
     @discardableResult
-    func index(_ job: Job) async -> String {
+    func index(_ job: Job, progress: @Sendable (Double) async -> Void = { _ in }) async -> String {
         let pdf = OpenPDF()
-        for page in job.pages {
+        for (done, page) in job.pages.enumerated() {
+            await progress(Double(done) / Double(job.pages.count))
             guard !Task.isCancelled,
                   FileManager.default.fileExists(atPath: job.package.manifestURL.path(percentEncoded: false)) else { break }
             if let existing = running[page.id] { await existing.task.value }
