@@ -23,13 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pin to Xcode 26.2 (Swift 6.2.3).
+      # Pin to Xcode 26.5 (Swift 6.3.x).
       # - Swift 6.0/6.1 is too old: the source uses nonisolated(nonsending) (Swift 6.2+).
       # - Swift 6.3.3 (the macos-26 default, Xcode 26.6) hits an IRGen ICE: every
       #   Bool->@Sendable closure reabstraction thunk trips SmallVector grow_pod in
       #   SyncCallEmission::setArgs. 6.2.3 has the syntax and not the bug.
-      - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app
 
       - name: Show toolchain
         run: |
