@@ -147,7 +147,12 @@ struct OwlLunaSettingsView: View {
             }
             .accessibilityIdentifier("settings.transcription.language")
         }
-        .task { transcriptLanguages = await Task.detached(priority: .userInitiated) { Transcription.onDeviceLanguages() }.value }
+        .task {
+            let languages: [Locale] = await Task.detached(priority: .userInitiated) {
+                Transcription.onDeviceLanguages()
+            }.value
+            transcriptLanguages = languages
+        }
     }
 
     private var trashSection: some View {
@@ -199,7 +204,14 @@ struct OwlLunaSettingsView: View {
             }
             .task(id: ownPaper) {
                 let id = ownPaper, root = store.root
-                ownPaperName = id.isEmpty ? nil : await Task.detached(priority: .userInitiated) { PaperShelf.paper(id, in: root)?.name }.value
+                if id.isEmpty {
+                    ownPaperName = nil
+                } else {
+                    let name: String? = await Task.detached(priority: .userInitiated) {
+                        PaperShelf.paper(id, in: root)?.name
+                    }.value
+                    ownPaperName = name
+                }
             }
             SettingsChoiceRow(title: "Paper Colour", value: color.displayName, selection: $color) {
                 ForEach(PaperColor.allCases) { Text($0.displayName).tag($0) }
