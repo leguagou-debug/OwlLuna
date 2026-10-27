@@ -48,7 +48,9 @@ struct InkDish: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let foot = session.showsToolTray ? ToolTray.height + ToolTray.gap * 2 + session.zoomPanelLift : 0
+            let foot: CGFloat = session.showsToolTray
+                ? ToolTray.height + ToolTray.gap * 2 + session.zoomPanelLift
+                : 0
             ZStack {
                 Color.clear
                     .contentShape(Rectangle())
