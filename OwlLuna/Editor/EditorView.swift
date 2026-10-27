@@ -324,7 +324,7 @@ fileprivate struct EditorContent: View {
     /// The editor's sheets, alerts and observers, kept apart from the layout so each stays quick to type-check.
     /// Split in two: one expression this long times out the type checker on Swift 6.2.
     private func sheets<Content: View>(_ content: Content) -> some View {
-        sheetsHalfTwo(sheetsHalfOne(content))
+        sheetsHalfThree(sheetsHalfTwo(sheetsHalfOne(content)))
     }
 
     /// Sheets and pickers.
@@ -404,6 +404,11 @@ fileprivate struct EditorContent: View {
             }
             .presentationCornerRadius(Radius.sheet)
         }
+    }
+
+    /// Notices and the lifecycle observers.
+    private func sheetsHalfThree<V: View>(_ content: V) -> some View {
+        content
         .notice("Rename Link", isPresented: $renamingLink, message: Text("Leave it empty to name the link after what it opens.")) {
             TextField("Name", text: $linkLabel)
         } actions: {
