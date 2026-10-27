@@ -34,11 +34,11 @@ enum DocumentScan {
     static func pages(from images: [UIImage], in package: NotebookPackage) async throws -> [NotebookPage] {
         var pages: [NotebookPage] = []
         for image in images {
-            let picture = try await Task.detached(priority: .userInitiated) { @Sendable () -> (data: Data, size: CGSize) in
+            let scan = try await Task.detached(priority: .userInitiated) { @Sendable () -> (data: Data, size: CGSize) in
                 try picture(image)
             }.value
-            let file = try await package.writeAsset(picture.data, ext: "jpg")
-            pages.append(page(file: file, pictureSize: picture.size))
+            let file = try await package.writeAsset(scan.data, ext: "jpg")
+            pages.append(page(file: file, pictureSize: scan.size))
         }
         guard !pages.isEmpty else { throw ImportError.empty }
         return pages
