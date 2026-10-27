@@ -453,6 +453,11 @@ fileprivate struct EditorContent: View {
 
     /// Lifecycle observers: page bookkeeping, undo state and the recording notices.
     private func sheetsHalfFour<V: View>(_ content: V) -> some View {
+        sheetsHalfFive(sheetsHalfFourEarly(content))
+    }
+
+    /// The first observers: modal state, recording, page count, appearing and the window's mode.
+    private func sheetsHalfFourEarly<V: View>(_ content: V) -> some View {
         content
         .onChange(of: isPresentingModal) { _, presenting in session.canvas?.setModalShowing(presenting) }
         .onChange(of: session.recorder.isRecording) { _, recording in
@@ -470,6 +475,11 @@ fileprivate struct EditorContent: View {
         .onChange(of: window?.active) { if pane != .single, window?.active == document.id { session.canvas?.paneBecameActive() } }
         .onChange(of: session.mode, initial: true) { if pane != .secondary { window?.hidesChrome = session.mode != .writing } }
         .onChange(of: store.indexVersion) { refreshNotebookTitles() }
+    }
+
+    /// The remaining observers: undo notifications, disappearing and the show-page request.
+    private func sheetsHalfFive<V: View>(_ content: V) -> some View {
+        content
         .onReceive(Publishers.Merge3(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup),
                                      NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange),
                                      NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange))) { _ in session.refreshUndoState() }
