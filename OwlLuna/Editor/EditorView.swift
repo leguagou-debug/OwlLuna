@@ -408,6 +408,11 @@ fileprivate struct EditorContent: View {
 
     /// Notices and the lifecycle observers.
     private func sheetsHalfThree<V: View>(_ content: V) -> some View {
+        sheetsHalfFour(sheetsHalfFourNotices(content))
+    }
+
+    /// The notices: renames, deletions, bookmarks and the error alert.
+    private func sheetsHalfFourNotices<V: View>(_ content: V) -> some View {
         content
         .notice("Rename Link", isPresented: $renamingLink, message: Text("Leave it empty to name the link after what it opens.")) {
             TextField("Name", text: $linkLabel)
@@ -444,6 +449,11 @@ fileprivate struct EditorContent: View {
                 message: Text(errorMessage ?? session.recorder.errorMessage ?? flashcards.lastError ?? "")) {
             Button("OK", role: .cancel) {}
         }
+    }
+
+    /// Lifecycle observers: page bookkeeping, undo state and the recording notices.
+    private func sheetsHalfFour<V: View>(_ content: V) -> some View {
+        content
         .onChange(of: isPresentingModal) { _, presenting in session.canvas?.setModalShowing(presenting) }
         .onChange(of: session.recorder.isRecording) { _, recording in
             announce(recording ? String(localized: "Recording started") : String(localized: "Recording saved"))
