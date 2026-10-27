@@ -40,10 +40,18 @@ struct InkDish: View {
 
     /// The middles of `count` wells set evenly round the rim, the first at the top, measured from the dish's middle.
     static func wells(_ count: Int) -> [CGPoint] {
-        (0..<max(count, 0)).map { index in
-            let angle = -Double.pi / 2 + 2 * Double.pi * Double(index) / Double(count)
-            return CGPoint(x: ring * cos(angle), y: ring * sin(angle))
+        let wells: Int = max(count, 0)
+        let divisor: Double = Double(max(count, 1))
+        var points: [CGPoint] = []
+        points.reserveCapacity(wells)
+        for index in 0..<wells {
+            let step: Double = 2 * Double.pi * Double(index) / divisor
+            let angle: Double = -Double.pi / 2 + step
+            let x: CGFloat = ring * CGFloat(cos(angle))
+            let y: CGFloat = ring * CGFloat(sin(angle))
+            points.append(CGPoint(x: x, y: y))
         }
+        return points
     }
 
     var body: some View {
