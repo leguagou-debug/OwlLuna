@@ -47,6 +47,9 @@ jobs:
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            SWIFT_COMPILATION_MODE=singlefile \
+            OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-cmo' \
             2>&1 | tee "$RUNNER_TEMP/archive.log"
 
       - name: Verify and package into .ipa
