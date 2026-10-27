@@ -51,6 +51,9 @@ struct InkDish: View {
             let foot: CGFloat = session.showsToolTray
                 ? ToolTray.height + ToolTray.gap * 2 + session.zoomPanelLift
                 : 0
+            let spot: CGPoint = Self.centre(for: point, in: proxy.size, foot: foot)
+            let scale: CGFloat = isOut || reduceMotion ? 1 : 0.6
+            let alpha: Double = isOut ? 1 : 0
             ZStack {
                 Color.clear
                     .contentShape(Rectangle())
@@ -58,9 +61,9 @@ struct InkDish: View {
                     .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in close() })
                     .accessibilityHidden(true)
                 dish
-                    .scaleEffect(isOut || reduceMotion ? 1 : 0.6)
-                    .opacity(isOut ? 1 : 0)
-                    .position(Self.centre(for: point, in: proxy.size, foot: foot))
+                    .scaleEffect(scale)
+                    .opacity(alpha)
+                    .position(spot)
             }
         }
         .onAppear {
