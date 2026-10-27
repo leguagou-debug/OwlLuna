@@ -1,0 +1,112 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'OwlLuna/**'
+      - 'Shared/**'
+      - 'Config/**'
+      - 'OwlLunaWidgets/**'
+      - '.github/workflows/ipa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    name: Unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      # Archive with code signing fully disabled. The app group entitlement can't be
+      # granted by a free Apple ID, so we build without it; Sideloadly re-signs and
+      # strips what the free profile can't carry. Sync stays unavailable, app still runs.
+      - name: Archive (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project OwlLuna.xcodeproj \
+            -scheme OwlLuna \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/OwlLuna.xcarchive" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            2>&1 | tee "$RUNNER_TEMP/archive.log"
+
+      - name: Verify and package into .ipa
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/OwlLuna.xcarchive"
+          app="$ARCHIVE/Products/Applications/OwlLuna.app"
+
+          if [ ! -d "$app" ]; then
+            echo "::error::OwlLuna.app not found at $app"
+            ls -R "$ARCHIVE/Products" || true
+            exit 1
+          fi
+
+          echo "--- bundle info ---"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist"
+
+          echo "--- architecture ---"
+          lipo -info "$app/OwlLuna" || true
+
+          echo "--- plugins ---"
+          ls -1 "$app/PlugIns" 2>/dev/null || echo "(none)"
+
+          # Drop stale signature artifacts so the sideloading signer starts clean.
+          rm -rf "$app/_CodeSignature"
+          rm -f "$app/embedded.mobileprovision"
+          for ext in "$app"/PlugIns/*.appex; do
+            [ -d "$ext" ] || continue
+            rm -rf "$ext/_CodeSignature"
+            rm -f "$ext/embedded.mobileprovision"
+          done
+
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$app" "$RUNNER_TEMP/Payload/"
+
+          cd "$RUNNER_TEMP"
+          zip -qry OwlLuna-unsigned.ipa Payload
+
+          echo "--- result ---"
+          ls -lh OwlLuna-unsigned.ipa
+          unzip -l OwlLuna-unsigned.ipa | head -20
+
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")
+          build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")
+          echo "IPA_NAME=OwlLuna-${version}-${build}-unsigned.ipa" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OwlLuna-unsigned-ipa
+          path: ${{ runner.temp }}/OwlLuna-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: archive-log
+          path: ${{ runner.temp }}/archive.log
+          if-no-files-found: ignore
+          retention-days: 7
