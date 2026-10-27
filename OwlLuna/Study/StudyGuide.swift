@@ -306,14 +306,6 @@ struct AppleStudyModel: StudyModel {
             default: throw error
             }
         } catch {
-            if #available(iOS 27, *), let known = error as? LanguageModelError {
-                switch known {
-                case .contextSizeExceeded: throw StudyGuideError.tooLong
-                case .guardrailViolation, .refusal: throw StudyGuideError.declined
-                case .unsupportedLanguageOrLocale: throw StudyGuideError.language
-                default: throw error
-                }
-            }
             throw error
         }
     }
