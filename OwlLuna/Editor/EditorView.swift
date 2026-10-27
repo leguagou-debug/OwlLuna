@@ -322,7 +322,13 @@ fileprivate struct EditorContent: View {
     }
 
     /// The editor's sheets, alerts and observers, kept apart from the layout so each stays quick to type-check.
+    /// Split in two: one expression this long times out the type checker on Swift 6.2.
     private func sheets<Content: View>(_ content: Content) -> some View {
+        sheetsHalfTwo(sheetsHalfOne(content))
+    }
+
+    /// Sheets and pickers.
+    private func sheetsHalfOne<Content: View>(_ content: Content) -> some View {
         content
         .sheet(item: $editingNotes) { target in PresenterNotesSheet(document: document, pageID: target.id).presentationCornerRadius(Radius.sheet) }
         .sheet(item: $readingInk) { target in
@@ -363,6 +369,11 @@ fileprivate struct EditorContent: View {
             document.perform { await insertPDF(result, at: position) }
         }
         .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem, matching: .images)
+    }
+
+    /// Scans, stickers, links, notices and the lifecycle observers.
+    private func sheetsHalfTwo<V: View>(_ content: V) -> some View {
+        content
         .fullScreenCover(isPresented: $scanning) {
             DocumentScanner { images in
                 scanning = false
