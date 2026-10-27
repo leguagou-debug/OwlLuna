@@ -38,7 +38,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         UIPinchGestureRecognizer(target: self, action: #selector(pinched)),
         UIRotationGestureRecognizer(target: self, action: #selector(twisted)),
     ]
-    private(set) lazy var handlePan = UIPanGestureRecognizer(target: self, action: #selector(dragHandle))
+    private lazy var handlePan = GripPan(target: self, action: #selector(dragHandle))
 
     init(item: PageItem, pageSize: CGSize) {
         self.item = item
@@ -69,6 +69,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         handle.accessibilityLabel = String(localized: "Resize and rotate")
         handle.accessibilityTraits = .adjustable
         (recognizers[0] as? UIPanGestureRecognizer)?.maximumNumberOfTouches = 1
+        handlePan.maximumNumberOfTouches = 1
         for recognizer in recognizers {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
@@ -218,13 +219,14 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
         report(composed(from: base), state: gesture.state)
     }
 
-    @objc private func dragHandle(_ gesture: UIPanGestureRecognizer) {
+    @objc private func dragHandle(_ gesture: GripPan) {
         guard let superview else { return }
         let point = gesture.location(in: superview)
         let vector = CGPoint(x: point.x - center.x, y: point.y - center.y)
         if gesture.state == .began {
             begin()
-            handleStart = vector
+            let down = gesture.start(in: superview)
+            handleStart = CGPoint(x: down.x - center.x, y: down.y - center.y)
         }
         guard let base else { return }
         let start = max(hypot(handleStart.x, handleStart.y), 1)
@@ -235,11 +237,12 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
 
     /// A side grip moves its side and holds the opposite one still: a picture is squeezed, a text box wraps again and
     /// grows downwards, tape gets longer.
-    @objc private func dragSide(_ gesture: UIPanGestureRecognizer) {
+    @objc private func dragSide(_ gesture: GripPan) {
         guard let superview, let side = (gesture.view as? SideGrip)?.side else { return }
         if gesture.state == .began { begin() }
         guard let base else { return }
-        let moved = gesture.translation(in: superview), turn = base.rotation
+        let point = gesture.location(in: superview), start = gesture.start(in: superview), turn = base.rotation
+        let moved = CGPoint(x: point.x - start.x, y: point.y - start.y)
         let along = side == .left || side == .right ? moved.x * cos(turn) + moved.y * sin(turn) : moved.y * cos(turn) - moved.x * sin(turn)
         let outwards = side == .left || side == .top ? -along : along
         report(stretched(base, side: side, by: outwards / max(scale, 0.01)), state: gesture.state)
@@ -286,7 +289,7 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
 /// A grip on one side of the selection. VoiceOver hears the width or height it changes and swipes it a tenth at a time.
 private final class SideGrip: UIView {
     let side: ItemSelectionView.Side
-    let pan = UIPanGestureRecognizer()
+    let pan = GripPan()
     var onStep: ((CGFloat) -> Void)?
     private let bar = UIView()
 
@@ -300,6 +303,7 @@ private final class SideGrip: UIView {
         bar.layer.borderWidth = 1
         bar.isUserInteractionEnabled = false
         addSubview(bar)
+        pan.maximumNumberOfTouches = 1
         addGestureRecognizer(pan)
         accessibilityIdentifier = "page.grip.\(side)"
         // VoiceOver needs one grip for the width and one for the height.
@@ -322,6 +326,18 @@ private final class SideGrip: UIView {
 
     override func accessibilityIncrement() { onStep?(1) }
     override func accessibilityDecrement() { onStep?(-1) }
+}
+
+/// A pan that keeps where the finger came down, as its own translation only counts from where it was recognised.
+private final class GripPan: UIPanGestureRecognizer {
+    private var down: CGPoint = .zero
+
+    func start(in view: UIView) -> CGPoint { view.convert(down, from: nil) }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if state == .possible, let touch = touches.first { down = touch.location(in: nil) }
+        super.touchesBegan(touches, with: event)
+    }
 }
 
 /// The knobs on a selection or a crop. In Dark Mode they turn to cream card stock so they show on a dark page and a
