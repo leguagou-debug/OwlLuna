@@ -164,8 +164,10 @@ final class ItemSelectionView: UIView, UIGestureRecognizerDelegate {
 
     private func report(_ changed: PageItem, state: UIGestureRecognizer.State) {
         let changed = keptOnPage(changed)
-        let allPans: [UIPanGestureRecognizer] = recognizers + [handlePan] + grips.map(\.pan)
-        let others: Bool = allPans.contains { (pan: UIPanGestureRecognizer) -> Bool in
+        var allPans: [UIGestureRecognizer] = recognizers
+        allPans.append(handlePan)
+        for grip in grips { allPans.append(grip.pan) }
+        let others: Bool = allPans.contains { (pan: UIGestureRecognizer) -> Bool in
             pan.state == .began || pan.state == .changed
         }
         switch state {
